@@ -5,10 +5,10 @@ import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.assets.loaders.I18NBundleLoader;
-import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.List;
 import com.badlogic.gdx.scenes.scene2d.ui.SelectBox;
@@ -23,17 +23,11 @@ import com.badlogic.gdx.utils.I18NBundle;
 import com.mygdx.game.RogueFantasy;
 
 import java.util.Locale;
-import java.util.function.Function;
 
 /**
  * A class that encapsulates the option menu window
  */
-public class OptionWindow extends Window {
-    private RogueFantasy game;
-    private Screen parent;
-    private Preferences prefs;
-    private AssetManager manager;
-    private Skin skin;
+public class OptionWindow extends GameWindow {
     private Label bgmLabel;
     private Label sfxLabel;
     private Label langLabel;
@@ -41,29 +35,33 @@ public class OptionWindow extends Window {
     private Slider sfxSlider;
     private SelectBox langBox;
     private TextButton backBtn;
-    private I18NBundle langBundle;
+
     /**
      * Builds the option window, to be used as an actor in any screen
      *
      * @param game    the reference to the game object that controls game screens
+     * @param stage   the current stage in use
      * @param parent  the parent screen that invoked the option window
      * @param manager the asset manager containing assets loaded from the loading process
      * @param title   the title of the options window
      * @param skin    the game skin to be used when building the window
      * @param styleName the style name present in the skin to be used when building the window
      */
-    public OptionWindow(RogueFantasy game, Screen parent, AssetManager manager, String title, Skin skin, String styleName) {
-        super(title, skin, styleName);
-        this.game = game;
-        this.parent = parent;
-        this.manager = manager;
-        this.skin = skin;
+    public OptionWindow(RogueFantasy game, Stage stage, Screen parent, AssetManager manager, String title, Skin skin, String styleName) {
+        super(game, stage, parent, manager, title, skin, styleName);
+    }
 
-        // gets language bundle from asset manager
+    @Override
+    public void build() {
+        // makes sure window is clear and not in stage before building it
+        this.clear();
+        this.remove();
+
+        // makes sure language is up to date with current selected option
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
 
-        // gets preferences reference, that stores simple data persisted between executions
-        prefs = Gdx.app.getPreferences("globalPrefs");
+        // makes sure title is in the correct language
+        this.getTitleLabel().setText(" "+langBundle.format("option"));
 
         // music volume slider
         bgmSlider = new Slider(0, 1, 0.1f, false, skin);
@@ -73,21 +71,24 @@ public class OptionWindow extends Window {
         // music volume slider
         sfxSlider = new Slider(0, 1, 0.1f, false, skin);
         sfxSlider.setValue(prefs.getFloat("sfxVolume", 1.0f));
-        sfxSlider.getStyle().background.setMinHeight(40);
-        sfxSlider.getStyle().knobBefore.setMinHeight(30);
-        sfxSlider.getStyle().knob.setMinHeight(40);
-        sfxSlider.getStyle().knobDown.setMinHeight(40);
+        sfxSlider.getStyle().background.setMinHeight(24);
+        sfxSlider.getStyle().knobBefore.setMinHeight(14);
+        sfxSlider.getStyle().knob.setMinHeight(35);
+        sfxSlider.getStyle().knob.setMinWidth(25);
+        sfxSlider.getStyle().knobDown.setMinHeight(35);
+        sfxSlider.getStyle().knobDown.setMinWidth(25);
         sfxSlider.setAnimateDuration(0.1f);
 
         // options labels
-        bgmLabel = new Label( " "+ langBundle.format("bgm"), skin, "font8", Color.WHITE);
-        sfxLabel = new Label( " "+ langBundle.format("sfx"), skin, "font8", Color.WHITE);
-        langLabel = new Label( " "+ langBundle.format("lang"), skin, "font8", Color.WHITE);
+        bgmLabel = new Label( " "+ langBundle.format("bgm"), skin, "fontMedium", Color.WHITE);
+        sfxLabel = new Label( " "+ langBundle.format("sfx"), skin, "fontMedium", Color.WHITE);
+        langLabel = new Label( " "+ langBundle.format("lang"), skin, "fontMedium", Color.WHITE);
 
         // back button
         backBtn = new TextButton(langBundle.format("back"), skin);
 
         // language select box
+        //TODO: Find a way to add emoji flags to items of lang box?
         langBox = new SelectBox(skin, "newSelectBoxStyle");
         langBox.setAlignment(Align.right);
         langBox.getList().setStyle(skin.get("newListStyle", List.ListStyle.class));
@@ -219,22 +220,6 @@ public class OptionWindow extends Window {
             if(parent instanceof MainMenuScreen)
                 ((MainMenuScreen) parent).update(getInstance(), true, MainMenuScreen.ScreenCommands.RELOAD_LANGUAGE);
 
-            // updates language bundle
-            //langBundle = manager.get("lang/langbundle", I18NBundle.class);
-
-            // updates texts from this window
-//            backBtn.setText(langBundle.format("back"));
-//            getTitleLabel().setText(langBundle.format("option"));
-//            bgmLabel.setText(" "+ langBundle.format("bgm"));
-//            sfxLabel.setText(" "+ langBundle.format("sfx"));
-//            langLabel.setText(" "+ langBundle.format("lang"));
-//            String[] values = new String[]{langBundle.format("en"), langBundle.format("pt_br"), langBundle.format("de"), langBundle.format("es")};
-//            //langBox.setItems(langBundle.format("en"), langBundle.format("pt_br"), langBundle.format("de"), langBundle.format("es"));
-//           // langBox.getList().clearItems();
-//            langBox.getList().setItems(values);
-
-           // langBox.setSelectedIndex(prefs.getInteger("lastLangIdx", 0));
-
         }
 
         // called when back button is pressed
@@ -243,7 +228,7 @@ public class OptionWindow extends Window {
         }
     }
 
-    private Window getInstance() {
+    private OptionWindow getInstance() {
         return this;
     }
 }

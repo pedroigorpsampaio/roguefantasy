@@ -9,6 +9,7 @@ import com.badlogic.gdx.assets.loaders.I18NBundleLoader;
 import com.badlogic.gdx.assets.loaders.resolvers.InternalFileHandleResolver;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGeneratorLoader;
@@ -26,6 +27,9 @@ import com.badlogic.gdx.scenes.scene2d.ui.Window;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
+import com.github.tommyettinger.textra.Font;
+import com.github.tommyettinger.textra.KnownFonts;
+import com.kotcrab.vis.ui.VisUI;
 import com.mygdx.game.RogueFantasy;
 
 import java.util.Locale;
@@ -64,16 +68,20 @@ public class LoadScreen implements Screen {
         if(!manager.isLoaded("skin/neutralizer/neutralizer-ui.json")) {
             // loads skin to use for loading screen (blocks until finish loading, to display correctly the loading screen)
             manager.load("skin/neutralizer/neutralizer-ui.json", Skin.class);
-            // load font
+            // TODO: LOAD DIFFERENT SIZES OF FONT
+            // load fonts
             FileHandleResolver resolver = new InternalFileHandleResolver();
             manager.setLoader(FreeTypeFontGenerator.class, new FreeTypeFontGeneratorLoader(resolver));
             manager.setLoader(BitmapFont.class, ".ttf", new FreetypeFontLoader(resolver));
-            FreetypeFontLoader.FreeTypeFontLoaderParameter fontSmall = new FreetypeFontLoader.FreeTypeFontLoaderParameter();
-            fontSmall.fontFileName = "fonts/immortal.ttf";
-            fontSmall.fontParameters.size = 25;
-            fontSmall.fontParameters.borderColor = Color.BLACK;
-            fontSmall.fontParameters.borderWidth = 1.5f;
-            manager.load("fonts/immortal13.ttf", BitmapFont.class, fontSmall);
+            FreetypeFontLoader.FreeTypeFontLoaderParameter fontMedium = new FreetypeFontLoader.FreeTypeFontLoaderParameter();
+            // medium font
+            fontMedium.fontFileName = "fonts/immortal.ttf";
+            fontMedium.fontParameters.size = 25;
+            fontMedium.fontParameters.borderColor = Color.BLACK;
+            fontMedium.fontParameters.borderWidth = 1.5f;
+            fontMedium.fontParameters.magFilter = Texture.TextureFilter.Linear;
+            fontMedium.fontParameters.minFilter = Texture.TextureFilter.Linear;
+            manager.load("fonts/immortalMedium.ttf", BitmapFont.class, fontMedium);
             // blocks until skin is fully loaded
             manager.finishLoading();
         }
@@ -83,43 +91,52 @@ public class LoadScreen implements Screen {
             // skin is available, let's fetch it and do something interesting
             skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             // gets font loaded
-            BitmapFont font8 = manager.get("fonts/immortal13.ttf", BitmapFont.class);
-            font8.getData().markupEnabled = true;
-            skin.add("font8", font8, BitmapFont.class);
+            BitmapFont fontMedium = manager.get("fonts/immortalMedium.ttf", BitmapFont.class);
+            fontMedium.getData().markupEnabled = true;
+            // creates the typist font containing emojis and game icons that is ready for effects
+            Font iconFont = new Font(fontMedium);
+            Font emojiFont = new Font(fontMedium);
+            KnownFonts.addEmoji(emojiFont);
+            KnownFonts.addGameIcons(iconFont);
+            skin.add("emojiFont", emojiFont, Font.class);
+            skin.add("iconFont", iconFont, Font.class);
+            skin.add("fontMedium", fontMedium, BitmapFont.class);
             // creates new styles based on the new font
             Window.WindowStyle wStyle =  skin.get(Window.WindowStyle.class);
-            wStyle.titleFont = font8;
+            wStyle.titleFont = fontMedium;
             wStyle.titleFontColor = Color.WHITE;
             skin.add("newWindowStyle", wStyle, Window.WindowStyle.class);
 
             Label.LabelStyle lStyle = skin.get(Label.LabelStyle.class);
-            lStyle.font = font8;
+            lStyle.font = fontMedium;
             lStyle.fontColor = Color.WHITE;
             skin.add("newLabelStyle", lStyle, Label.LabelStyle.class);
 
             TextField.TextFieldStyle tfStyle = skin.get(TextField.TextFieldStyle.class);
-            tfStyle.font = font8;
+            tfStyle.font = fontMedium;
             tfStyle.fontColor = Color.WHITE;
             skin.add("newTextFieldStyle", tfStyle, TextField.TextFieldStyle.class);
 
             TextButton.TextButtonStyle tbStyle = skin.get(TextButton.TextButtonStyle.class);
-            tbStyle.font = font8;
+            tbStyle.font = fontMedium;
             tbStyle.fontColor = Color.WHITE;
             skin.add("newTextButtonStyle", tbStyle, TextButton.TextButtonStyle.class);
 
             CheckBox.CheckBoxStyle cbStyle =  skin.get(CheckBox.CheckBoxStyle.class);
-            cbStyle.font = font8;
+            cbStyle.font = fontMedium;
             cbStyle.fontColor = Color.WHITE;
             skin.add("newCheckBoxStyle", cbStyle, CheckBox.CheckBoxStyle.class);
 
             SelectBox.SelectBoxStyle sbStyle =  skin.get(SelectBox.SelectBoxStyle.class);
-            sbStyle.font = font8;
+            sbStyle.font = fontMedium;
             sbStyle.fontColor = Color.WHITE;
             skin.add("newSelectBoxStyle", sbStyle, SelectBox.SelectBoxStyle.class);
 
             List.ListStyle liStyle =  skin.get(List.ListStyle.class);
-            liStyle.font = font8;
+            liStyle.font = fontMedium;
             skin.add("newListStyle", liStyle, List.ListStyle.class);
+
+            VisUI.load(skin); //load VisUI
         }
 
         // loads assets based on the next screen

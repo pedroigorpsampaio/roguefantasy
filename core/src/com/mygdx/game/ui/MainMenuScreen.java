@@ -16,16 +16,14 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
-import com.badlogic.gdx.scenes.scene2d.ui.Window;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FillViewport;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
+import com.kotcrab.vis.ui.VisUI;
 import com.mygdx.game.RogueFantasy;
-
-import java.util.function.Supplier;
 
 /**
  * Main menu screen class
@@ -45,6 +43,7 @@ public class MainMenuScreen implements Screen {
     private OptionWindow optionWindow;
     private LoginWindow loginWindow;
     private InfoWindow infoWindow;
+    private RegisterWindow registerWindow;
     private I18NBundle langBundle;
     private TextButton playBtn;
     private TextButton infoBtn;
@@ -67,7 +66,7 @@ public class MainMenuScreen implements Screen {
         prefs = Gdx.app.getPreferences("globalPrefs");
 
         // gets font from asset manager
-       // BitmapFont font8 = manager.get("fonts/immortal13.ttf", BitmapFont.class);
+       // BitmapFont fontMedium = manager.get("fonts/immortalMedium.ttf", BitmapFont.class);
 
         // get and play music
         bgm = manager.get("bgm/mystic_dungeons.mp3", Music.class);
@@ -77,7 +76,7 @@ public class MainMenuScreen implements Screen {
 
         // loads game chosen skin
         skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
-        //skin.add("font8", font8, BitmapFont.class);
+        //skin.add("fontMedium", fontMedium, BitmapFont.class);
 
         // background stage
         bgStage = new Stage(new FillViewport(1280, 720));
@@ -93,24 +92,28 @@ public class MainMenuScreen implements Screen {
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
 
         // creates option window
-        optionWindow = new OptionWindow(game, this, manager, " "+langBundle.format("option"),
+        optionWindow = new OptionWindow(game, stage, this, manager, " "+langBundle.format("option"),
                                             skin, "newWindowStyle");
 
         // creates login window
-        loginWindow = new LoginWindow(game, stage, manager , " "+langBundle.format("loginWindowTitle"),
+        loginWindow = new LoginWindow(game, stage, this, manager , " "+langBundle.format("loginWindowTitle"),
                                         skin, "newWindowStyle");
 
         // creates info window
-        infoWindow = new InfoWindow(game, this, manager, " "+langBundle.format("info"),
+        infoWindow = new InfoWindow(game, stage,this, manager, " "+langBundle.format("info"),
                                     skin, "newWindowStyle");
+
+        // creates register window
+        registerWindow = new RegisterWindow(game, stage, this, manager, " "+langBundle.format("register"),
+                skin, "newWindowStyle");
 
         // label that describes the project name/version
         String descStr = " "+ langBundle.format("game") + " " + langBundle.format("version");
-        projectDescLabel = new Label(descStr, skin, "font8", Color.WHITE);
+        projectDescLabel = new Label(descStr, skin, "fontMedium", Color.WHITE);
         projectDescLabel.setAlignment(Align.center);
 
         // just a fps label (TODO: TO BE CHANGED IN THE FUTURE)
-        fpsLabel = new Label("fps:", skin, "font8", Color.WHITE);
+        fpsLabel = new Label("fps:", skin, "fontMedium", Color.WHITE);
         fpsLabel.setAlignment(Align.center);
 
         optionsBtn = new TextButton(langBundle.format("option"), skin);
@@ -190,6 +193,8 @@ public class MainMenuScreen implements Screen {
         menuTable.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
         optionWindow.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
         loginWindow.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
+        registerWindow.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
+        infoWindow.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
     }
 
     @Override
@@ -215,12 +220,13 @@ public class MainMenuScreen implements Screen {
         manager.dispose();
         bgTexture.dispose();
         bgm.dispose();
+        VisUI.dispose();
     }
 
     /**
      * Updates this screen based on commands received via opened windows
      */
-    public void update(Window window, boolean rebuild, ScreenCommands cmd) {
+    public void update(GameWindow window, boolean rebuild, ScreenCommands cmd) {
         // commands received through option window
         if(window.equals(optionWindow)) {
             // execute desired command
@@ -235,13 +241,18 @@ public class MainMenuScreen implements Screen {
                     Gdx.app.error("Unknown Window Command", "Current screen received an unknown command from option window");
                     break;
             }
-            // rebuilds option window if requested (only if its opened
-            if(rebuild && optionWindow.getStage().equals(stage)) {
-                optionWindow.remove();
-                optionWindow = new OptionWindow(game, getInstance(), manager, langBundle.format("option"),
-                        skin, "newWindowStyle");
-                optionWindow.setPosition(Gdx.graphics.getWidth() / 2.0f, Gdx.graphics.getHeight() / 2.0f, Align.center);
-                stage.addActor(optionWindow);
+
+            // reloads option window if requested (only if its opened) - updates language changes
+            if(rebuild && optionWindow.getStage().equals(stage))
+                loadWindow(optionWindow, true);
+
+        } else if(window.equals(loginWindow)) {
+            switch(cmd) {
+                case LOAD_REGISTER_WINDOW:
+                    loadWindow(registerWindow, true); // loads register window
+                    break;
+                default:
+                    Gdx.app.error("Unknown Window Command", "Current screen received an unknown command from login window");
             }
         }
     }
@@ -257,10 +268,36 @@ public class MainMenuScreen implements Screen {
         exitBtn.setText(langBundle.format("exit"));
     }
 
+    /**
+     * Loads a game window into stage
+     * @param gameWindow the game window to be loaded
+     * @param single if window should be the only one opened, if so close all other windows
+     */
+    private void loadWindow(GameWindow gameWindow, boolean single) {
+        // clear all windows to make sure only one is going to be opened at the same time
+        if(single)
+            clearWindows();
+        // builds game window - builds make sure that this window is not opened already and that it is clear for rebuilding
+        gameWindow.build();
+        // centers game window
+        gameWindow.setPosition(Gdx.graphics.getWidth() / 2.0f, Gdx.graphics.getHeight() / 2.0f, Align.center);
+        // adds built game window to the stage to display it
+        stage.addActor(gameWindow);
+    }
+
+    // remove all windows from stage
+    private void clearWindows() {
+        infoWindow.remove();
+        optionWindow.remove();
+        loginWindow.remove();
+        registerWindow.remove();
+    }
+
     // possible screen commands to receive from windows
     enum ScreenCommands {
         RELOAD_LANGUAGE,
-        RELOAD_VOLUME
+        RELOAD_VOLUME,
+        LOAD_REGISTER_WINDOW
     }
 
     /**
@@ -301,48 +338,20 @@ public class MainMenuScreen implements Screen {
 
         // called when play button is pressed
         private void playBtnOnClick(InputEvent event, float x, float y) {
-            // clear all windows to make sure only one is going to be opened at the same time
-            clearWindows();
-            // updates language bundle
-            langBundle = manager.get("lang/langbundle", I18NBundle.class);
-            // creates login window
-            loginWindow = new LoginWindow(game, stage, manager ,
-                    " "+langBundle.format("loginWindowTitle"),
-                    skin, "newWindowStyle");
-            loginWindow.setPosition(Gdx.graphics.getWidth() / 2.0f, Gdx.graphics.getHeight() / 2.0f, Align.center);
-            stage.addActor(loginWindow);
+            // loads login window
+            loadWindow(loginWindow, true);
         }
 
         // called when info button is pressed
         private void infoBtnOnClick(InputEvent event, float x, float y) {
-            // clear all windows to make sure only one is going to be opened at the same time
-            clearWindows();
-            // updates language bundle
-            langBundle = manager.get("lang/langbundle", I18NBundle.class);
-            // adds option window into stage in case user opens it
-            infoWindow =  new InfoWindow(game, getInstance(), manager, langBundle.format("info"),
-                                            skin, "newWindowStyle");
-            infoWindow.setPosition(Gdx.graphics.getWidth() / 2.0f, Gdx.graphics.getHeight() / 2.0f, Align.center);
-            stage.addActor(infoWindow);
+            // loads info window
+            loadWindow(infoWindow, true);
         }
 
         // called when options button is pressed
         private void optionsBtnOnClick(InputEvent event, float x, float y) {
-            // clear all windows to make sure only one is going to be opened at the same time
-            clearWindows();
-            // updates language bundle
-            langBundle = manager.get("lang/langbundle", I18NBundle.class);
-            // adds option window into stage in case user opens it
-            optionWindow =  new OptionWindow(game, getInstance(), manager, langBundle.format("option"),
-                    skin, "newWindowStyle");
-            optionWindow.setPosition(Gdx.graphics.getWidth() / 2.0f, Gdx.graphics.getHeight() / 2.0f, Align.center);
-            stage.addActor(optionWindow);
-        }
-
-        // remove all windows from stage
-        private void clearWindows() {
-            optionWindow.remove();
-            loginWindow.remove();
+            // loads option window
+            loadWindow(optionWindow, true);
         }
 
         // called when exit button is pressed

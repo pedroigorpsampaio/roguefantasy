@@ -2,9 +2,10 @@ package com.mygdx.game.ui;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
-import com.badlogic.gdx.Preferences;
+import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Cursor;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -14,32 +15,28 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
-import com.badlogic.gdx.scenes.scene2d.ui.Window;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.Scaling;
+import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
 
 /**
  * A class that encapsulates the option menu window
  */
-public class LoginWindow extends Window {
-    private RogueFantasy game;
-    private Stage stage;
-    private Preferences prefs;
-    private AssetManager manager;
-    private Skin skin;
-    private TextButton backBtn;
-    private I18NBundle langBundle;
+public class LoginWindow extends GameWindow {
     private Label projectDescLabel;
     private Label usernameLabel;
     private Label passwordLabel;
+    private TypingLabel forgotPwLabel;
+    private TypingLabel registerLinkLabel;
     private TextField passwordTextField;
     private TextField userNameTextField;
     private CheckBox showPasswordCB;
     private CheckBox rememberCB;
+    private TextButton backBtn;
     private TextButton loginBtn;
 
     /**
@@ -52,22 +49,26 @@ public class LoginWindow extends Window {
      * @param skin    the game skin to be used when building the window
      * @param styleName the style name present in the skin to be used when building the window
      */
-    public LoginWindow(RogueFantasy game, Stage stage, AssetManager manager, String title, Skin skin, String styleName) {
-        super(title, skin, styleName);
-        this.game = game;
-        this.stage = stage;
-        this.manager = manager;
-        this.skin = skin;
+    public LoginWindow(RogueFantasy game, Stage stage, Screen parent, AssetManager manager, String title, Skin skin, String styleName) {
+        super(game, stage, parent, manager, title, skin, styleName);
+    }
 
-        // gets language bundle from asset manager
+    @Override
+    public void build() {
+        // makes sure window is clear and not in stage before building it
+        this.clear();
+        this.remove();
+
+        // makes sure language is up to date with current selected option
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
 
-        // gets preferences reference, that stores simple data persisted between executions
-        prefs = Gdx.app.getPreferences("globalPrefs");
+        // makes sure title is in the correct language
+        this.getTitleLabel().setText(" "+langBundle.format("loginWindowTitle"));
 
         // label that describes the project name/version
         String descStr = " "+ langBundle.format("game") + " " + langBundle.format("version");
-        final Label projectDescLabel = new Label(descStr, skin, "font8", Color.WHITE);
+        projectDescLabel = new Label(descStr, skin, "fontMedium", Color.WHITE);
+        projectDescLabel.setAlignment(Align.center);
 
         // remember checkbox
         String rememberStr = " "+ langBundle.format("rememberLogin");
@@ -78,7 +79,7 @@ public class LoginWindow extends Window {
         // TODO: ADJUST LOGIN MENU UP ON KEYBOARD OPEN - ON ANDROID
         // username label
         String usrStr = langBundle.format("username").substring(0, 1).toUpperCase() + langBundle.format("username").substring(1);
-        final Label usernameLabel = new Label( usrStr + ": ", skin, "font8", Color.WHITE);
+        usernameLabel = new Label( usrStr + ": ", skin, "fontMedium", Color.WHITE);
         usernameLabel.setAlignment(Align.center);
         // username text field
         userNameTextField = new TextField(prefs.getString("username", ""), skin, "newTextFieldStyle");
@@ -87,7 +88,7 @@ public class LoginWindow extends Window {
 
         // password label
         String passStr = langBundle.format("password").substring(0, 1).toUpperCase() + langBundle.format("password").substring(1);
-        final Label passwordLabel = new Label(passStr+": ", skin, "font8", Color.WHITE);
+        passwordLabel = new Label(passStr+": ", skin, "fontMedium", Color.WHITE);
         passwordLabel.setAlignment(Align.center);
         // password text field in password mode.
         passwordTextField = new TextField("", skin, "newTextFieldStyle");
@@ -95,6 +96,21 @@ public class LoginWindow extends Window {
         passwordTextField.setAlignment(Align.center);
         passwordTextField.setPasswordCharacter('*');
         passwordTextField.setPasswordMode(true);
+
+        // forgot password label with different color
+        // TODO: FORGOT PASSWORD RECOVERY
+        // TODO: INSTANT TEXT WITH NO EFFECT WITH TYPIST , HOW?
+        forgotPwLabel = new TypingLabel("{SIZE=95%}{COLOR=SKY}[_]"+langBundle.format("forgotPassword"), iconFont);
+        //forgotPwLabel.setFontScale(0.9f);
+        forgotPwLabel.setAlignment(Align.center);
+        forgotPwLabel.skipToTheEnd();
+
+        // register account link label
+        registerLinkLabel = new TypingLabel("{SPEED=1.5}"+langBundle.format("dontHaveAccount") +
+                " {COLOR=SKY}[_]" + langBundle.format("register"), iconFont);
+        //registerLinkLabel.setFontScale(0.9f);
+        registerLinkLabel.setAlignment(Align.center);
+        registerLinkLabel.skipToTheEnd();
 
         // remember me checkbox to choose the option to store login credentials
         // TODO: STORE LOGIN CREDENTIALS - SEND PREFERENCES TO BUILD WINDOW WITH PREVIOUS DATA
@@ -120,25 +136,26 @@ public class LoginWindow extends Window {
 
         // builds options window
         this.getTitleTable().padBottom(6);
-        this.defaults().spaceBottom(10).padRight(5).padLeft(5).padBottom(2).minWidth(320);
+        this.defaults().spaceBottom(10).padRight(22).padLeft(1).padBottom(10).minWidth(320);
         this.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
-        this.getTitleTable().padBottom(6);
         this.setMovable(false);
-        this.defaults().spaceBottom(10).padRight(5).padLeft(5).padBottom(2).minWidth(320);
-        this.add(projectDescLabel).colspan(0);
+        this.add(projectDescLabel).colspan(2);
         this.row();
         this.add(usernameLabel).colspan(1);
-        this.add(userNameTextField).minWidth(213).expandX().fillX().colspan(1);
+        this.add(userNameTextField).minWidth(324).colspan(1);
         this.row();
         this.add(passwordLabel).colspan(1);
-        this.add(passwordTextField).minWidth(213).expandX().fillX().colspan(1);
+        this.add(passwordTextField).minWidth(324).colspan(1);
         this.row();
         this.add(rememberCB).colspan(1);
         this.add(showPasswordCB).colspan(1);
         this.row();
-        this.add(backBtn).minWidth(182).colspan(1);
-        this.add(loginBtn).minWidth(182).colspan(1);
+        this.add(backBtn).minWidth(182).colspan(1).spaceTop(25);
+        this.add(loginBtn).minWidth(182).colspan(2).spaceTop(25);
         this.row();
+        this.add(forgotPwLabel).colspan(2).spaceTop(25);
+        this.row();
+        this.add(registerLinkLabel).colspan(2).spaceTop(24);
         this.pack();
 
         // instantiate the controller that adds listeners and acts when needed
@@ -185,6 +202,49 @@ public class LoginWindow extends Window {
                     loginBtnOnClick(event, x, y);
                 }
             });
+            forgotPwLabel.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    super.clicked(event, x, y);
+                    forgotPwOnClick(event, x, y);
+                }
+                @Override
+                public void enter(InputEvent event, float x, float y, int pointer, Actor fromActor) {
+                    Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Hand);
+                }
+                @Override
+                public void exit(InputEvent event, float x, float y, int pointer, Actor toActor) {
+                    Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Arrow);
+                }
+            });
+            registerLinkLabel.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    super.clicked(event, x, y);
+                    registerLinkOnClick(event, x, y);
+                }
+                @Override
+                public void enter(InputEvent event, float x, float y, int pointer, Actor fromActor) {
+                    Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Hand);
+                }
+                @Override
+                public void exit(InputEvent event, float x, float y, int pointer, Actor toActor) {
+                    Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Arrow);
+                }
+            });
+        }
+
+        // called when register link is clicked, loads register window
+        private void registerLinkOnClick(InputEvent event, float x, float y) {
+            // calls parent screen update method to properly switch to register window
+            if(parent instanceof MainMenuScreen) {
+                ((MainMenuScreen) parent).update(getInstance(), false, MainMenuScreen.ScreenCommands.LOAD_REGISTER_WINDOW);
+            }
+        }
+
+        // called when forgot password is clicked, gives user option to recover
+        // TODO: IMPLEMENT FORGOT PASSWORD RECOVERY
+        private void forgotPwOnClick(InputEvent event, float x, float y) {
         }
 
         // toggle password visibility
@@ -242,7 +302,6 @@ public class LoginWindow extends Window {
             Label.LabelStyle lStyle = skin.get("newLabelStyle", Label.LabelStyle.class);
             TextButton.TextButtonStyle tbStyle = skin.get("newTextButtonStyle", TextButton.TextButtonStyle.class);
 
-
             if (userNameTextField.getText().length() == 0 || passwordTextField.getText().length() == 0) {
                 infoLogin[0] = langBundle.format("loginWrongInfo");
                 infoLoginBtn[0] = langBundle.format("back");
@@ -252,13 +311,16 @@ public class LoginWindow extends Window {
             }
             System.out.println("Login with Following Credentials: " + userNameTextField.getText() + "/" + passwordTextField.getText());
 
-
-            Dialog infoDialog = new Dialog(langBundle.format("loginInfoDialog"), skin, "newWindowStyle")
-                    .text(infoLogin[0], lStyle).button(infoLoginBtn[0], skin, tbStyle).key(Input.Keys.ENTER, true)
-                    .key(Input.Keys.ESCAPE, false);
-
+            Dialog infoDialog = new Dialog(langBundle.format("loginInfoDialog"), skin, "newWindowStyle");
+            infoDialog.text(infoLogin[0], lStyle).button(infoLoginBtn[0], skin, tbStyle);
+            infoDialog.key(Input.Keys.ENTER, true).key(Input.Keys.ESCAPE, false);
             infoDialog.getTitleTable().padBottom(3).padLeft(2);
+            infoDialog.pack();
             infoDialog.show(stage);
         }
+    }
+
+    private LoginWindow getInstance() {
+        return this;
     }
 }

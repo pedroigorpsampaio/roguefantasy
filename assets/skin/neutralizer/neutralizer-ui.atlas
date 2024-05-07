@@ -622,3 +622,18 @@ window
   orig: 54, 60
   offset: 0, 0
   index: -1
+list-selection
+  rotate: false
+  xy: 50, 1
+  size: 1, 1
+  orig: 1, 1
+  offset: 0, 0
+  index: -1
+window-bg
+  rotate: false
+  xy: 52, 1
+  size: 1, 1
+  orig: 1, 1
+  offset: 0, 0
+  index: -1
+
