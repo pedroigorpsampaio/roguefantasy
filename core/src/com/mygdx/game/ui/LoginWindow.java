@@ -162,6 +162,11 @@ public class LoginWindow extends GameWindow {
         new loginController();
     }
 
+    @Override
+    public void resize(int width, int height) {
+
+    }
+
     /**
      * A nested class that controls the option window
      */
@@ -265,7 +270,7 @@ public class LoginWindow extends GameWindow {
             prefs.flush();
         }
 
-        // Makes username field acccept alphanumeric and digits only
+        // Makes username field accept alphanumeric and digits only
         private boolean userNameFilter(TextField textField, char c) {
             if (Character.toString(c).matches("^[a-zA-Z0-9]"))
                 return true;

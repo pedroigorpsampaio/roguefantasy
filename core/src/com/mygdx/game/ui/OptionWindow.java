@@ -114,11 +114,16 @@ public class OptionWindow extends GameWindow {
         this.add(langLabel).colspan(1);
         this.add(langBox).width(240).spaceTop(16);
         this.row();
-        this.add(backBtn).minWidth(182).colspan(2).spaceTop(21);
+        this.add(backBtn).minWidth(182).colspan(2).spaceTop(21).padBottom(10);
         this.pack();
 
         // instantiate the controller that adds listeners and acts when needed
         new OptionController();
+    }
+
+    @Override
+    public void resize(int width, int height) {
+
     }
 
     /**

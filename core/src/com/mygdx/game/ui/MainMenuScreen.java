@@ -133,7 +133,7 @@ public class MainMenuScreen implements Screen {
         bgStage.addActor(bg);
 
         // updates camera zoom based on current device screen
-        float uiZoomFactor = 1280f / Gdx.graphics.getWidth();
+        float uiZoomFactor = 720f / Gdx.graphics.getHeight();
         if(Gdx.app.getType() == Application.ApplicationType.Android) // zoom menu if user is using android device
             ((OrthographicCamera)stage.getCamera()).zoom = uiZoomFactor; // zoom in  window menu
 
@@ -186,6 +186,7 @@ public class MainMenuScreen implements Screen {
     }
 
     // updates stage viewport and centers menu windows on resize
+    // also calls resize methods from windows
     @Override
     public void resize(int width, int height) {
         bgStage.getViewport().update(width, height, true);
@@ -195,6 +196,10 @@ public class MainMenuScreen implements Screen {
         loginWindow.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
         registerWindow.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
         infoWindow.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
+        optionWindow.resize(width, height);
+        loginWindow.resize(width, height);
+        registerWindow.resize(width, height);
+        infoWindow.resize(width, height);
     }
 
     @Override
@@ -254,6 +259,14 @@ public class MainMenuScreen implements Screen {
                 default:
                     Gdx.app.error("Unknown Window Command", "Current screen received an unknown command from login window");
             }
+        } else if(window.equals(registerWindow)) {
+            switch(cmd) {
+                case LOAD_LOGIN_WINDOW:
+                    loadWindow(loginWindow, true); // loads register window
+                    break;
+                default:
+                    Gdx.app.error("Unknown Window Command", "Current screen received an unknown command from register window");
+            }
         }
     }
 
@@ -283,6 +296,7 @@ public class MainMenuScreen implements Screen {
         gameWindow.setPosition(Gdx.graphics.getWidth() / 2.0f, Gdx.graphics.getHeight() / 2.0f, Align.center);
         // adds built game window to the stage to display it
         stage.addActor(gameWindow);
+        stage.draw();
     }
 
     // remove all windows from stage
@@ -297,7 +311,8 @@ public class MainMenuScreen implements Screen {
     enum ScreenCommands {
         RELOAD_LANGUAGE,
         RELOAD_VOLUME,
-        LOAD_REGISTER_WINDOW
+        LOAD_REGISTER_WINDOW,
+        LOAD_LOGIN_WINDOW
     }
 
     /**
@@ -357,6 +372,7 @@ public class MainMenuScreen implements Screen {
         // called when exit button is pressed
         private void exitBtnOnClick(InputEvent event, float x, float y) {
             Gdx.app.exit();
+            // TODO: FIGURE OUT WHAT TO DO ON ANDROID (NO EXIT BUTTON?)
             //System.exit(0);
         }
     }

@@ -9,6 +9,7 @@ import com.badlogic.gdx.assets.loaders.I18NBundleLoader;
 import com.badlogic.gdx.assets.loaders.resolvers.InternalFileHandleResolver;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
@@ -16,6 +17,7 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGeneratorLoader;
 import com.badlogic.gdx.graphics.g2d.freetype.FreetypeFontLoader;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.List;
 import com.badlogic.gdx.scenes.scene2d.ui.ProgressBar;
@@ -96,6 +98,10 @@ public class LoadScreen implements Screen {
             // creates the typist font containing emojis and game icons that is ready for effects
             Font iconFont = new Font(fontMedium);
             Font emojiFont = new Font(fontMedium);
+            iconFont.setInlineImageMetrics(-50f, -4f, 0f);
+            emojiFont.setInlineImageMetrics(-15f, -12f, 0f);
+            iconFont.setUnderlineMetrics(-0.4f,-0.1f,-0.1f,0f);
+            emojiFont.setUnderlineMetrics(-0.4f,-0.1f,-0.1f,0f);
             KnownFonts.addEmoji(emojiFont);
             KnownFonts.addGameIcons(iconFont);
             skin.add("emojiFont", emojiFont, Font.class);
@@ -115,6 +121,14 @@ public class LoadScreen implements Screen {
             TextField.TextFieldStyle tfStyle = skin.get(TextField.TextFieldStyle.class);
             tfStyle.font = fontMedium;
             tfStyle.fontColor = Color.WHITE;
+            Pixmap pxColor = new Pixmap(1, 1, Pixmap.Format.RGB888);
+            pxColor.setColor(new Color(0x75757575));
+            pxColor.fill();
+            tfStyle.focusedBackground = new Image(new Texture(pxColor)).getDrawable();
+            pxColor.setColor(new Color(Color.TEAL));
+            pxColor.fill();
+            tfStyle.selection =  new Image(new Texture(pxColor)).getDrawable();
+            pxColor.dispose();
             skin.add("newTextFieldStyle", tfStyle, TextField.TextFieldStyle.class);
 
             TextButton.TextButtonStyle tbStyle = skin.get(TextButton.TextButtonStyle.class);

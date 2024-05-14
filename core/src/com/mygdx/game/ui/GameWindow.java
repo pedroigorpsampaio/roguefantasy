@@ -25,6 +25,7 @@ import com.mygdx.game.RogueFantasy;
  */
 public abstract class GameWindow extends Window {
     protected Font iconFont;
+    protected Font emojiFont;
     protected RogueFantasy game;
     protected Stage stage;
     protected Screen parent;
@@ -53,6 +54,7 @@ public abstract class GameWindow extends Window {
         this.manager = manager;
         this.skin = skin;
         iconFont = skin.get("iconFont", Font.class); // gets typist font with icons
+        emojiFont = skin.get("emojiFont", Font.class); // gets typist font with icons
 
         // gets language bundle from asset manager
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
@@ -65,5 +67,10 @@ public abstract class GameWindow extends Window {
      * Abstract method for subclasses to build the window according to their necessities
      */
     public abstract void build();
+
+    /**
+     * Abstract method for subclasses to act according to their necessities when game is resized
+     */
+    public abstract void resize(int width, int height);
 
 }

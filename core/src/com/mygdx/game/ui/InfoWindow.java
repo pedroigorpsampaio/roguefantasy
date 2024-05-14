@@ -64,14 +64,14 @@ public class InfoWindow extends GameWindow {
 
         // discord link label with different color and effects
         //https://game-icons.net/about.html#authors
-        String discText = "{SIZE=130%}{COLOR=sage}[+talk][%]{ENDCOLOR}   {FADE}{GRADIENT=ROYAL;azure}" +
-                "{LINK=http://discord.gg/invite}http://discord.gg/invite{ENDGRADIENT}{ENDFADE}    ";
+        String discText = "{SIZE=135%}{COLOR=sage}[+talk][%]{ENDCOLOR}{FADE}{GRADIENT=ROYAL;azure}" +
+                "{LINK=http://discord.gg/invite}http://discord.gg/invite{ENDGRADIENT}{ENDFADE}           ";
         discLabel = new TypingLabel( discText, iconFont) ;
         discLabel.setAlignment(Align.center);
 
-        String creditsText = "{SIZE=79%}{COLOR=ROYAL}[+pencil-brush][%]{ENDCOLOR}   " +
+        String creditsText = "{SIZE=79%}{COLOR=ROYAL}[+pencil-brush][%]{ENDCOLOR}" +
                 "{SIZE=79%}{FADE}{GRADIENT=GOLD;red}" +
-                "{LINK=https://game-icons.net/about.html#authors}@game icons{ENDGRADIENT}{ENDFADE}[%]    ";
+                "{LINK=https://game-icons.net/about.html#authors}@game icons{ENDGRADIENT}{ENDFADE}[%]      ";
         creditsLabel = new TypingLabel( creditsText, iconFont) ;
         creditsLabel.setAlignment(Align.center);
 
@@ -89,11 +89,16 @@ public class InfoWindow extends GameWindow {
         this.row();
         this.add(creditsLabel).padTop(51).padBottom(14);
         this.row();
-        this.add(backBtn).minWidth(182).spaceTop(25);
+        this.add(backBtn).minWidth(182).spaceTop(25).padBottom(10);
         this.pack();
 
         // instantiate the controller that adds listeners and acts when needed
         new InfoController();
+    }
+
+    @Override
+    public void resize(int width, int height) {
+
     }
 
     /**

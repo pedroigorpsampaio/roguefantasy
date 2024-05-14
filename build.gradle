@@ -142,5 +142,6 @@ project(":core") {
         api "com.kotcrab.vis:vis-ui:$visuiVersion"
         api "com.badlogicgames.gdx:gdx-ai:$aiVersion"
         implementation "com.github.tommyettinger:textratypist:0.10.0"
+        implementation 'com.github.crykn:kryonet:2.22.8'
     }
 }
