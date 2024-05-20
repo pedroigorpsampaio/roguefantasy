@@ -12,9 +12,9 @@ import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
-import com.mygdx.server.network.LoginRegister;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
+import com.mygdx.server.ui.RogueFantasyServer;
 
 
 /**
@@ -25,6 +25,7 @@ import com.mygdx.server.ui.CommandDispatcher.Command;
 public class LoginServer implements CmdReceiver {
     Server server;
     HashSet<LoginRegister.Character> loggedIn = new HashSet();
+    private boolean isOnline = false; // is this server online?
 
     public LoginServer() throws IOException {
         server = new Server() {
@@ -155,9 +156,15 @@ public class LoginServer implements CmdReceiver {
                 }
             }
         });
-        server.bind(LoginRegister.port);
+        try {
+            server.bind(LoginRegister.port);
+        } catch (IOException e) {
+            Log.info("login-server", "Could not bind port " + LoginRegister.port + " and start login server");
+            return;
+        }
+        // server online
         server.start();
-
+        isOnline = true;
         Log.info("login-server", "Login Server is running!");
     }
 
@@ -234,14 +241,37 @@ public class LoginServer implements CmdReceiver {
     }
 
     public void stop() {
-        System.out.println("Stopping Login Server...");
-        server.stop();
+        if(isOnline) {
+            Log.info("login-server", "Login server is stopping...");
+            server.stop();
+            server.close();
+            Log.info("login-server", "Login server has stopped!");
+            isOnline = false;
+        } else
+            Log.info("login-server", "Login server is not running!");
     }
 
-    // process commands received via console
+    // process commands received via dispatcher
     @Override
     public void process(Command cmd) {
+        switch (cmd.getType()) {
+            case STOP:
+                stop();
+                break;
+            case RESTART:
+                stop(); // only stops server, will be restarted in UI module
+                break;
+            default:
+                break;
+        }
+    }
 
+    public boolean isOnline() {
+        return isOnline;
+    }
+
+    public int getNumberOfPlayersOnline() {
+        return loggedIn.size();
     }
 
     // This holds per connection state.

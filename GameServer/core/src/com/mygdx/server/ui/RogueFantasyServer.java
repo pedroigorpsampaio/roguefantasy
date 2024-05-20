@@ -1,8 +1,15 @@
 package com.mygdx.server.ui;
 
+import static com.esotericsoftware.minlog.Log.LEVEL_DEBUG;
+import static com.esotericsoftware.minlog.Log.LEVEL_ERROR;
+import static com.esotericsoftware.minlog.Log.LEVEL_INFO;
+import static com.esotericsoftware.minlog.Log.LEVEL_TRACE;
+import static com.esotericsoftware.minlog.Log.LEVEL_WARN;
+
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.scenes.scene2d.Actor;
@@ -21,75 +28,73 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.badlogic.gdx.utils.Timer;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.esotericsoftware.minlog.Log;
 import com.mygdx.server.network.LoginServer;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.io.UnsupportedEncodingException;
-import java.nio.charset.StandardCharsets;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.management.ManagementFactory;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
-import java.util.LinkedList;
-import java.util.ListIterator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class RogueFantasyServer extends ApplicationAdapter implements CmdReceiver {
 	LoginServer loginServer;
 	CommandDispatcher dispatcher;
 	SpriteBatch batch;
-	private PrintStream archived;
-	private ByteArrayOutputStream outputStream;
-	private String utf8, data ="";
 	private Skin skin;
 	private Stage stage;
 	private Table uiTable;
 	private Label logLabel;
 	private ScrollPane logScrollPane;
 	private TextButton sendBtn;
-	private byte[] lastBaos = {};
-	private LinkedList<String> globalLogs, loginLogs, chatLogs, gameLogs; // will contain logs from each server and global logs
-	private LogTab currentTab; // current log tab
-	private TextButton globalTabBtn, loginTabBtn, chatTablBtn, gameTabBtn; // tab buttons
+	private ArrayList<String> cmdHistory; // command history to be saved
+	private int cmdOffset = -1; // cmd history offset, when user scrolls through cmd history
+	private List<String> globalLogs, loginLogs, chatLogs, gameLogs; // will contain logs from each server and global logs
+	private ServerChannel currentTab; // current log tab
+	private TextButton globalTabBtn, loginTabBtn, chatTablBtn, gameTabBtn, metricsBtn; // tab buttons
 	private Label titleLabel;
 	private TextField cmdField;
 	private ButtonGroup<TextButton> bgTabs; // button group containing button tabs
+	private final long firstServerTime = System.currentTimeMillis(); // time when server started
+	private UIController controller;
+	private boolean currentTabNeedsUpdate = false;
+	private double cpuLoad;
+	private long ramLoad;
+	private Music timeCommandoSong, corneriaSong, demonBlueSong; // songs for gimmick purposes
 
 	@Override
 	public void create ()  {
 		batch = new SpriteBatch();
 		skin = new Skin(Gdx.files.internal("skin/uiskin.json"));
 
+		// gimmick musics (use play command)
+		timeCommandoSong = Gdx.audio.newMusic(Gdx.files.internal("music/time_commando.mp3"));
+		corneriaSong = Gdx.audio.newMusic(Gdx.files.internal("music/corneria.mp3"));
+		demonBlueSong = Gdx.audio.newMusic(Gdx.files.internal("music/demon_blue.mp3"));
+
 		// initialize linked lists of logs
-		globalLogs = new LinkedList<>();
-		loginLogs = new LinkedList<>();
-		chatLogs = new LinkedList<>();
-		gameLogs = new LinkedList<>();
-		currentTab = LogTab.GLOBAL; // starts at global tab, all info tab
+		globalLogs = Collections.synchronizedList(new ArrayList<>());
+		loginLogs = Collections.synchronizedList(new ArrayList<>());
+		chatLogs = Collections.synchronizedList(new ArrayList<>());
+		gameLogs = Collections.synchronizedList(new ArrayList<>());
+		cmdHistory = new ArrayList<>();
+		currentTab = ServerChannel.GLOBAL; // starts at global tab, all info tab
 
-		// redirect system out to use it on server console
-		outputStream = new ByteArrayOutputStream();
-		utf8 = StandardCharsets.UTF_8.name();
-		try {
-			archived =  new PrintStream(outputStream, true, utf8);
-		} catch (UnsupportedEncodingException e) {
-			throw new RuntimeException(e);
-		}
-		System.setErr(System.out); // err becomes default out
-		System.setOut(archived);
-		// log level
-		Log.set(Log.LEVEL_DEBUG);
+		Log.setLogger(new ServerLogger()); // sets logger class to be able to catch logs and display it on screen
 
-		// starts login server
-		try {
-			loginServer = new LoginServer();
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-		
+		Log.set(LEVEL_DEBUG); // sets log level
+
 		// creates ui stage
 		stage = new Stage(new ScreenViewport());
 		Gdx.input.setInputProcessor(stage);
@@ -100,7 +105,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		titleLabel.setAlignment(Align.center);
 
 		// log label
-		logLabel = new Label(data, skin);
+		logLabel = new Label("", skin);
 		logLabel.setAlignment(Align.topLeft);
 		logLabel.setWrap(true);
 
@@ -109,7 +114,8 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		loginTabBtn = new TextButton("Login", skin, "toggle");
 		chatTablBtn = new TextButton("Chat", skin, "toggle");
 		gameTabBtn = new TextButton("Game", skin, "toggle");
-		bgTabs = new ButtonGroup<>(globalTabBtn, loginTabBtn, chatTablBtn, gameTabBtn);
+		metricsBtn = new TextButton("Metrics", skin, "toggle");
+		bgTabs = new ButtonGroup<>(globalTabBtn, loginTabBtn, chatTablBtn, gameTabBtn, metricsBtn);
 		bgTabs.setMinCheckCount(1);
 		bgTabs.setMaxCheckCount(1);
 		bgTabs.setUncheckLast(true);
@@ -134,6 +140,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		hgTabBtns.addActor(loginTabBtn);
 		hgTabBtns.addActor(chatTablBtn);
 		hgTabBtns.addActor(gameTabBtn);
+		hgTabBtns.addActor(metricsBtn);
 		hgTabBtns.space(4);
 		uiTable.add(hgTabBtns).colspan(1).left();
 		uiTable.row();
@@ -158,9 +165,47 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		stage.addActor(uiTable);
 
 		// ui controller
-		new UIController();
+		controller = new UIController();
+
+		// starts update timer, that updates UI metrics between set intervals
+		Timer.schedule(controller.updateTimer, 0f, GlobalConfig.METRICS_UPDATE_INTERVAL);
 		// cmd dispatcher
 		dispatcher = new CommandDispatcher(this, loginServer);
+		// starts all servers
+		startServer(ServerChannel.ALL);
+	}
+
+	private void startServer(ServerChannel serverType) {
+		if(serverType == ServerChannel.ALL || serverType == ServerChannel.LOGIN) {
+			// starts login server if not online already
+			if(loginServer == null || !loginServer.isOnline()) {
+				Log.info("cmd", "Starting " +serverType.text+ " server...");
+				try {
+					loginServer = new LoginServer();
+					dispatcher.setLoginServer(loginServer);
+				} catch (IOException e) {
+					Log.error("login-server", "Error starting " + serverType.text + "  server: " + e);
+				}
+			} else
+				Log.info("cmd", serverType.text + " server is already running!");
+		}
+		if(serverType == ServerChannel.ALL || serverType == ServerChannel.CHAT) {
+			// TODO chat server
+		}
+		if(serverType == ServerChannel.ALL || serverType == ServerChannel.GAME) {
+			// TODO game server
+		}
+	}
+
+	// just free servers references here
+	private void stopServer(ServerChannel serverType) {
+		if(serverType == ServerChannel.ALL || serverType == ServerChannel.LOGIN) {loginServer = null;}
+		if(serverType == ServerChannel.ALL || serverType == ServerChannel.CHAT) {
+			// TODO chat server
+		}
+		if(serverType == ServerChannel.ALL || serverType == ServerChannel.GAME) {
+			// TODO game server
+		}
 	}
 
 	// only scrolls to the end if bar is at the end,
@@ -175,86 +220,66 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 
 	@Override
 	public void render () {
-		// if new log occurs, proccess it
-		boolean newLog = lastBaos.length != outputStream.size();
-		if(newLog) {
-			//Log.debug("global", "New log input");
 
-			try {
-				data = outputStream.toString(utf8); // gets new data in stream, after last reset
-			} catch (UnsupportedEncodingException e) {
-				throw new RuntimeException(e);
-			}
-			parseLogData(data); // parses new log data
-			scrollToEnd(); // scrolls to the end if user is already at the end of scrollpane
-			// updates last bytearray
-			outputStream.reset(); // empty stream to keep it from growing
-			lastBaos = outputStream.toByteArray();
+		if(currentTabNeedsUpdate) {
+			updateLogLabel(currentTab);
+			scrollToEnd(); // scroll to keep up with log (only scrolls if bar is already bottom)
+			currentTabNeedsUpdate = false;
 		}
 
 		ScreenUtils.clear(0.4f, 0.4f, 0.5f, 1);
-//		batch.begin();
-//		font.draw(batch, data, 222, 222);
-//		batch.end();
 		stage.act(Math.min(Gdx.graphics.getDeltaTime(), 1 / 30f));
 		stage.draw();
 
 	}
 
 	/**
-	 * Parses log data, allocating it to their respective linked lists
-	 * @param data	the log data to be parsed in Log (minlog) format from kryonet
-	 *              can be multi line strings, since it will be split by lines
+	 * Returns the log list that corresponds to the tab received in parameter
+	 * @param tab	the tab to get the log list from
+	 * @return		the log list that corresponds to the tab
 	 */
-	private void parseLogData(String data) {
-		// splits each line of the log data
-		String[] splitData = data.split("\\n");
-		// for each line allocate it to the respective linked list
-		for (int i=0; i<splitData.length; i++) {
-			String tag = splitData[i].substring(splitData[i].indexOf("[")+1, splitData[i].indexOf("]"));
+	private List<String> logListFromTab(ServerChannel tab) {
+		List<String> list;
 
-			switch(tag) {
-				case "login-server":
-					storeLog(loginLogs, splitData[i]);
-					if(currentTab == LogTab.LOGIN) // updates if is selected tab
-						updateLogLabel(loginLogs);
-					break;
-				case "chat-server":
-					storeLog(chatLogs, splitData[i]);
-					if(currentTab == LogTab.CHAT) // updates if is selected tab
-						updateLogLabel(chatLogs);
-					break;
-				case "game-server":
-					storeLog(gameLogs, splitData[i]);
-					if(currentTab == LogTab.GAME) // updates if is selected tab
-						updateLogLabel(gameLogs);
-					break;
-				default:
-					break;
-			}
-			storeLog(globalLogs, splitData[i]); // always adds to global
-			if(currentTab == LogTab.GLOBAL) // updates label if selected tab is global
-				updateLogLabel(globalLogs);
+		switch (tab) {
+			case LOGIN:
+				list = loginLogs;
+				break;
+			case CHAT:
+				list = chatLogs;
+				break;
+			case GAME:
+				list = gameLogs;
+				break;
+			default:
+				list = globalLogs;
+				break;
 		}
+
+		return list;
 	}
 
 	/**
 	 * Updates the log label text
-	 * @param logList	the log list to use for log label
+	 * @param tab	the tab to update log list
 	 */
-	private void updateLogLabel(LinkedList<String> logList) {
-		// By using String Builder
-		StringBuilder stringBuilder = new StringBuilder();
+	private void updateLogLabel(ServerChannel tab) {
+		if(tab != ServerChannel.METRICS) { // if its not metrics, load logs
+			List<String> list = logListFromTab(tab); // gets log from tab
+			StringBuilder stringBuilder = new StringBuilder(); // str builder that will build log text
+			// log list may be accessed concurrently by server when receiving messages from clients
+			// since logger implementation access directly log lists to add new logs
+			synchronized(list) {
+				Iterator i = list.iterator(); // Must be in synchronized block
+				while (i.hasNext())
+					stringBuilder.append(i.next()).append("\n");
+			}
 
-		// using ListIterator for traversing a linked list
-		ListIterator<String> listIterator = logList.listIterator();
-
-		while (listIterator.hasNext()) {
-			// using append method for appending string
-			stringBuilder.append(listIterator.next())
-					.append("\n");
+			logLabel.setText(stringBuilder);
 		}
-		logLabel.setText(stringBuilder);
+		else { // if it is metrics tab, load serve metrics into label
+			controller.updateMetrics();
+		}
 	}
 
 	/**
@@ -263,10 +288,23 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	 * @param logList	the log list that the log will be added
 	 * @param log		the new log to be added to the list
 	 */
-	private void storeLog(LinkedList<String> logList, String log) {
+	private void storeLog(List<String> logList, String log) {
 		logList.add(log); // adds to the log list
 		if(logList.size() > GlobalConfig.MAX_LOG_DISPLAY_SIZE) // keep new elements only, within max size
-			logList.removeFirst();
+			logList.remove(0);
+	}
+
+	/**
+	 * Logs to the log list keeping it within the max set size
+	 * To do so it keeps only the MAX_SIZE new log inputs
+	 * @param tab	the current tab that the log will be added
+	 * @param log	the new log to be added to the list
+	 */
+	private void storeLog(ServerChannel tab, String log) {
+		List<String> list = logListFromTab(tab);
+		list.add(log); // adds to the log list
+		if(list.size() > GlobalConfig.MAX_LOG_DISPLAY_SIZE) // keep new elements only, within max size
+			list.remove(0);
 	}
 
 	@Override
@@ -281,49 +319,38 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	public void dispose () {
 		loginServer.stop(); // stops server to save it
 		batch.dispose();
-		archived.close();
 		stage.dispose();
 		skin.dispose();
-		try {
-			outputStream.close();
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
 	}
 
-	// process commands received via console
+	// process commands received via dispatcher
 	@Override
 	public void process(Command cmd) {
+		RogueFantasyServer.ServerChannel receiver;
 		switch (cmd.type) {
 			case CLEAR_LOG:
-				clearTab();
+				try {
+					controller.clearTab(ServerChannel.fromString(cmd.args[0]));
+				} catch (Exception e) { // argument does not match with possible ones
+					Log.info("cmd", "Invalid argument: "+cmd.args[0]);
+				}
+				break;
+			case START:
+			case RESTART:
+				receiver = dispatcher.getReceiver(cmd);
+				startServer(receiver);
+				break;
+			case STOP:
+				receiver = dispatcher.getReceiver(cmd);
+				stopServer(receiver);
+				break;
+			case PLAY:
+				controller.playSong(cmd.args[0], true); // plays song exclusively
+				break;
+			case PAUSE:
+				controller.stopSongs(); // stops any song that is currently playing
 				break;
 			default:
-				break;
-		}
-	}
-
-	// clears current tab
-	private void clearTab() {
-		switch(currentTab) {
-			case CHAT:
-				chatLogs.clear();
-				updateLogLabel(chatLogs);
-				break;
-			case GAME:
-				gameLogs.clear();
-				updateLogLabel(gameLogs);
-				break;
-			case LOGIN:
-				loginLogs.clear();
-				updateLogLabel(loginLogs);
-				break;
-			case GLOBAL:
-				globalLogs.clear();
-				updateLogLabel(globalLogs);
-				break;
-			default:
-				System.err.println("Unknown tab selected");
 				break;
 		}
 	}
@@ -345,7 +372,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				@Override
 				public void changed(ChangeEvent event, Actor actor) {
 					if(globalTabBtn.isChecked()) {
-						changeTab(LogTab.GLOBAL, globalLogs);
+						changeTab(ServerChannel.GLOBAL);
 					}
 				}
 			});
@@ -353,7 +380,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				@Override
 				public void changed(ChangeEvent event, Actor actor) {
 					if(loginTabBtn.isChecked()) {
-						changeTab(LogTab.LOGIN, loginLogs);
+						changeTab(ServerChannel.LOGIN);
 					}
 				}
 			});
@@ -361,7 +388,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				@Override
 				public void changed(ChangeEvent event, Actor actor) {
 					if(chatTablBtn.isChecked()) {
-						changeTab(LogTab.CHAT, chatLogs);
+						changeTab(ServerChannel.CHAT);
 					}
 				}
 			});
@@ -369,15 +396,40 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				@Override
 				public void changed(ChangeEvent event, Actor actor) {
 					if(gameTabBtn.isChecked()) {
-						changeTab(LogTab.GAME, gameLogs);
+						changeTab(ServerChannel.GAME);
+					}
+				}
+			});
+			metricsBtn.addListener(new ChangeListener() {
+				@Override
+				public void changed(ChangeEvent event, Actor actor) {
+					if(metricsBtn.isChecked()) {
+						changeTab(ServerChannel.METRICS);
 					}
 				}
 			});
 			cmdField.addListener(new InputListener() {
 				@Override
 				public boolean keyDown(InputEvent event, int keycode) {
-					if (keycode == Input.Keys.ENTER) {
+					if (keycode == Input.Keys.ENTER || keycode == Input.Keys.NUMPAD_ENTER) {
 						sendCmd(cmdField.getText());
+						cmdOffset = -1; // reset command offset if new input is made
+					} else if (keycode == Input.Keys.UP) {
+						if(!downHistoryTimer.isScheduled())
+							Timer.schedule(upHistoryTimer, 0f, .2f);
+					} else if (keycode == Input.Keys.DOWN) {
+						if(!upHistoryTimer.isScheduled())
+							Timer.schedule(downHistoryTimer, 0f, .2f);
+					}
+					return false;
+				}
+
+				@Override
+				public boolean keyUp(InputEvent event, int keycode) {
+					if (keycode == Input.Keys.UP) {
+						upHistoryTimer.cancel();
+					} else if (keycode == Input.Keys.DOWN) {
+						downHistoryTimer.cancel();
 					}
 					return false;
 				}
@@ -393,20 +445,110 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 
 				@Override
 				public boolean keyDown(InputEvent event, int keycode) {
-					if (keycode == Input.Keys.ENTER) {
+					if (keycode == Input.Keys.ENTER || keycode == Input.Keys.NUMPAD_ENTER) {
 						if(!cmdField.hasKeyboardFocus())
 							stage.setKeyboardFocus(cmdField);
 					} else if (keycode == Input.Keys.ESCAPE) {
 						if(cmdField.hasKeyboardFocus())
 							stage.setKeyboardFocus(null);
 					} else if (keycode == Input.Keys.TAB) {
-						int nextIdx = (bgTabs.getCheckedIndex() + 1) % bgTabs.getButtons().size;
+						int nextIdx;
+						if(!Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT))
+							nextIdx = (bgTabs.getCheckedIndex() + 1) % bgTabs.getButtons().size;
+						else
+							nextIdx = (bgTabs.getCheckedIndex() + bgTabs.getButtons().size - 1) % bgTabs.getButtons().size;
 						TextButton next = bgTabs.getButtons().get(nextIdx);
 						next.setChecked(true);
 					}
 					return false;
 				}
 			});
+		}
+		// timer to go through cmd history upwards when up arrow is pressed down
+		private Timer.Task upHistoryTimer = new Timer.Task() {
+			@Override
+			public void run() {
+				cmdOffset++;
+				if(cmdOffset>=cmdHistory.size()) { // already at last command
+					cmdOffset = cmdHistory.size() - 1;
+				}
+				// update text field retrieving cmd from history
+				cmdField.setText(retrieveCmd());
+				cmdField.setCursorPosition(cmdField.getText().length());
+			}
+		};
+		// timer to go through cmd history downwards when down arrow is pressed down
+		private Timer.Task downHistoryTimer = new Timer.Task() {
+			@Override
+			public void run() {
+				cmdOffset--;
+				if(cmdOffset < 0)  { // already at most recent command
+					cmdOffset = 0;
+				}
+				// update text field retrieving cmd from history
+				cmdField.setText(retrieveCmd());
+				cmdField.setCursorPosition(cmdField.getText().length());
+			}
+		};
+
+		// timer that updates metrics on intervals
+		private Timer.Task updateTimer = new Timer.Task() {
+			@Override
+			public void run() {
+				cpuLoad = ManagementFactory.getPlatformMXBean(
+						com.sun.management.OperatingSystemMXBean.class).getProcessCpuLoad();
+				int mb = 1024 * 1024;
+				// get Runtime instance
+				Runtime instance = Runtime.getRuntime();
+				ramLoad = (instance.totalMemory() - instance.freeMemory()) / mb;
+				updateMetrics(); // update metrics tab
+			}
+		};
+
+		// updates metrics table (only if it is selected)
+		private void updateMetrics() {
+			if(currentTab == ServerChannel.METRICS) {
+				long time = System.currentTimeMillis() - firstServerTime;
+				int seconds = (int) (time / 1000) % 60 ;
+				int minutes = (int) ((time / (1000*60)) % 60);
+				int hours   = (int) ((time / (1000*60*60)) % 24);
+				StringBuilder b = new StringBuilder();
+				b.append("Time elapsed server was deployed: ");
+				if (hours <= 9) b.append('0'); // avoid using format methods to decrease work
+				b.append(hours);
+				b.append(":");
+				if (minutes <= 9) b.append('0');
+				b.append(minutes);
+				b.append(":");
+				if (seconds <= 9) b.append('0');
+				b.append(seconds);
+				b.append(" (hh:mm:ss)");
+				b.append("\n");
+				b.append("Players online: ");
+				b.append(loginServer.getNumberOfPlayersOnline());
+				b.append("\n");
+				b.append("CPU Usage: ");
+				b.append((int)(cpuLoad*1000f));
+				b.append("%");
+				b.append("\n");
+				b.append("RAM Usage: ");
+				b.append(ramLoad);
+				b.append(" MB");
+				b.append("\n");
+				logLabel.setText(b);
+			}
+		}
+
+		// retrieves command from command history based on current offset
+		private String retrieveCmd() {
+			if(cmdHistory == null || cmdHistory.isEmpty()) return ""; // if cmd history is null, there is nothing to retrieve
+
+			// makes sure we are within array bounds
+			int idx = cmdHistory.size() - 1 - cmdOffset;
+			if(idx < 0) idx = 0;
+			if(idx >= cmdHistory.size() - 1) idx = cmdHistory.size() - 1;
+
+			return cmdHistory.get(idx);
 		}
 
 		// sends commands to the parser and executor
@@ -415,27 +557,195 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 			cmdField.setText(""); // clear cmd field
 			// sends command to dispatcher that will deal with parsing and processing
 			dispatcher.processCommand(cmd);
+			// adds to the linked list of commands history
+			cmdHistory.add(cmd); // adds to the log list
+			if(cmdHistory.size() > GlobalConfig.MAX_CMD_HISTORY_SIZE) // keep new elements only, within max size
+				cmdHistory.remove(0);
 		}
 
 		// change selected log tab and updates label text
-		private void changeTab(LogTab tab, LinkedList<String> log) {
+		private void changeTab(ServerChannel tab) {
 			currentTab = tab;
-			updateLogLabel(log);
+			updateLogLabel(tab);
 			logScrollPane.layout();
 			logScrollPane.setScrollPercentY(100);
 			logScrollPane.updateVisualScroll();
 		}
+
+		// clears tab passed via parameter
+		private void clearTab(ServerChannel tab) {
+			switch(tab) {
+				case CHAT:
+					chatLogs.clear();
+					Log.info("cmd", "Chat log cleared");
+					break;
+				case GAME:
+					gameLogs.clear();
+					Log.info("cmd", "Game log cleared");
+					break;
+				case LOGIN:
+					loginLogs.clear();
+					Log.info("cmd", "Login log cleared");
+					break;
+				case GLOBAL:
+					globalLogs.clear();
+					Log.info("cmd", "Global log cleared");
+					break;
+				case ALL: // clears all tabs
+					chatLogs.clear(); gameLogs.clear(); loginLogs.clear(); globalLogs.clear();
+					Log.info("cmd", "All logs cleared");
+					break;
+				default:
+					System.err.println("Unknown tab selected");
+					break;
+			}
+			if(tab.equals(currentTab))
+				updateLogLabel(tab);
+		}
+
+		// plays song from loaded musics
+		private void playSong(String name, boolean exclusive) {
+			if(exclusive) {
+				timeCommandoSong.stop(); demonBlueSong.stop(); corneriaSong.stop();
+			}
+			switch (name) {
+				case "time_commando":
+					timeCommandoSong.play();
+					Log.info("cmd", "Now playing: "+name);
+					break;
+				case "corneria":
+					Log.info("cmd", "Now playing: "+name);
+					corneriaSong.play();
+					break;
+				case "demon_blue":
+					Log.info("cmd", "Now playing: "+name);
+					demonBlueSong.play();
+					break;
+				default:
+					Log.info("cmd", "Unknown song to play: "+name);
+					break;
+			}
+		}
+
+		// stops songs being played
+		private void stopSongs() {
+			timeCommandoSong.stop(); demonBlueSong.stop(); corneriaSong.stop();
+		}
+	}
+
+	// extends logger class and override print method
+	// to catch when new log occurs and process it
+	// and also to change formatting
+	public class ServerLogger extends Log.Logger {
+		@Override
+		public void log(int level, String category, String message, Throwable ex) {
+			StringBuilder builder = new StringBuilder();
+			long time = System.currentTimeMillis();
+			int seconds = (int) (time / 1000) % 60 ;
+			int minutes = (int) ((time / (1000*60)) % 60);
+			int hours   = (int) ((time / (1000*60*60)) % 24);
+			if (hours <= 9) builder.append('0'); // avoid using format methods to decrease work
+			builder.append(hours);
+			builder.append(":");
+			if (minutes <= 9) builder.append('0');
+			builder.append(minutes);
+			builder.append(":");
+			if (seconds <= 9) builder.append('0');
+			builder.append(seconds);
+			switch (level) {
+				case LEVEL_ERROR:
+					builder.append(" ERROR: ");
+					break;
+				case LEVEL_WARN:
+					builder.append(" WARN: ");
+					break;
+				case LEVEL_INFO:
+					builder.append(" INFO: ");
+					break;
+				case LEVEL_DEBUG:
+					builder.append(" DEBUG: ");
+					break;
+				case LEVEL_TRACE:
+					builder.append(" TRACE: ");
+					break;
+			}
+			builder.append('[');
+			builder.append(category);
+			builder.append("] ");
+			builder.append(message);
+			if (ex != null) {
+				StringWriter writer = new StringWriter();
+				ex.printStackTrace(new PrintWriter(writer));
+				builder.append('\n');
+				builder.append(writer.toString().trim());
+			}
+
+			String logStr = builder.toString();
+
+			switch(category) {
+				case "login-server":
+					storeLog(loginLogs, logStr);
+					if(currentTab == ServerChannel.LOGIN) // updates if is selected tab
+						currentTabNeedsUpdate = true;
+					break;
+				case "chat-server":
+					storeLog(chatLogs, logStr);
+					if(currentTab == ServerChannel.CHAT) // updates if is selected tab
+						currentTabNeedsUpdate = true;
+					break;
+				case "game-server":
+					storeLog(gameLogs, logStr);
+					if(currentTab == ServerChannel.GAME) // updates if is selected tab
+						currentTabNeedsUpdate = true;
+					break;
+				case "cmd": // add cmd to selected tab (if not global, that already adds all tags)
+					if(currentTab != ServerChannel.GLOBAL) {
+						storeLog(currentTab, logStr);
+						currentTabNeedsUpdate = true;
+					}
+					break;
+				default:
+					break;
+			}
+			storeLog(globalLogs, logStr); // always adds to global
+			if(currentTab == ServerChannel.GLOBAL) // updates label if selected tab is global
+				currentTabNeedsUpdate = true;
+
+		}
+	}
+
+	public enum ServerChannel {
+		GLOBAL("global"),
+		LOGIN("login"),
+		GAME("game"),
+		CHAT("chat"),
+		ALL("all"),
+		METRICS("metrics"),
+		UNKNOWN("unknown");
+
+		private String text;
+
+		ServerChannel(String text) {
+			this.text = text;
+		}
+
+		public String getText() {
+			return this.text;
+		}
+
+		public static ServerChannel fromString(String text) throws Exception{
+			for (ServerChannel t : ServerChannel.values()) {
+				if (t.text.equalsIgnoreCase(text)) {
+					return t;
+				}
+			}
+			throw new Exception("No enum constant with text " + text + " found");
+		}
 	}
 
 	class GlobalConfig {
-		static final int MAX_LOG_DISPLAY_SIZE = 300;
+		public static final int MAX_CMD_HISTORY_SIZE = 50;
+		public static final int MAX_LOG_DISPLAY_SIZE = 300;
+		public static final float METRICS_UPDATE_INTERVAL = 0.25f;
 	}
-
-	enum LogTab {
-		GLOBAL,
-		LOGIN,
-		GAME,
-		CHAT
-	}
-
 }
