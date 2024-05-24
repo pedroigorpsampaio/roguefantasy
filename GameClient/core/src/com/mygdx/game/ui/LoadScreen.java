@@ -33,6 +33,8 @@ import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.KnownFonts;
 import com.kotcrab.vis.ui.VisUI;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.util.Encoder;
 
 import java.util.Locale;
 
@@ -178,8 +180,10 @@ public class LoadScreen implements Screen {
     @Override
     public void render(float delta) {
         if(manager.update()) {
-            // we are done loading, let's move to another screen!
-            game.setScreen(new MainMenuScreen(game, manager));
+            if(screen.equals("menu")) {
+                // we are done loading, let's move to another screen!
+                game.setScreen(new MainMenuScreen(game, manager, LoginClient.getInstance()));
+            }
             dispose();
         }
 

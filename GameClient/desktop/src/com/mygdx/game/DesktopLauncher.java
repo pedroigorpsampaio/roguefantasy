@@ -10,6 +10,7 @@ public class DesktopLauncher {
 		config.setForegroundFPS(60);
 		config.setWindowedMode(1280, 720);
 		config.setTitle("project-rogue-fantasy");
+
 		new Lwjgl3Application(new RogueFantasy(), config);
 	}
 }

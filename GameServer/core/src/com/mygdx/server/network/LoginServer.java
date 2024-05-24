@@ -1,5 +1,7 @@
 package com.mygdx.server.network;
 
+import static com.mygdx.server.network.LoginRegister.Register.*;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -12,9 +14,10 @@ import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
+import com.mygdx.server.db.PostgresDB;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
-import com.mygdx.server.ui.RogueFantasyServer;
+import com.mygdx.server.util.Encoder;
 
 
 /**
@@ -23,12 +26,14 @@ import com.mygdx.server.ui.RogueFantasyServer;
  * and other communications related to the authentication of the user
  */
 public class LoginServer implements CmdReceiver {
+    private final Encoder encoder;
     Server server;
     HashSet<LoginRegister.Character> loggedIn = new HashSet();
     private boolean isOnline = false; // is this server online?
+    PostgresDB postgresDB;
 
     public LoginServer() throws IOException {
-        server = new Server() {
+        server = new Server(65535, 65535) {
             protected Connection newConnection () {
                 // By providing our own connection implementation, we can store per
                 // connection state without a connection ID to state look up.
@@ -36,9 +41,13 @@ public class LoginServer implements CmdReceiver {
             }
         };
 
+        postgresDB = new PostgresDB();
+
         // For consistency, the classes to be sent over the network are
         // registered by the same method for both the client and server.
         LoginRegister.register(server);
+
+        encoder = new Encoder();
 
         server.addListener(new Listener() {
             public void received (Connection c, Object object) {
@@ -79,63 +88,64 @@ public class LoginServer implements CmdReceiver {
 
                 if (object instanceof LoginRegister.Register) {
                     // Ignore if already logged in.
-                    if (character != null) return;
+                    //if (character != null) return;
 
                     LoginRegister.Register register = (LoginRegister.Register)object;
+                    String userName = encoder.decryptSignedData(register.userName);
+                    String password = encoder.decryptSignedData(register.password);
+                    String email = encoder.decryptSignedData(register.email);
+                    String charName = encoder.decryptSignedData(register.charName);
+
+                    Log.debug("login-server", "Register Request: ");
+                    Log.debug("login-server", "user: " + userName);
+                    Log.debug("login-server", "pass: "+ password);
+                    Log.debug("login-server", "email: "+ email);
+                    Log.debug("login-server", "char: "+ charName);
+
+                    // invalid data wont be registered, return db error
+                    if(!registrationIsValid(userName, password, email, charName)) {
+                        c.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.DB_ERROR));
+                        return;
+                    }
+
+                    c.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.USER_SUCCESSFULLY_REGISTERED));
 
                     // Reject if the login is invalid.
-                    if (!isValid(register.name)) {
-                        c.close();
-                        return;
-                    }
-                    if (!isValid(register.otherStuff)) {
-                        c.close();
-                        return;
-                    }
-
-                    // Reject if character alread exists.
-                    if (loadCharacter(register.name) != null) {
-                        c.close();
-                        return;
-                    }
-
-                    character = new LoginRegister.Character();
-                    character.name = register.name;
-                    character.otherStuff = register.otherStuff;
-                    character.x = 0;
-                    character.y = 0;
-                    if (!saveCharacter(character)) {
-                        c.close();
-                        return;
-                    }
-
-                    loggedIn(connection, character);
-                    return;
+//                    if (!isValid(register.name)) {
+//                        c.close();
+//                        return;
+//                    }
+//                    if (!isValid(register.otherStuff)) {
+//                        c.close();
+//                        return;
+//                    }
+//
+//                    // Reject if character alread exists.
+//                    if (loadCharacter(register.name) != null) {
+//                        c.close();
+//                        return;
+//                    }
+//
+//                    character = new LoginRegister.Character();
+//                    character.name = register.name;
+//                    character.otherStuff = register.otherStuff;
+//                    character.x = 0;
+//                    character.y = 0;
+//                    if (!saveCharacter(character)) {
+//                        c.close();
+//                        return;
+//                    }
+//
+//                    loggedIn(connection, character);
+//                    return;
                 }
 
-                if (object instanceof LoginRegister.MoveCharacter) {
-                    // Ignore if not logged in.
-                    if (character == null) return;
+            }
 
-                    LoginRegister.MoveCharacter msg = (LoginRegister.MoveCharacter)object;
-
-                    // Ignore if invalid move.
-                    if (Math.abs(msg.x) != 1 && Math.abs(msg.y) != 1) return;
-
-                    character.x += msg.x;
-                    character.y += msg.y;
-                    if (!saveCharacter(character)) {
-                        connection.close();
-                        return;
-                    }
-
-                    LoginRegister.UpdateCharacter update = new LoginRegister.UpdateCharacter();
-                    update.id = character.id;
-                    update.x = character.x;
-                    update.y = character.y;
-                    server.sendToAllTCP(update);
-                    return;
-                }
+            private boolean registrationIsValid (String userName, String password, String email, String charName) {
+                boolean dataIsValid = isValidAndFitName(charName) && isValidAndFitEmail(email) &&
+                        isValidAndFitUser(userName) && isValidAndFitPassword(password);
+                return dataIsValid;
             }
 
             private boolean isValid (String value) {
@@ -147,13 +157,13 @@ public class LoginServer implements CmdReceiver {
 
             public void disconnected (Connection c) {
                 CharacterConnection connection = (CharacterConnection)c;
-                if (connection.character != null) {
-                    loggedIn.remove(connection.character);
-
-                    LoginRegister.RemoveCharacter removeCharacter = new LoginRegister.RemoveCharacter();
-                    removeCharacter.id = connection.character.id;
-                    server.sendToAllTCP(removeCharacter);
-                }
+//                if (connection.character != null) {
+//                    loggedIn.remove(connection.character);
+//
+//                    LoginRegister.RemoveCharacter removeCharacter = new LoginRegister.RemoveCharacter();
+//                    removeCharacter.id = connection.character.id;
+//                    server.sendToAllTCP(removeCharacter);
+//                }
             }
         });
         try {
@@ -169,21 +179,21 @@ public class LoginServer implements CmdReceiver {
     }
 
     void loggedIn (CharacterConnection c, LoginRegister.Character character) {
-        c.character = character;
-
-        // Add existing characters to new logged in connection.
-        for (LoginRegister.Character other : loggedIn) {
-            LoginRegister.AddCharacter addCharacter = new LoginRegister.AddCharacter();
-            addCharacter.character = other;
-            c.sendTCP(addCharacter);
-        }
-
-        loggedIn.add(character);
-
-        // Add logged in character to all connections.
-        LoginRegister.AddCharacter addCharacter = new LoginRegister.AddCharacter();
-        addCharacter.character = character;
-        server.sendToAllTCP(addCharacter);
+//        c.character = character;
+//
+//        // Add existing characters to new logged in connection.
+//        for (LoginRegister.Character other : loggedIn) {
+//            LoginRegister.AddCharacter addCharacter = new LoginRegister.AddCharacter();
+//            addCharacter.character = other;
+//            c.sendTCP(addCharacter);
+//        }
+//
+//        loggedIn.add(character);
+//
+//        // Add logged in character to all connections.
+//        LoginRegister.AddCharacter addCharacter = new LoginRegister.AddCharacter();
+//        addCharacter.character = character;
+//        server.sendToAllTCP(addCharacter);
     }
 
     boolean saveCharacter (LoginRegister.Character character) {
@@ -242,13 +252,15 @@ public class LoginServer implements CmdReceiver {
 
     public void stop() {
         if(isOnline) {
+            // TODO: SAVE LOGIN STATE BEFORE ENDING?
             Log.info("login-server", "Login server is stopping...");
             server.stop();
             server.close();
             Log.info("login-server", "Login server has stopped!");
             isOnline = false;
+            postgresDB.close(); // stops connection with db
         } else
-            Log.info("login-server", "Login server is not running!");
+            Log.info("cmd", "Login server is not running!");
     }
 
     // process commands received via dispatcher
@@ -256,10 +268,8 @@ public class LoginServer implements CmdReceiver {
     public void process(Command cmd) {
         switch (cmd.getType()) {
             case STOP:
+            case RESTART:   // only stops server, will be restarted in UI module
                 stop();
-                break;
-            case RESTART:
-                stop(); // only stops server, will be restarted in UI module
                 break;
             default:
                 break;

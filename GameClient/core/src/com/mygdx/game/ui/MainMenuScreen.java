@@ -24,12 +24,16 @@ import com.badlogic.gdx.utils.viewport.FillViewport;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.kotcrab.vis.ui.VisUI;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.util.Encoder;
 
 /**
  * Main menu screen class
  */
 public class MainMenuScreen implements Screen {
 
+    private static LoginClient loginClient;
+    private Encoder encoder;
     private Skin skin;
     private Stage stage;
     private Label fpsLabel;
@@ -55,12 +59,16 @@ public class MainMenuScreen implements Screen {
     /**
      * Builds the game main menu screen with login, register and options menu (prototype version)
      *
-     * @param game    the reference to the game object that controls game screens
-     * @param manager the asset manager containing assets loaded from the loading process
+     * @param game     the reference to the game object that controls game screens
+     * @param manager  the asset manager containing assets loaded from the loading process
+     * @param loginClient the login client instance that handles communication with login server
      */
-    public MainMenuScreen(RogueFantasy game, AssetManager manager) {
+    public MainMenuScreen(RogueFantasy game, AssetManager manager, LoginClient loginClient) {
         this.manager = manager;
         this.game = game;
+        this.loginClient = loginClient;
+        loginClient.connect();
+        loginClient.sendHello();
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
@@ -106,6 +114,7 @@ public class MainMenuScreen implements Screen {
         // creates register window
         registerWindow = new RegisterWindow(game, stage, this, manager, " "+langBundle.format("register"),
                 skin, "newWindowStyle");
+        registerWindow.prepareNetwork(loginClient, encoder);
 
         // label that describes the project name/version
         String descStr = " "+ langBundle.format("game") + " " + langBundle.format("version");
@@ -160,7 +169,6 @@ public class MainMenuScreen implements Screen {
         new MainMenuController();
 
         // TODO: BETTER ORGANIZE WINDOW / REGISTER MODE
-
     }
 
     // returns instance of this screen

@@ -13,8 +13,17 @@ buildscript {
         classpath 'org.gretty:gretty:3.1.0'
         classpath 'com.android.tools.build:gradle:8.1.2'
         classpath 'com.mobidevelop.robovm:robovm-gradle-plugin:2.3.20'
-        
+    }
+}
 
+plugins {
+    id "io.spring.dependency-management" version "1.0.6.RELEASE"
+}
+
+dependencyManagement {
+    imports {
+        mavenBom 'org.springframework.security:spring-security-bom:6.3.0'
+        mavenBom 'org.springframework:spring-framework-bom:6.1.7'
     }
 }
 
@@ -132,7 +141,6 @@ project(":html") {
 project(":core") {
     apply plugin: "java-library"
 
-
     dependencies {
         api "com.badlogicgames.gdx:gdx:$gdxVersion"
         api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
@@ -144,5 +152,7 @@ project(":core") {
         implementation "com.github.tommyettinger:textratypist:0.10.0"
         implementation 'com.github.crykn:kryonet:2.22.8'
         implementation 'com.esotericsoftware:kryo:5.6.0'
+        implementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
+        implementation("at.favre.lib:bcrypt:0.10.2")
     }
 }

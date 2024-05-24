@@ -10,16 +10,18 @@ import java.util.HashMap;
  */
 public class CommandDispatcher {
     private CmdReceiver consoleUI;
-
-    private CmdReceiver loginServer;
+    private CmdReceiver loginServer, gameServer;
+    public CmdReceiver getGameServer() {return gameServer;}
+    public void setGameServer(CmdReceiver gameServer) {this.gameServer = gameServer;}
     public CmdReceiver getLoginServer() {return loginServer;}
     public void setLoginServer(CmdReceiver loginServer) {this.loginServer = loginServer;}
     HashMap<CmdType, Integer> cmdArgsSize; // size of args for each command
 
     // constructor set references to the command receivers
-    public CommandDispatcher(CmdReceiver consoleUI, CmdReceiver loginServer) {
+    public CommandDispatcher(CmdReceiver consoleUI, CmdReceiver loginServer, CmdReceiver gameServer) {
         this.consoleUI = consoleUI;
         this.loginServer = loginServer;
+        this.gameServer = gameServer;
         // sets arg size for each cmd
         cmdArgsSize = new HashMap<>();
         cmdArgsSize.put(CmdType.CLEAR_LOG, 1);
@@ -29,6 +31,7 @@ public class CommandDispatcher {
         cmdArgsSize.put(CmdType.STOP, 1);
         cmdArgsSize.put(CmdType.PLAY, 1);
         cmdArgsSize.put(CmdType.PAUSE, 0);
+        cmdArgsSize.put(CmdType.EXIT, 0);
     }
 
     // parses the command string
@@ -38,30 +41,35 @@ public class CommandDispatcher {
         String[] splitData = trimmedStr.split("\\s+");
 
         Command cmd = new Command();
-        switch (splitData[0]) {
-            case "clear":
-                cmd.type = CmdType.CLEAR_LOG;
-                break;
-            case "stop":
-                cmd.type = CmdType.STOP;
-                break;
-            case "start":
-                cmd.type = CmdType.START;
-                break;
-            case "restart":
-                cmd.type = CmdType.RESTART;
-                break;
-            case "play":
-                cmd.type = CmdType.PLAY;
-                break;
-            case "pause":
-                cmd.type = CmdType.PAUSE;
-                break;
-            default:
-                Log.info("cmd", "Unknown command: "+splitData[0]);
-                cmd.type = CmdType.UNKNOWN;
-                break;
-        }
+//        switch (splitData[0]) {
+//            case "clear":
+//                cmd.type = CmdType.CLEAR_LOG;
+//                break;
+//            case "stop":
+//                cmd.type = CmdType.STOP;
+//                break;
+//            case "start":
+//                cmd.type = CmdType.START;
+//                break;
+//            case "restart":
+//                cmd.type = CmdType.RESTART;
+//                break;
+//            case "play":
+//                cmd.type = CmdType.PLAY;
+//                break;
+//            case "pause":
+//                cmd.type = CmdType.PAUSE;
+//                break;
+//            default:
+//                Log.info("cmd", "Unknown command: "+splitData[0]);
+//                cmd.type = CmdType.UNKNOWN;
+//                break;
+//        }
+        cmd.type = CmdType.fromString(splitData[0]); // gets command type via fromstring method from enum
+
+        if(cmd.type.equals(CmdType.UNKNOWN)) // unknown command
+            Log.info("cmd", "Unknown command: " + splitData[0]);
+
         if(splitData.length > 1) // has args
             cmd.args = Arrays.copyOfRange(splitData, 1, splitData.length); // stores args
 
@@ -90,7 +98,8 @@ public class CommandDispatcher {
         }
 
         // distribute command to the interested command processors
-        if(cmd.type == CmdType.CLEAR_LOG || cmd.type == CmdType.PLAY || cmd.type == CmdType.PAUSE) { // server console only commands
+        if(cmd.type == CmdType.CLEAR_LOG || cmd.type == CmdType.PLAY
+                || cmd.type == CmdType.PAUSE || cmd.type == CmdType.EXIT) { // server console only commands
             consoleUI.process(cmd); // sends command to be processed by console ui
         } else if(cmd.type == CmdType.START || cmd.type == CmdType.STOP || cmd.type == CmdType.RESTART) { // server commands
             RogueFantasyServer.ServerChannel receiver = getReceiver(cmd);
@@ -103,10 +112,12 @@ public class CommandDispatcher {
                     consoleUI.process(cmd);
                     break;
                 case GAME: // TODO WHEN GAME SERVER IS IMPLEMENTED
+                    gameServer.process(cmd);
                     consoleUI.process(cmd);
                     break;
                 case ALL: // TODO WHEN ALL SERVERS ARE IMPLEMENTED
                     loginServer.process(cmd);
+                    gameServer.process(cmd);
                     consoleUI.process(cmd);
                     break;
                 default:
@@ -151,6 +162,7 @@ public class CommandDispatcher {
         RESTART("restart", "(all, login, chat, game)"),
         PLAY("play", "(time_commando, corneria, demon_blue)"),
         PAUSE("pause", ""),
+        EXIT("exit", ""),
         UNKNOWN("unknown", "");
         private String text;
         private String args;
@@ -164,13 +176,14 @@ public class CommandDispatcher {
             return this.text;
         }
 
-        public static CmdType fromString(String text) throws Exception{
+        public static CmdType fromString(String text){
             for (CmdType t : CmdType.values()) {
                 if (t.text.equalsIgnoreCase(text)) {
                     return t;
                 }
             }
-            throw new Exception("No enum constant with text " + text + " found");
+            //throw new Exception("No enum constant with text " + text + " found");
+            return CmdType.UNKNOWN;
         }
 
         public String getPossibleArgs() {

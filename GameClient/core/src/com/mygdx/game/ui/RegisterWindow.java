@@ -1,5 +1,7 @@
 package com.mygdx.game.ui;
 
+import static com.mygdx.game.network.LoginRegister.Register.*;
+
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
@@ -29,14 +31,20 @@ import com.badlogic.gdx.utils.Scaling;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.github.tommyettinger.textra.TypingListener;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.network.LoginRegister;
+import com.mygdx.game.util.Encoder;
 import com.mygdx.game.util.NameGenerator;
 
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.util.regex.Pattern;
 
 /**
  * A class that encapsulates the option menu window
+ * implements PropertyChangeListener to listen to login server messages
  */
-public class RegisterWindow extends GameWindow {
+public class RegisterWindow extends GameWindow implements PropertyChangeListener {
     private TypingLabel usernameLabel;
     private TypingLabel passwordLabel;
     private Label regsiterTitleLabel;
@@ -62,6 +70,8 @@ public class RegisterWindow extends GameWindow {
     private TypingLabel tosLabel;
     private CheckBox tosCB;
     private Dialog infoDialog;
+    private LoginClient loginClient;
+    private Encoder encoder;
 
     /**
      * Builds the register window, to be used as an actor in any screen
@@ -83,6 +93,10 @@ public class RegisterWindow extends GameWindow {
         // makes sure window is clear and not in stage before building it
         this.clear();
         this.remove();
+
+        // if its not listening to registration responses, start listening to it
+        if(!loginClient.isListening("registrationResponse", this))
+            loginClient.addListener("registrationResponse", this);
 
         // makes sure language is up to date with current selected option
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
@@ -250,11 +264,55 @@ public class RegisterWindow extends GameWindow {
         new RegisterController();
     }
 
+    // sets the connection reference and the encoder
+    public void prepareNetwork(LoginClient loginClient, Encoder encoder) {
+        this.loginClient = loginClient; this.encoder = encoder;
+    }
+
     // resizes info dialogs on game resize
     @Override
     public void resize(int width, int height) {
         if(infoDialog != null)
             infoDialog.setPosition( stage.getWidth() / 2f - infoDialog.getWidth() / 2f, stage.getHeight() / 2f - infoDialog.getHeight() / 2f );
+    }
+
+    /**
+     * Method that reacts on server responses (registration responses)
+     * @param propertyChangeEvent   the server response encapsulated in PCE
+     */
+    @Override
+    public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
+        if(propertyChangeEvent.getPropertyName().equals("registrationResponse")) { // received a registration response
+            LoginRegister.Response response = (LoginRegister.Response) propertyChangeEvent.getNewValue();
+            if(infoDialog != null && infoDialog.getStage() != null) infoDialog.remove(); // removes any dialog
+            switch (response.type) { // adapts info dialog accordingly to server response
+                case CHAR_ALREADY_REGISTERED: // char already registered
+                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                            langBundle.format("charAlreadyExistsContent"), false, true);
+                    break;
+                case USER_ALREADY_REGISTERED:  // user already registered
+                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                            langBundle.format("userAlreadyExistsContent"), false, true);
+                    break;
+                case EMAIL_ALREADY_REGISTERED:  // email already registered
+                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                            langBundle.format("emailAlreadyExistsContent"), false, true);
+                    break;
+                case USER_SUCCESSFULLY_REGISTERED:  // user successfully registered
+                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("successDialogTitle"),
+                            langBundle.format("userRegisterSuccessContent"), false, true);
+                    break;
+                case DB_ERROR:
+                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                            langBundle.format("databaseErrorContent"), false, true);
+                    break;
+                default:
+                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                            langBundle.format("connectionRefusedContent"), false, true);
+                    break;
+            }
+            infoDialog.show(stage);
+        }
     }
 
     /**
@@ -414,62 +472,78 @@ public class RegisterWindow extends GameWindow {
             String password = passwordTextField.getText().replaceFirst("\\s++$", "");
             String email = emailTextField.getText().replaceFirst("\\s++$", "");
 
+            //String bCryptHash = Encoder.generateHash(password);
+//            System.out.println(bCryptHash);
+//            System.out.println(Encoder.verifyBCryptHash(password, bCryptHash));
+
             // checks if any of the data is empty
             boolean hasEmptyField = userName == "" || email  == "" || charName  == "" || password == "";
 
             // checks if all data is valid
-            boolean dataIsValid = isValidAndFitName(userName) && isValidAndFitEmail(email) &&
-                                    isValidAndFitUser(charName) && isValidAndFitPassword(password);
+            boolean dataIsValid = isValidAndFitName(charName) && isValidAndFitEmail(email) &&
+                                    isValidAndFitUser(userName) && isValidAndFitPassword(password);
 
             // if user has not agreed, show respective info dialog and return
-            if(!tosCB.isChecked()) {
-                showDialog(langBundle.format("userMustAgreeTitle"), langBundle.format("userMustAgree"));
+            if (!tosCB.isChecked()) {
+                infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("userMustAgreeTitle"),
+                                        langBundle.format("userMustAgree"), false, true);
+                infoDialog.show(stage);
                 return;
             }
             // if any of the field is empty, show respective info dialog and return
-            if(hasEmptyField) {
-                showDialog(langBundle.format("emptyFieldTitle"), langBundle.format("emptyFieldContent"));
+            if (hasEmptyField) {
+                infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("emptyFieldTitle"),
+                                        langBundle.format("emptyFieldContent"), false, true);
+                infoDialog.show(stage);
                 return;
             }
             // if data is not all valid, show respective info dialog and return
-            if(!dataIsValid) {
-                showDialog(langBundle.format("registerInvalidDataTitle"), langBundle.format("registerInvalidData"));
+            if (!dataIsValid) {
+                infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("registerInvalidDataTitle"),
+                                        langBundle.format("registerInvalidData"), false, true);
+                infoDialog.show(stage);
                 return;
             }
 
-            System.out.println(userName+"=\n"+charName+"=\n"+password+"=\n"+email+"=");
+            // everything is ok with the inputs, proceed to send registration request
 
-            // if connection is lost, show respective info dialog and return
-            // if(!isConnected) {}
-            // if username already exist, ||
-            // if(userNameExists) {}
-            // if email already in use, ||
-            // if(emailInUse) {}
-            // if character name already exist, ||
-            // if(charNameExists) {}
+            // shows a dialog informing the contacting of the server (to be closed when server responds)
+            infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("contactingServerTitle"),
+                                            langBundle.format("contactingServerContent"), true, false);
+            infoDialog.show(stage);
 
-            // if everything is ok and user is registered, ||
-            // show respective dialog box and go back to login page
-
+            // encrypts and sends to server from another thread
+            sendRegistrationAsync(userName, charName, password, email);
         }
 
-        // shows a normal dialog with provided title and content
-        private void showDialog(String title, String content) {
-            // styles from the skin
-            TextButton.TextButtonStyle tbStyle = skin.get("newTextButtonStyle", TextButton.TextButtonStyle.class);
-            infoDialog = new Dialog(title, skin, "newWindowStyle");
-            Label text = new Label(content, skin,"newLabelStyle");
-            text.setWidth(400);
-            text.setAlignment(Align.center);
-            text.setFillParent(true);
-            text.setHeight(text.getPrefHeight());
-            text.setWrap(true);
-            infoDialog.getContentTable().add(text).grow().minWidth(666).padLeft(4).padRight(25).padTop(20).padBottom(5);
-            infoDialog.button(langBundle.format("ok"), skin, tbStyle);
-            infoDialog.key(Input.Keys.ENTER, true).key(Input.Keys.ESCAPE, false);
-            infoDialog.getTitleTable().padBottom(3).padLeft(2);
-            infoDialog.pack();
-            infoDialog.show(stage);
+        // creates a thread to encrypt and send user data for registration request
+        private void sendRegistrationAsync(String userName, String charName, String password, String email) {
+            // Encrypt and send to server on another thread
+            new Thread(() -> {
+                // asynchronously to the rendering thread
+                if(!loginClient.isConnected())
+                    loginClient.connect();
+                encoder = Encoder.getInstance();
+                byte[] encryptedPass = encoder.signAndEncryptData(password);
+                byte[] encryptedUser = encoder.signAndEncryptData(userName);
+                byte[] encryptedEmail = encoder.signAndEncryptData(email);
+                byte[] encryptedChar = encoder.signAndEncryptData(charName);
+                LoginRegister.Register reg = new LoginRegister.Register();
+                reg.charName = encryptedChar; reg.userName = encryptedUser;
+                reg.email = encryptedEmail; reg.password = encryptedPass;
+                if(loginClient.isConnected()) // sends register attempt if login is connected
+                    loginClient.sendRegisterAttempt(reg);
+                // processes the result
+                Gdx.app.postRunnable(() -> {
+                    if(!loginClient.isConnected()) { // connection has failed
+                        if(infoDialog!= null && infoDialog.getStage() != null) infoDialog.remove(); // removes waiting dialog
+                        // show connection failed dialog
+                        infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                                langBundle.format("connectionRefusedContent"), false, true);
+                        infoDialog.show(stage);
+                    }
+                });
+            }).start();
         }
 
         // called when suggest name is called - generates a name and fills char name label
@@ -569,38 +643,6 @@ public class RegisterWindow extends GameWindow {
 
         }
 
-        private boolean isValidAndFitUser(String user) {
-            int minLength = prefs.getInteger("defaultMinNameSize", 2);
-            int maxLength = prefs.getInteger("defaultMaxNameSize", 26);
-            if(user.length() <= maxLength && user.length() >= minLength && isValidUser(user))
-                return true;
-            else
-                return false;
-        }
-
-        private boolean isValidUser(String user) {
-            Pattern regex = Pattern.compile("[^a-zA-Z0-9]");
-            if (regex.matcher(user).find())
-                return false;
-            return true;
-        }
-
-        private boolean isValidAndFitName(String name) {
-            int minLength = prefs.getInteger("defaultMinNameSize", 2);
-            int maxLength = prefs.getInteger("defaultMaxNameSize", 26);
-            if(name.length() <= maxLength && name.length() >= minLength && isValidName(name))
-                return true;
-            else
-                return false;
-        }
-
-        private boolean isValidName(String name) {
-            Pattern regex = Pattern.compile("^[a-zA-Z0-9]+( [a-zA-Z0-9]+)*$");
-            if (regex.matcher(name).find())
-                return true;
-            return false;
-        }
-
         // blocks space bar inputs
         private boolean spaceBarFilter(TextField textField, char c) {
             if (c == ' ')
@@ -623,40 +665,6 @@ public class RegisterWindow extends GameWindow {
                 if(textField.getText().charAt(i) == ' ')
                     count++;
             if (c == ' ' && count >= 3)
-                return false;
-            return true;
-        }
-
-        private boolean isValidAndFitEmail(String email) {
-            int minLength = prefs.getInteger("defaultMinEmailSize", 6);
-            int maxLength = prefs.getInteger("defaultMaxEmailSize", 254);
-            if(email.length() <= maxLength && email.length() >= minLength && isValidEmail(email))
-                return true;
-            else
-                return false;
-        }
-
-        private boolean isValidEmail(String email) {
-            String regexPattern = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
-
-            Pattern regex = Pattern.compile(regexPattern);
-            if (regex.matcher(email).find())
-                return true;
-            return false;
-        }
-
-        private boolean isValidAndFitPassword(String password) {
-            int minLength = prefs.getInteger("defaultMinPasswordSize", 8);
-            int maxLength = prefs.getInteger("defaultMaxPasswordSize", 64);
-            if(password.length() <= maxLength && password.length() >= minLength && isValidPassword(password))
-                return true;
-            else
-                return false;
-        }
-
-        private boolean isValidPassword(String password) {
-            Pattern regex = Pattern.compile("[^a-zA-Z0-9!@#$%^&*?/.;:_,-]");
-            if (regex.matcher(password).find())
                 return false;
             return true;
         }

@@ -22,7 +22,7 @@ import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.Scaling;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
-import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.network.GameClient;
 
 /**
  * A class that encapsulates the option menu window
@@ -250,9 +250,7 @@ public class LoginWindow extends GameWindow {
 
         // called when forgot password is clicked, gives user option to recover
         // TODO: IMPLEMENT FORGOT PASSWORD RECOVERY
-        private void forgotPwOnClick(InputEvent event, float x, float y) {
-            new LoginClient();
-        }
+        private void forgotPwOnClick(InputEvent event, float x, float y) {new GameClient();}
 
         // toggle password visibility
         private void onShowPasswordClicked(ChangeListener.ChangeEvent event, Actor actor) {

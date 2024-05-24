@@ -31,6 +31,7 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.Timer;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.esotericsoftware.minlog.Log;
+import com.mygdx.server.network.GameServer;
 import com.mygdx.server.network.LoginServer;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
@@ -40,6 +41,9 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.management.ManagementFactory;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -49,8 +53,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class RogueFantasyServer extends ApplicationAdapter implements CmdReceiver {
+	// game servers
 	LoginServer loginServer;
+	GameServer gameServer;
+	// command dispatcher
 	CommandDispatcher dispatcher;
+	// ui vars
 	SpriteBatch batch;
 	private Skin skin;
 	private Stage stage;
@@ -170,7 +178,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		// starts update timer, that updates UI metrics between set intervals
 		Timer.schedule(controller.updateTimer, 0f, GlobalConfig.METRICS_UPDATE_INTERVAL);
 		// cmd dispatcher
-		dispatcher = new CommandDispatcher(this, loginServer);
+		dispatcher = new CommandDispatcher(this, loginServer, gameServer);
 		// starts all servers
 		startServer(ServerChannel.ALL);
 	}
@@ -186,14 +194,26 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				} catch (IOException e) {
 					Log.error("login-server", "Error starting " + serverType.text + "  server: " + e);
 				}
-			} else
-				Log.info("cmd", serverType.text + " server is already running!");
+			} else {
+				Log.info("cmd", "Login server is already running!");
+			}
 		}
 		if(serverType == ServerChannel.ALL || serverType == ServerChannel.CHAT) {
 			// TODO chat server
 		}
 		if(serverType == ServerChannel.ALL || serverType == ServerChannel.GAME) {
 			// TODO game server
+			// starts login server if not online already
+			if(gameServer == null || !gameServer.isOnline()) {
+				Log.info("cmd", "Starting " +serverType.text+ " server...");
+				try {
+					gameServer = new GameServer();
+					dispatcher.setGameServer(gameServer);
+				} catch (IOException e) {
+					Log.error("game-server", "Error starting " + serverType.text + "  server: " + e);
+				}
+			} else
+				Log.info("cmd", "Game server is already running!");
 		}
 	}
 
@@ -203,9 +223,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		if(serverType == ServerChannel.ALL || serverType == ServerChannel.CHAT) {
 			// TODO chat server
 		}
-		if(serverType == ServerChannel.ALL || serverType == ServerChannel.GAME) {
-			// TODO game server
-		}
+		if(serverType == ServerChannel.ALL || serverType == ServerChannel.GAME) {gameServer = null;}
 	}
 
 	// only scrolls to the end if bar is at the end,
@@ -301,6 +319,10 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	 * @param log	the new log to be added to the list
 	 */
 	private void storeLog(ServerChannel tab, String log) {
+		// if not a log tab return
+		if(tab != ServerChannel.GLOBAL && tab != ServerChannel.LOGIN &&
+				tab != ServerChannel.CHAT && tab != ServerChannel.GAME)
+			return;
 		List<String> list = logListFromTab(tab);
 		list.add(log); // adds to the log list
 		if(list.size() > GlobalConfig.MAX_LOG_DISPLAY_SIZE) // keep new elements only, within max size
@@ -321,6 +343,32 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		batch.dispose();
 		stage.dispose();
 		skin.dispose();
+	}
+
+	// closes all servers saving changes before ending process
+	public void safeExit() {
+		Log.info("cmd", "Closing all servers and exiting...");
+
+		loginServer.stop();
+		gameServer.stop();
+
+		// waits until both servers are saved and closed before finishing process
+		while(loginServer.isOnline() || gameServer.isOnline());
+
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				long time = System.currentTimeMillis();
+				while (System.currentTimeMillis() < time + 2000){}
+				Gdx.app.postRunnable(new Runnable() {
+					@Override
+					public void run() {
+						Gdx.app.exit();
+						//System.exit(-1);
+					}
+				});
+			}
+		}).start();
 	}
 
 	// process commands received via dispatcher
@@ -349,6 +397,9 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				break;
 			case PAUSE:
 				controller.stopSongs(); // stops any song that is currently playing
+				break;
+			case EXIT:
+				safeExit(); // closes all servers saving changes before closing exe
 				break;
 			default:
 				break;
@@ -512,8 +563,9 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				int seconds = (int) (time / 1000) % 60 ;
 				int minutes = (int) ((time / (1000*60)) % 60);
 				int hours   = (int) ((time / (1000*60*60)) % 24);
+				boolean loginIsOn = loginServer != null && loginServer.isOnline();
 				StringBuilder b = new StringBuilder();
-				b.append("Time elapsed server was deployed: ");
+				b.append("Time elapsed since server was deployed: ");
 				if (hours <= 9) b.append('0'); // avoid using format methods to decrease work
 				b.append(hours);
 				b.append(":");
@@ -523,9 +575,21 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				if (seconds <= 9) b.append('0');
 				b.append(seconds);
 				b.append(" (hh:mm:ss)");
+				b.append("\n\n");
+				b.append("Login Server: ");
+				if(loginIsOn) b.append("online");
+				else b.append("offline");
 				b.append("\n");
+				b.append("Chat Server: ");
+				//if(loginServer.isOnline()) b.append("online");
+				//else b.append("offline");
+				b.append("\n");
+				b.append("Game Server: ");
+				if(gameServer != null && gameServer.isOnline()) b.append("online");
+				else b.append("offline");
+				b.append("\n\n");
 				b.append("Players online: ");
-				b.append(loginServer.getNumberOfPlayersOnline());
+				if(loginIsOn) b.append(loginServer.getNumberOfPlayersOnline());
 				b.append("\n");
 				b.append("CPU Usage: ");
 				b.append((int)(cpuLoad*1000f));
@@ -534,6 +598,18 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				b.append("RAM Usage: ");
 				b.append(ramLoad);
 				b.append(" MB");
+				b.append("\n\n");
+				b.append("Global log size: ");
+				b.append(globalLogs.size());
+				b.append("\n");
+				b.append("Login log size: ");
+				b.append(loginLogs.size());
+				b.append("\n");
+				b.append("Chat log size: ");
+				b.append(chatLogs.size());
+				b.append("\n");
+				b.append("Game log size: ");
+				b.append(gameLogs.size());
 				b.append("\n");
 				logLabel.setText(b);
 			}
@@ -640,10 +716,13 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		@Override
 		public void log(int level, String category, String message, Throwable ex) {
 			StringBuilder builder = new StringBuilder();
-			long time = System.currentTimeMillis();
-			int seconds = (int) (time / 1000) % 60 ;
-			int minutes = (int) ((time / (1000*60)) % 60);
-			int hours   = (int) ((time / (1000*60*60)) % 24);
+			Instant time = Instant.now();
+			LocalDateTime ldt = LocalDateTime.ofInstant(time, ZoneId.systemDefault());
+			int hours = ldt.getHour();
+			int minutes = ldt.getMinute();
+			int seconds = ldt.getSecond();
+//			int minutes = (int) ((time / (1000*60)) % 60);
+//			int hours   = (int) ((time / (1000*60*60)) % 24);
 			if (hours <= 9) builder.append('0'); // avoid using format methods to decrease work
 			builder.append(hours);
 			builder.append(":");
