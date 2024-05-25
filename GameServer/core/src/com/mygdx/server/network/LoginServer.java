@@ -1,7 +1,6 @@
 package com.mygdx.server.network;
 
-import static com.mygdx.server.network.LoginRegister.Register.*;
-
+import java.beans.PropertyChangeSupport;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -14,10 +13,9 @@ import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
-import com.mygdx.server.db.PostgresDB;
+import com.mygdx.server.db.DbController;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
-import com.mygdx.server.util.Encoder;
 
 
 /**
@@ -25,14 +23,14 @@ import com.mygdx.server.util.Encoder;
  * Server that deals with login, registration, character creation
  * and other communications related to the authentication of the user
  */
-public class LoginServer implements CmdReceiver {
-    private final Encoder encoder;
+public class LoginServer extends DispatchServer implements CmdReceiver {
+    private final DbController dbController; // reference to the controller of the database
     Server server;
     HashSet<LoginRegister.Character> loggedIn = new HashSet();
     private boolean isOnline = false; // is this server online?
-    PostgresDB postgresDB;
 
     public LoginServer() throws IOException {
+        super(); // calls constructor of the superclass to instantiate listeners list
         server = new Server(65535, 65535) {
             protected Connection newConnection () {
                 // By providing our own connection implementation, we can store per
@@ -41,13 +39,15 @@ public class LoginServer implements CmdReceiver {
             }
         };
 
-        postgresDB = new PostgresDB();
+        // instantiate database controller that will act
+        // on server requests related to the postgres database
+        // and is responsible for the available database ops
+        dbController = DbController.getInstance();
+        addListener(dbController); // adds db controller as listener to all login server requests
 
         // For consistency, the classes to be sent over the network are
         // registered by the same method for both the client and server.
         LoginRegister.register(server);
-
-        encoder = new Encoder();
 
         server.addListener(new Listener() {
             public void received (Connection c, Object object) {
@@ -90,25 +90,40 @@ public class LoginServer implements CmdReceiver {
                     // Ignore if already logged in.
                     //if (character != null) return;
 
-                    LoginRegister.Register register = (LoginRegister.Register)object;
-                    String userName = encoder.decryptSignedData(register.userName);
-                    String password = encoder.decryptSignedData(register.password);
-                    String email = encoder.decryptSignedData(register.email);
-                    String charName = encoder.decryptSignedData(register.charName);
+                    // creates request object to send to listeners
+                    Request request = new Request(c, object);
+                    // send request to interested listeners
+                    listeners.firePropertyChange("registerRequest", null, request);
 
-                    Log.debug("login-server", "Register Request: ");
-                    Log.debug("login-server", "user: " + userName);
-                    Log.debug("login-server", "pass: "+ password);
-                    Log.debug("login-server", "email: "+ email);
-                    Log.debug("login-server", "char: "+ charName);
-
-                    // invalid data wont be registered, return db error
-                    if(!registrationIsValid(userName, password, email, charName)) {
-                        c.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.DB_ERROR));
-                        return;
-                    }
-
-                    c.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.USER_SUCCESSFULLY_REGISTERED));
+//                    LoginRegister.Register register = (LoginRegister.Register)object;
+//                    String userName = encoder.decryptSignedData(register.userName);
+//                    String password = encoder.decryptSignedData(register.password);
+//                    String email = encoder.decryptSignedData(register.email);
+//                    String charName = encoder.decryptSignedData(register.charName);
+//
+//                    Log.debug("login-server", "Register Request: ");
+//                    Log.debug("login-server", "user: " + userName);
+//                    Log.debug("login-server", "pass: "+ password);
+//                    Log.debug("login-server", "email: "+ email);
+//                    Log.debug("login-server", "char: "+ charName);
+//
+//                    // invalid data wont be registered, return db error
+//                    if(!registrationIsValid(userName, password, email, charName)) {
+//                        c.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.DB_ERROR));
+//                        return;
+//                    }
+//
+//                    // checks for existing unique user data in database
+//                    LoginRegister.Response.Type type = postgresDB.checkRegisterData(userName, email, charName);
+//
+//                    // only registers user if no unique fields are violated
+//                    if(type == LoginRegister.Response.Type.USER_SUCCESSFULLY_REGISTERED) {
+//                        if(postgresDB.registerUser(userName, password, email, charName)) // if insert was properly executed
+//                            c.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.USER_SUCCESSFULLY_REGISTERED));
+//                        else // else send db error indicating it
+//                            c.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.DB_ERROR));
+//                    } else // send the response indicating that some unique data is duplicated (in order form user, email, charname)
+//                        c.sendTCP(new LoginRegister.Response(type));
 
                     // Reject if the login is invalid.
 //                    if (!isValid(register.name)) {
@@ -140,12 +155,6 @@ public class LoginServer implements CmdReceiver {
 //                    return;
                 }
 
-            }
-
-            private boolean registrationIsValid (String userName, String password, String email, String charName) {
-                boolean dataIsValid = isValidAndFitName(charName) && isValidAndFitEmail(email) &&
-                        isValidAndFitUser(userName) && isValidAndFitPassword(password);
-                return dataIsValid;
             }
 
             private boolean isValid (String value) {
@@ -258,7 +267,7 @@ public class LoginServer implements CmdReceiver {
             server.close();
             Log.info("login-server", "Login server has stopped!");
             isOnline = false;
-            postgresDB.close(); // stops connection with db
+            dbController.close();
         } else
             Log.info("cmd", "Login server is not running!");
     }
@@ -282,6 +291,21 @@ public class LoginServer implements CmdReceiver {
 
     public int getNumberOfPlayersOnline() {
         return loggedIn.size();
+    }
+
+    /**
+     * Contains data from received request from clients
+     * Including connection information and request content data
+     */
+    public class Request {
+        private Connection conn;
+        private Object content;
+        public Connection getConnection() {return conn;}
+        public Object getContent() {return content;}
+        public Request(Connection conn, Object content) {
+            this.conn = conn;
+            this.content = content;
+        }
     }
 
     // This holds per connection state.

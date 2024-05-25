@@ -28,6 +28,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.FocusListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.Scaling;
+import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.github.tommyettinger.textra.TypingListener;
 import com.mygdx.game.RogueFantasy;
@@ -36,6 +37,7 @@ import com.mygdx.game.network.LoginRegister;
 import com.mygdx.game.util.Encoder;
 import com.mygdx.game.util.NameGenerator;
 
+import java.awt.EventQueue;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.regex.Pattern;
@@ -278,41 +280,43 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
 
     /**
      * Method that reacts on server responses (registration responses)
+     * NOTE:  Gdx.app.postRunnable(() makes it thread-safe with libGDX UI
      * @param propertyChangeEvent   the server response encapsulated in PCE
      */
     @Override
     public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
-        if(propertyChangeEvent.getPropertyName().equals("registrationResponse")) { // received a registration response
-            LoginRegister.Response response = (LoginRegister.Response) propertyChangeEvent.getNewValue();
-            if(infoDialog != null && infoDialog.getStage() != null) infoDialog.remove(); // removes any dialog
-            switch (response.type) { // adapts info dialog accordingly to server response
-                case CHAR_ALREADY_REGISTERED: // char already registered
-                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
-                            langBundle.format("charAlreadyExistsContent"), false, true);
-                    break;
-                case USER_ALREADY_REGISTERED:  // user already registered
-                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
-                            langBundle.format("userAlreadyExistsContent"), false, true);
-                    break;
-                case EMAIL_ALREADY_REGISTERED:  // email already registered
-                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
-                            langBundle.format("emailAlreadyExistsContent"), false, true);
-                    break;
-                case USER_SUCCESSFULLY_REGISTERED:  // user successfully registered
-                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("successDialogTitle"),
-                            langBundle.format("userRegisterSuccessContent"), false, true);
-                    break;
-                case DB_ERROR:
-                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
-                            langBundle.format("databaseErrorContent"), false, true);
-                    break;
-                default:
-                    infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
-                            langBundle.format("connectionRefusedContent"), false, true);
-                    break;
-            }
-            infoDialog.show(stage);
+        Gdx.app.postRunnable(() -> {
+            if(propertyChangeEvent.getPropertyName().equals("registrationResponse")) { // received a registration response
+                LoginRegister.Response response = (LoginRegister.Response) propertyChangeEvent.getNewValue();
+                if(infoDialog != null && infoDialog.getStage() != null) infoDialog.remove(); // removes any dialog
+                switch (response.type) { // adapts info dialog accordingly to server response
+                    case CHAR_ALREADY_REGISTERED: // char already registered
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                                langBundle.format("charAlreadyExistsContent"), false, true);
+                        break;
+                    case USER_ALREADY_REGISTERED:  // user already registered
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                                langBundle.format("userAlreadyExistsContent"), false, true);
+                        break;
+                    case EMAIL_ALREADY_REGISTERED:  // email already registered
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                                langBundle.format("emailAlreadyExistsContent"), false, true);
+                        break;
+                    case USER_SUCCESSFULLY_REGISTERED:  // user successfully registered
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("successDialogTitle"),
+                                langBundle.format("userRegisterSuccessContent"), false, true);
+                        break;
+                    case DB_ERROR:
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                                langBundle.format("databaseErrorContent"), false, true);
+                        break;
+                    default:
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                                langBundle.format("connectionRefusedContent"), false, true);
+                        break;
+                }
         }
+    });
     }
 
     /**
@@ -485,21 +489,21 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
 
             // if user has not agreed, show respective info dialog and return
             if (!tosCB.isChecked()) {
-                infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("userMustAgreeTitle"),
+                infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("userMustAgreeTitle"),
                                         langBundle.format("userMustAgree"), false, true);
                 infoDialog.show(stage);
                 return;
             }
             // if any of the field is empty, show respective info dialog and return
             if (hasEmptyField) {
-                infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("emptyFieldTitle"),
+                infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("emptyFieldTitle"),
                                         langBundle.format("emptyFieldContent"), false, true);
                 infoDialog.show(stage);
                 return;
             }
             // if data is not all valid, show respective info dialog and return
             if (!dataIsValid) {
-                infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("registerInvalidDataTitle"),
+                infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("registerInvalidDataTitle"),
                                         langBundle.format("registerInvalidData"), false, true);
                 infoDialog.show(stage);
                 return;
@@ -507,10 +511,13 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
 
             // everything is ok with the inputs, proceed to send registration request
 
-            // shows a dialog informing the contacting of the server (to be closed when server responds)
-            infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("contactingServerTitle"),
-                                            langBundle.format("contactingServerContent"), true, false);
-            infoDialog.show(stage);
+            // shows a dialog informing the contacting of the server (to be closed when server responds or with timeout)
+            infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("contactingServerTitle"),
+                                            langBundle.format("contactingServerContent"), true, false,
+                                        prefs.getInteger("defaultMaxTimeOutValue", 15000) / 1000f);
+            //infoDialog.show(stage);
+            //close info dialog if too much time has passed (timeout value defined in prefs)
+
 
             // encrypts and sends to server from another thread
             sendRegistrationAsync(userName, charName, password, email);
@@ -533,12 +540,12 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
                 reg.email = encryptedEmail; reg.password = encryptedPass;
                 if(loginClient.isConnected()) // sends register attempt if login is connected
                     loginClient.sendRegisterAttempt(reg);
-                // processes the result
+                // processes the result in a thread safe way with libgdx UI
                 Gdx.app.postRunnable(() -> {
                     if(!loginClient.isConnected()) { // connection has failed
                         if(infoDialog!= null && infoDialog.getStage() != null) infoDialog.remove(); // removes waiting dialog
                         // show connection failed dialog
-                        infoDialog = CommonUI.createDialog(skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
                                 langBundle.format("connectionRefusedContent"), false, true);
                         infoDialog.show(stage);
                     }

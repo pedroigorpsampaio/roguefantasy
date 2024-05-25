@@ -16,6 +16,7 @@ android {
     }
     packagingOptions {
         exclude 'META-INF/robovm/ios/robovm.xml'
+        resources.excludes.add("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
     }
     defaultConfig {
         applicationId "com.mygdx.game"

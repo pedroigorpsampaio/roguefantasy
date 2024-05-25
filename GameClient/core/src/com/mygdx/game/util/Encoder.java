@@ -57,7 +57,6 @@ import java.util.List;
 import at.favre.lib.crypto.bcrypt.BCrypt;
 
 public class Encoder {
-    private static final String BC_PROVIDER = "BC" ;
     private static Encoder instance; // singleton instance
     private final X509Certificate certificate;
     private final PrivateKey key;
@@ -72,14 +71,12 @@ public class Encoder {
         }
         //System.out.println("Max Key Size for AES : " + maxKeySize);
 
-        Security.addProvider(new BouncyCastleProvider());
+        //Security.addProvider(new BouncyCastleProvider());
         CertificateFactory certFactory= null;
         try {
             certFactory = CertificateFactory
-                    .getInstance("X.509", "BC");
+                    .getInstance("X.509");
         } catch (CertificateException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchProviderException e) {
             throw new RuntimeException(e);
         }
 
@@ -234,7 +231,7 @@ public class Encoder {
             JceKeyTransRecipientInfoGenerator jceKey = new JceKeyTransRecipientInfoGenerator(encryptionCertificate);
             cmsEnvelopedDataGenerator.addRecipientInfoGenerator(jceKey);
             CMSTypedData msg = new CMSProcessableByteArray(data);
-            OutputEncryptor encryptor = new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES128_CBC).setProvider("BC").build();
+            OutputEncryptor encryptor = new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES128_CBC).build();
             CMSEnvelopedData cmsEnvelopedData = cmsEnvelopedDataGenerator.generate(msg, encryptor);
             encryptedData = cmsEnvelopedData.getEncoded();
         }
@@ -270,7 +267,7 @@ public class Encoder {
         Store certs = new JcaCertStore(certList);
         CMSSignedDataGenerator cmsGenerator = new CMSSignedDataGenerator();
         ContentSigner contentSigner = new JcaContentSignerBuilder("SHA256withRSA").build(signingKey);
-        cmsGenerator.addSignerInfoGenerator(new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider("BC").build()).build(contentSigner, signingCertificate));
+        cmsGenerator.addSignerInfoGenerator(new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().build()).build(contentSigner, signingCertificate));
         cmsGenerator.addCertificates(certs);
         CMSSignedData cms = cmsGenerator.generate(cmsData, true);
         signedMessage = cms.getEncoded();
@@ -293,8 +290,8 @@ public class Encoder {
             Collection<X509CertificateHolder> certCollection = certs.getMatches(signer.getSID());
             Iterator<X509CertificateHolder> certIt = certCollection.iterator();
             X509CertificateHolder certHolder = certIt.next();
-            X509Certificate certFromSignedData = new JcaX509CertificateConverter().setProvider(BC_PROVIDER).getCertificate(certHolder);
-            if (signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(BC_PROVIDER).build(certFromSignedData))) {
+            X509Certificate certFromSignedData = new JcaX509CertificateConverter().getCertificate(certHolder);
+            if (signer.verify(new JcaSimpleSignerInfoVerifierBuilder().build(certFromSignedData))) {
                 verified = true;
             } else {
                 verified = false;

@@ -18,6 +18,7 @@ public class RogueFantasy extends Game {
 		// Set default values in preferences
 		prefs.putInteger("defaultTextColor", Color.WHITE.toIntBits());
 		prefs.putInteger("defaultErrorColor", Color.RED.toIntBits());
+		prefs.putInteger("defaultMaxTimeOutValue", 15000); // in milli
 		
 		prefs.flush();
 

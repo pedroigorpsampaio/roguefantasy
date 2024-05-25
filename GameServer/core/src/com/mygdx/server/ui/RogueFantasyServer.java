@@ -10,6 +10,7 @@ import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.scenes.scene2d.Actor;
@@ -85,6 +86,10 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	public void create ()  {
 		batch = new SpriteBatch();
 		skin = new Skin(Gdx.files.internal("skin/uiskin.json"));
+		Label.LabelStyle lStyle = skin.get(Label.LabelStyle.class);
+		//lStyle.fontColor = Color.RED;
+		lStyle.font.getData().markupEnabled = true;
+		skin.add("newLabelStyle", lStyle, Label.LabelStyle.class);
 
 		// gimmick musics (use play command)
 		timeCommandoSong = Gdx.audio.newMusic(Gdx.files.internal("music/time_commando.mp3"));
@@ -113,7 +118,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		titleLabel.setAlignment(Align.center);
 
 		// log label
-		logLabel = new Label("", skin);
+		logLabel = new Label("", skin, "newLabelStyle");
 		logLabel.setAlignment(Align.topLeft);
 		logLabel.setWrap(true);
 
@@ -733,19 +738,19 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 			builder.append(seconds);
 			switch (level) {
 				case LEVEL_ERROR:
-					builder.append(" ERROR: ");
+					builder.append(" [#A32D1D]ERROR: ");
 					break;
 				case LEVEL_WARN:
-					builder.append(" WARN: ");
+					builder.append(" [YELLOW]WARN: ");
 					break;
 				case LEVEL_INFO:
-					builder.append(" INFO: ");
+					builder.append(" [#8CFF00]INFO: ");
 					break;
 				case LEVEL_DEBUG:
 					builder.append(" DEBUG: ");
 					break;
 				case LEVEL_TRACE:
-					builder.append(" TRACE: ");
+					builder.append(" [ORANGE]TRACE: ");
 					break;
 			}
 			builder.append('[');
@@ -758,6 +763,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				builder.append('\n');
 				builder.append(writer.toString().trim());
 			}
+			builder.append("[]"); // ends color markup
 
 			String logStr = builder.toString();
 
