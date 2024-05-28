@@ -106,6 +106,7 @@ public class MainMenuScreen implements Screen {
         // creates login window
         loginWindow = new LoginWindow(game, stage, this, manager , " "+langBundle.format("loginWindowTitle"),
                                         skin, "newWindowStyle");
+        loginWindow.startServerListening(loginClient, encoder);
 
         // creates info window
         infoWindow = new InfoWindow(game, stage,this, manager, " "+langBundle.format("info"),
@@ -114,7 +115,7 @@ public class MainMenuScreen implements Screen {
         // creates register window
         registerWindow = new RegisterWindow(game, stage, this, manager, " "+langBundle.format("register"),
                 skin, "newWindowStyle");
-        registerWindow.prepareNetwork(loginClient, encoder);
+        registerWindow.startServerListening(loginClient, encoder);
 
         // label that describes the project name/version
         String descStr = " "+ langBundle.format("game") + " " + langBundle.format("version");
@@ -234,6 +235,8 @@ public class MainMenuScreen implements Screen {
         bgTexture.dispose();
         bgm.dispose();
         VisUI.dispose();
+        loginWindow.stopServerListening();
+        registerWindow.stopServerListening();
     }
 
     /**

@@ -1,5 +1,10 @@
 package com.mygdx.game.ui;
 
+import static com.mygdx.game.network.LoginRegister.Register.isValidAndFitEmail;
+import static com.mygdx.game.network.LoginRegister.Register.isValidAndFitName;
+import static com.mygdx.game.network.LoginRegister.Register.isValidAndFitPassword;
+import static com.mygdx.game.network.LoginRegister.Register.isValidAndFitUser;
+
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
@@ -8,6 +13,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Cursor;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
 import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
@@ -23,11 +29,17 @@ import com.badlogic.gdx.utils.Scaling;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.network.GameClient;
+import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.network.LoginRegister;
+import com.mygdx.game.util.Encoder;
+
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 
 /**
  * A class that encapsulates the option menu window
  */
-public class LoginWindow extends GameWindow {
+public class LoginWindow extends GameWindow implements PropertyChangeListener {
     private Label projectDescLabel;
     private Label usernameLabel;
     private Label passwordLabel;
@@ -39,6 +51,7 @@ public class LoginWindow extends GameWindow {
     private CheckBox rememberCB;
     private TextButton backBtn;
     private TextButton loginBtn;
+    private Dialog infoDialog;
 
     /**
      * Builds the option window, to be used as an actor in any screen
@@ -161,11 +174,61 @@ public class LoginWindow extends GameWindow {
 
         // instantiate the controller that adds listeners and acts when needed
         new loginController();
+
+        // if its not listening to login responses, start listening to it
+        if(!loginClient.isListening("loginResponse", this))
+            loginClient.addListener("loginResponse", this);
     }
 
     @Override
     public void resize(int width, int height) {
 
+    }
+
+    /**
+     * to be able to access and communicate with servers
+     */
+    public void startServerListening(LoginClient loginClient, Encoder encoder) {
+        this.loginClient = loginClient; this.encoder = encoder;
+        // if its not listening to login responses, start listening to it
+        if(!loginClient.isListening("loginResponse", this))
+            loginClient.addListener("loginResponse", this);
+    }
+
+    /**
+     * cut communication with server property changes
+     */
+    public void stopServerListening() {
+        // if its listening to login responses, stops listening to it
+        if(loginClient.isListening("loginResponse", this))
+            loginClient.removeListener("loginResponse", this);
+    }
+
+    /**
+     * Method that reacts on server responses (login responses)
+     * NOTE:  Gdx.app.postRunnable(() makes it thread-safe with libGDX UI
+     * @param propertyChangeEvent   the server response encapsulated in PCE
+     */
+    @Override
+    public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
+        Gdx.app.postRunnable(() -> {
+            if(propertyChangeEvent.getPropertyName().equals("loginResponse")) { // received a login response
+                LoginRegister.Response response = (LoginRegister.Response) propertyChangeEvent.getNewValue();
+                if(infoDialog != null && infoDialog.getStage() != null) infoDialog.remove(); // removes any dialog
+                switch (response.type) { // adapts info dialog accordingly to server response
+                    case LOGIN_SUCCESSFUL: // char already registered
+                        // TODO: LOGIN SUCESSFULLY MADE - GET USER DATA AND LOAD GAME SCREEN
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("contactingServerTitle"),
+                                langBundle.format("loadingCharContent"), true, false,
+                                prefs.getInteger("defaultMaxTimeOutValue", 15000) / 1000f);
+                        break;
+                    default:
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("loginWrongInfo"),
+                            langBundle.format("invalidLoginContent"), false, true);
+                        break;
+                }
+            }
+        });
     }
 
     /**
@@ -185,7 +248,7 @@ public class LoginWindow extends GameWindow {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
                     super.clicked(event, x, y);
-                    backBtnOnClick(event, x, y);
+                    backBtnOnClick();
                 }
             });
             // remember check box listener
@@ -205,7 +268,7 @@ public class LoginWindow extends GameWindow {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
                     super.clicked(event, x, y);
-                    loginBtnOnClick(event, x, y);
+                    loginBtnOnClick();
                 }
             });
             forgotPwLabel.addListener(new ClickListener() {
@@ -238,6 +301,17 @@ public class LoginWindow extends GameWindow {
                     Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Arrow);
                 }
             });
+            getInstance().addListener(new InputListener(){ //  for keyboard shortcuts
+                @Override
+                public boolean keyDown(InputEvent event, int keycode) {
+                    if (keycode == Input.Keys.ENTER || keycode == Input.Keys.NUMPAD_ENTER) {
+                        loginBtnOnClick();
+                    } else if (keycode == Input.Keys.ESCAPE) {
+                        backBtnOnClick();
+                    }
+                    return false;
+                }
+            });
         }
 
         // called when register link is clicked, loads register window
@@ -250,7 +324,9 @@ public class LoginWindow extends GameWindow {
 
         // called when forgot password is clicked, gives user option to recover
         // TODO: IMPLEMENT FORGOT PASSWORD RECOVERY
-        private void forgotPwOnClick(InputEvent event, float x, float y) {new GameClient();}
+        private void forgotPwOnClick(InputEvent event, float x, float y) {
+            //new GameClient();
+        }
 
         // toggle password visibility
         private void onShowPasswordClicked(ChangeListener.ChangeEvent event, Actor actor) {
@@ -293,35 +369,77 @@ public class LoginWindow extends GameWindow {
         }
 
         // called when back button is pressed
-        private void backBtnOnClick(InputEvent event, float x, float y) {
+        private void backBtnOnClick() {
             remove(); // removes option window
         }
 
-        // called when login button is pressed - try to login
-        private void loginBtnOnClick(InputEvent event, float x, float y) {
-            // localized strings
-            final String[] infoLogin = {langBundle.format("loginSuccess")};
-            final String[] infoLoginBtn = {langBundle.format("ok")};
+        // called when login button is pressed - tries to login
+        private void loginBtnOnClick() {
+            // unfocus everything on stage
+            stage.unfocusAll();
+            // gets data to validate it before sending it to the server
+            String userName = userNameTextField.getText().replaceFirst("\\s++$", "");
+            String password = passwordTextField.getText().replaceFirst("\\s++$", "");
 
-            // styles from the skin
-            Label.LabelStyle lStyle = skin.get("newLabelStyle", Label.LabelStyle.class);
-            TextButton.TextButtonStyle tbStyle = skin.get("newTextButtonStyle", TextButton.TextButtonStyle.class);
+            // checks if any of the data is empty
+            boolean hasEmptyField = userName == "" || password == "";
 
-            if (userNameTextField.getText().length() == 0 || passwordTextField.getText().length() == 0) {
-                infoLogin[0] = langBundle.format("loginWrongInfo");
-                infoLoginBtn[0] = langBundle.format("back");
-            } else {
-                infoLogin[0] = langBundle.format("loginSuccess");
-                infoLoginBtn[0] = langBundle.format("ok");
+            // checks if all data is valid
+            boolean dataIsValid = isValidAndFitUser(userName) && isValidAndFitPassword(password);
+
+            // if any of the field is empty, show respective info dialog and return
+            if (hasEmptyField) {
+                infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("emptyFieldTitle"),
+                        langBundle.format("emptyFieldContent"), false, true);
+                infoDialog.show(stage);
+                return;
             }
-            System.out.println("Login with Following Credentials: " + userNameTextField.getText() + "/" + passwordTextField.getText());
+            // if data is not all valid, show respective info dialog and return
+            if (!dataIsValid) {
+                infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("loginWrongInfo"),
+                        langBundle.format("invalidLoginContent"), false, true);
+                infoDialog.show(stage);
+                return;
+            }
+            // only after data is validated it is sent to the server to check if user/password exist
+            // encrypting and signing it before sending it to the login server
 
-            Dialog infoDialog = new Dialog(langBundle.format("loginInfoDialog"), skin, "newWindowStyle");
-            infoDialog.text(infoLogin[0], lStyle).button(infoLoginBtn[0], skin, tbStyle);
-            infoDialog.key(Input.Keys.ENTER, true).key(Input.Keys.ESCAPE, false);
-            infoDialog.getTitleTable().padBottom(3).padLeft(2);
-            infoDialog.pack();
-            infoDialog.show(stage);
+            // shows a dialog informing the contacting of the server (to be closed when server responds or with timeout)
+            infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("contactingServerTitle"),
+                    langBundle.format("contactingServerContent"), true, false,
+                    prefs.getInteger("defaultMaxTimeOutValue", 15000) / 1000f);
+
+            // encrypts and sends to server from another thread
+            sendLoginAsync(userName, password);
+        }
+
+        // creates a thread to encrypt and send user data for login request
+        private void sendLoginAsync(String userName, String password) {
+            // Encrypt and send to server on another thread
+            new Thread(() -> {
+                // asynchronously to the rendering thread
+                if(!loginClient.isConnected())
+                    loginClient.connect();
+                // sign and encrypt data
+                encoder = Encoder.getInstance();
+                byte[] encryptedPass = encoder.signAndEncryptData(password);
+                byte[] encryptedUser = encoder.signAndEncryptData(userName);
+                LoginRegister.Login login = new LoginRegister.Login();
+                login.userName = encryptedUser;
+                login.password = encryptedPass;
+                if(loginClient.isConnected()) // sends attempt if login client is connected
+                    loginClient.sendLoginAttempt(login);
+                // processes the result in a thread safe way with libgdx UI
+                Gdx.app.postRunnable(() -> {
+                    if(!loginClient.isConnected()) { // connection has failed
+                        if(infoDialog!= null && infoDialog.getStage() != null) infoDialog.remove(); // removes waiting dialog
+                        // show connection failed dialog
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("errorDialogTitle"),
+                                langBundle.format("connectionRefusedContent"), false, true);
+                        infoDialog.show(stage);
+                    }
+                });
+            }).start();
         }
     }
 

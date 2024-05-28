@@ -39,7 +39,9 @@ public class LoginRegister {
             EMAIL_ALREADY_REGISTERED, // email already registered
             USER_SUCCESSFULLY_REGISTERED, // registration was successful
             DB_ERROR, // error while doing operation on database
-            DISCARD; // useless response
+            LOGIN_SUCCESSFUL, // login was successful
+            LOGIN_INVALID_CREDENTIALS, // login failed due to invalid credentials
+            DISCARD, // useless response
         }
         public Type type;
         public Response() {this.type = Type.DISCARD;}
@@ -47,7 +49,8 @@ public class LoginRegister {
     }
 
     static public class Login {
-        public String name;
+        public byte[] userName;
+        public byte[] password;
     }
 
     static public class RegistrationRequired {

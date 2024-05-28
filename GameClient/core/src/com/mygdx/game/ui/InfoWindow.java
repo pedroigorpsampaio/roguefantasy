@@ -19,6 +19,8 @@ import com.badlogic.gdx.utils.I18NBundle;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.util.Encoder;
 
 /**
  * A class that encapsulates the option menu window
@@ -98,6 +100,16 @@ public class InfoWindow extends GameWindow {
 
     @Override
     public void resize(int width, int height) {
+
+    }
+
+    @Override
+    public void startServerListening(LoginClient loginClient, Encoder encoder) {
+
+    }
+
+    @Override
+    public void stopServerListening() {
 
     }
 

@@ -19,6 +19,8 @@ import com.badlogic.gdx.utils.I18NBundle;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.util.Encoder;
 
 /**
  * A class that encapsulates a generic game window
@@ -33,6 +35,8 @@ public abstract class GameWindow extends Window {
     protected AssetManager manager;
     protected Skin skin;
     protected I18NBundle langBundle;
+    protected LoginClient loginClient;
+    protected Encoder encoder;
     /**
      * Sets the window vars to be properly used in the game stage
      * Build should be implemented by each subclass and should build
@@ -72,5 +76,16 @@ public abstract class GameWindow extends Window {
      * Abstract method for subclasses to act according to their necessities when game is resized
      */
     public abstract void resize(int width, int height);
+
+    /**
+     * Abstract method for subclasses to be able to access and communicate with servers if needed
+     * Subclasses that want to listen to servers must implement PropertyChangeListener interface
+     */
+    public abstract void startServerListening(LoginClient loginClient, Encoder encoder);
+
+    /**
+     * Abstract method for subclasses to cut communication with server property changes
+     */
+    public abstract void stopServerListening();
 
 }

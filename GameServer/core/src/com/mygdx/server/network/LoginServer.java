@@ -53,36 +53,42 @@ public class LoginServer extends DispatchServer implements CmdReceiver {
             public void received (Connection c, Object object) {
                 // We know all connections for this server are actually CharacterConnections.
                 CharacterConnection connection = (CharacterConnection)c;
-                LoginRegister.Character character = connection.character;
+                DbController.CharacterLoginData charData = connection.charData;
 
                 if (object instanceof LoginRegister.Login) {
                     // Ignore if already logged in.
-                    if (character != null) return;
+                   // if (character != null) return;
+
+                    // creates request object to send to listeners
+                    Request request = new Request(connection, object);
+                    // send request to interested listeners
+                    listeners.firePropertyChange("loginRequest", null, request);
+
 
                     // Reject if the name is invalid.
-                    String name = ((LoginRegister.Login)object).name;
-                    if (!isValid(name)) {
-                        c.close();
-                        return;
-                    }
-
-                    // Reject if already logged in.
-                    for (LoginRegister.Character other : loggedIn) {
-                        if (other.name.equals(name)) {
-                            c.close();
-                            return;
-                        }
-                    }
-
-                    character = loadCharacter(name);
-
-                    // Reject if couldn't load character.
-                    if (character == null) {
-                        c.sendTCP(new LoginRegister.RegistrationRequired());
-                        return;
-                    }
-
-                    loggedIn(connection, character);
+//                    String name = ((LoginRegister.Login)object).name;
+//                    if (!isValid(name)) {
+//                        c.close();
+//                        return;
+//                    }
+//
+//                    // Reject if already logged in.
+//                    for (LoginRegister.Character other : loggedIn) {
+//                        if (other.name.equals(name)) {
+//                            c.close();
+//                            return;
+//                        }
+//                    }
+//
+//                    character = loadCharacter(name);
+//
+//                    // Reject if couldn't load character.
+//                    if (character == null) {
+//                        c.sendTCP(new LoginRegister.RegistrationRequired());
+//                        return;
+//                    }
+//
+//                    loggedIn(connection, character);
                     return;
                 }
 
@@ -91,7 +97,7 @@ public class LoginServer extends DispatchServer implements CmdReceiver {
                     //if (character != null) return;
 
                     // creates request object to send to listeners
-                    Request request = new Request(c, object);
+                    Request request = new Request(connection, object);
                     // send request to interested listeners
                     listeners.firePropertyChange("registerRequest", null, request);
 
@@ -298,19 +304,19 @@ public class LoginServer extends DispatchServer implements CmdReceiver {
      * Including connection information and request content data
      */
     public class Request {
-        private Connection conn;
+        private CharacterConnection conn;
         private Object content;
-        public Connection getConnection() {return conn;}
+        public CharacterConnection getConnection() {return conn;}
         public Object getContent() {return content;}
-        public Request(Connection conn, Object content) {
+        public Request(CharacterConnection conn, Object content) {
             this.conn = conn;
             this.content = content;
         }
     }
 
     // This holds per connection state.
-    static class CharacterConnection extends Connection {
-        public LoginRegister.Character character;
+    public static class CharacterConnection extends Connection {
+        public DbController.CharacterLoginData charData;
     }
 
 }

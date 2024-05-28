@@ -21,6 +21,8 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.util.Encoder;
 
 import java.util.Locale;
 
@@ -123,6 +125,16 @@ public class OptionWindow extends GameWindow {
 
     @Override
     public void resize(int width, int height) {
+
+    }
+
+    @Override
+    public void startServerListening(LoginClient loginClient, Encoder encoder) {
+
+    }
+
+    @Override
+    public void stopServerListening() {
 
     }
 

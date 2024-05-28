@@ -12,6 +12,7 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
 import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
@@ -72,8 +73,6 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
     private TypingLabel tosLabel;
     private CheckBox tosCB;
     private Dialog infoDialog;
-    private LoginClient loginClient;
-    private Encoder encoder;
 
     /**
      * Builds the register window, to be used as an actor in any screen
@@ -95,10 +94,6 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
         // makes sure window is clear and not in stage before building it
         this.clear();
         this.remove();
-
-        // if its not listening to registration responses, start listening to it
-        if(!loginClient.isListening("registrationResponse", this))
-            loginClient.addListener("registrationResponse", this);
 
         // makes sure language is up to date with current selected option
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
@@ -266,9 +261,23 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
         new RegisterController();
     }
 
-    // sets the connection reference and the encoder
-    public void prepareNetwork(LoginClient loginClient, Encoder encoder) {
+    /**
+     * to be able to access and communicate with servers
+     */
+    public void startServerListening(LoginClient loginClient, Encoder encoder) {
         this.loginClient = loginClient; this.encoder = encoder;
+        // if its not listening to registration responses, start listening to it
+        if(!loginClient.isListening("registrationResponse", this))
+            loginClient.addListener("registrationResponse", this);
+    }
+
+    /**
+     * cut communication with server property changes
+     */
+    public void stopServerListening() {
+        // if its listening to registration responses, stops listening to it
+        if(loginClient.isListening("registrationResponse", this))
+            loginClient.removeListener("registrationResponse", this);
     }
 
     // resizes info dialogs on game resize
@@ -363,7 +372,7 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
                     super.clicked(event, x, y);
-                    backBtnOnClick(event, x, y);
+                    backBtnOnClick();
                 }
             });
             registerBtn.addListener(new ClickListener() {
@@ -407,6 +416,17 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
                 @Override
                 public void onChar(long ch) {
 
+                }
+            });
+            getInstance().addListener(new InputListener(){ //  for keyboard shortcuts
+                @Override
+                public boolean keyDown(InputEvent event, int keycode) {
+                    if (keycode == Input.Keys.ENTER || keycode == Input.Keys.NUMPAD_ENTER) {
+                        registerAccount();
+                    } else if (keycode == Input.Keys.ESCAPE) {
+                        backBtnOnClick();
+                    }
+                    return false;
                 }
             });
         }
@@ -530,6 +550,7 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
                 // asynchronously to the rendering thread
                 if(!loginClient.isConnected())
                     loginClient.connect();
+                // sign and encrypt data
                 encoder = Encoder.getInstance();
                 byte[] encryptedPass = encoder.signAndEncryptData(password);
                 byte[] encryptedUser = encoder.signAndEncryptData(userName);
@@ -682,7 +703,7 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
         }
 
         // called when back button is pressed
-        private void backBtnOnClick(InputEvent event, float x, float y) {
+        private void backBtnOnClick() {
             if(parent instanceof MainMenuScreen) {  // goes back to login screen
                 ((MainMenuScreen) parent).update(getInstance(), false, MainMenuScreen.ScreenCommands.LOAD_LOGIN_WINDOW);
             }
