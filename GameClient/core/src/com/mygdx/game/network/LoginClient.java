@@ -19,14 +19,14 @@ import com.mygdx.game.network.LoginRegister.Character;
 import com.esotericsoftware.minlog.Log;
 
 public class LoginClient extends DispatchServer{
-    private static LoginClient instance; // login client instance (singleton)
-    Client client;
+    private static LoginClient instance; // login client instance
+    private Client client;
     String name="";
     String host = "192.168.0.192";
     public boolean isConnected() {return isConnected;}
     private boolean isConnected = false;
 
-    public LoginClient () {
+    protected LoginClient () {
         super(); // calls constructor of the superclass to instantiate listeners list
 
         client = new Client(65535, 65535);
@@ -49,11 +49,8 @@ public class LoginClient extends DispatchServer{
              *  Client received callback dispatches work to interested listeners
              */
             public void received (Connection connection, Object object) {
-                if (object instanceof RegistrationRequired) {
-//                    Register register = new Register();
-//                    register.name = name;
-//                    register.otherStuff = "ui.inputOtherStuff()";
-//                    client.sendTCP(register);
+                if (object instanceof LoginRegister.Token) { // token received to login in game server
+                    listeners.firePropertyChange("tokenResponse", null, object);
                 } else if (object instanceof LoginRegister.Response) { // Response type object
                     LoginRegister.Response response = (LoginRegister.Response) object;
                     switch(response.type) {
@@ -66,6 +63,8 @@ public class LoginClient extends DispatchServer{
                             break;
                         case LOGIN_SUCCESSFUL:
                         case LOGIN_INVALID_CREDENTIALS:
+                        case USER_ALREADY_LOGGED_IN:
+                        case GAME_SERVER_OFFLINE:
                             listeners.firePropertyChange("loginResponse", null, response);
                             break;
                         default:

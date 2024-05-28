@@ -33,6 +33,7 @@ import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.KnownFonts;
 import com.kotcrab.vis.ui.VisUI;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Encoder;
 
@@ -90,8 +91,8 @@ public class LoadScreen implements Screen {
             manager.finishLoading();
         }
 
-        // gets skin that should be loaded by now
-        if(manager.isLoaded("skin/neutralizer/neutralizer-ui.json")) {
+        // gets skin that should be loaded by now (ignore if its changing to game screen)
+        if(manager.isLoaded("skin/neutralizer/neutralizer-ui.json") && !screen.equals("game")) {
             // skin is available, let's fetch it and do something interesting
             skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             // gets font loaded
@@ -164,9 +165,33 @@ public class LoadScreen implements Screen {
             Locale defaultLocale = new Locale(prefs.getString("lastLangLocale", "en"), prefs.getString("lastCountry", ""));
             I18NBundleLoader.I18NBundleParameter langParams = new I18NBundleLoader.I18NBundleParameter(defaultLocale, "UTF-8");
             manager.load("lang/langbundle", I18NBundle.class, langParams);
-        } else {
+        } else if(screen.equals("game")){
 
         }
+
+        pgBar = new ProgressBar(0, 1, 0.1f, false, skin);
+        stage.addActor(pgBar);
+    }
+
+    // to be used for game screen
+    public LoadScreen(RogueFantasy game, String screen, AssetManager manager, String decryptedToken) {
+        this.game = game;
+        this.screen = screen;
+        this.manager = manager;
+
+        // gets preferences reference, that stores simple data persisted between executions
+        prefs = Gdx.app.getPreferences("globalPrefs");
+
+        stage = new Stage(new ScreenViewport());
+        Gdx.input.setInputProcessor(stage);
+
+        GameClient gameClient = GameClient.getInstance(); // gets gameclient instance
+        gameClient.connect(); // connects gameclient with server
+        gameClient.sendTokenAsync(decryptedToken); // login using token received
+
+        // load game specific assets
+        skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
+        manager.load("bgm/time_commando.mp3", Music.class);
 
         pgBar = new ProgressBar(0, 1, 0.1f, false, skin);
         stage.addActor(pgBar);
@@ -180,11 +205,14 @@ public class LoadScreen implements Screen {
     @Override
     public void render(float delta) {
         if(manager.update()) {
+            dispose();
             if(screen.equals("menu")) {
                 // we are done loading, let's move to another screen!
                 game.setScreen(new MainMenuScreen(game, manager, LoginClient.getInstance()));
+            } else if(screen.equals("game")) {
+                game.setScreen(new GameScreen(game, manager, GameClient.getInstance()));
             }
-            dispose();
+
         }
 
         // display loading information
@@ -219,6 +247,7 @@ public class LoadScreen implements Screen {
 
     @Override
     public void dispose() {
+        pgBar.remove();
         stage.dispose();
     }
 }

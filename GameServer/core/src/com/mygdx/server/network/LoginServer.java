@@ -24,12 +24,13 @@ import com.mygdx.server.ui.CommandDispatcher.Command;
  * and other communications related to the authentication of the user
  */
 public class LoginServer extends DispatchServer implements CmdReceiver {
-    private final DbController dbController; // reference to the controller of the database
+    private static LoginServer instance;
+    private DbController dbController; // reference to the controller of the database
     Server server;
     HashSet<LoginRegister.Character> loggedIn = new HashSet();
     private boolean isOnline = false; // is this server online?
 
-    public LoginServer() throws IOException {
+    private LoginServer() {
         super(); // calls constructor of the superclass to instantiate listeners list
         server = new Server(65535, 65535) {
             protected Connection newConnection () {
@@ -38,12 +39,6 @@ public class LoginServer extends DispatchServer implements CmdReceiver {
                 return new CharacterConnection();
             }
         };
-
-        // instantiate database controller that will act
-        // on server requests related to the postgres database
-        // and is responsible for the available database ops
-        dbController = DbController.getInstance();
-        addListener(dbController); // adds db controller as listener to all login server requests
 
         // For consistency, the classes to be sent over the network are
         // registered by the same method for both the client and server.
@@ -181,88 +176,35 @@ public class LoginServer extends DispatchServer implements CmdReceiver {
 //                }
             }
         });
+
+    }
+
+    public void connect() {
         try {
             server.bind(LoginRegister.port);
         } catch (IOException e) {
             Log.info("login-server", "Could not bind port " + LoginRegister.port + " and start login server");
+            isOnline = false;
             return;
         }
         // server online
         server.start();
         isOnline = true;
+        // instantiate database controller that will act
+        // on server requests related to the postgres database
+        // and is responsible for the available database ops
+        dbController = new DbController();
+        //dbController.connect(); // connects to postgres database
+        addListener(dbController); // adds db controller as listener to all login server requests
+
         Log.info("login-server", "Login Server is running!");
     }
 
-    void loggedIn (CharacterConnection c, LoginRegister.Character character) {
-//        c.character = character;
-//
-//        // Add existing characters to new logged in connection.
-//        for (LoginRegister.Character other : loggedIn) {
-//            LoginRegister.AddCharacter addCharacter = new LoginRegister.AddCharacter();
-//            addCharacter.character = other;
-//            c.sendTCP(addCharacter);
-//        }
-//
-//        loggedIn.add(character);
-//
-//        // Add logged in character to all connections.
-//        LoginRegister.AddCharacter addCharacter = new LoginRegister.AddCharacter();
-//        addCharacter.character = character;
-//        server.sendToAllTCP(addCharacter);
-    }
+    public static LoginServer getInstance() {
+        if(instance == null)
+            instance = new LoginServer();
 
-    boolean saveCharacter (LoginRegister.Character character) {
-        File file = new File("characters", character.name.toLowerCase());
-        file.getParentFile().mkdirs();
-
-        if (character.id == 0) {
-            String[] children = file.getParentFile().list();
-            if (children == null) return false;
-            character.id = children.length + 1;
-        }
-
-        DataOutputStream output = null;
-        try {
-            output = new DataOutputStream(new FileOutputStream(file));
-            output.writeInt(character.id);
-            output.writeUTF(character.otherStuff);
-            output.writeInt(character.x);
-            output.writeInt(character.y);
-            return true;
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            return false;
-        } finally {
-            try {
-                output.close();
-            } catch (IOException ignored) {
-            }
-        }
-    }
-
-    LoginRegister.Character loadCharacter (String name) {
-        File file = new File("characters", name.toLowerCase());
-        if (!file.exists()) return null;
-        DataInputStream input = null;
-        try {
-            input = new DataInputStream(new FileInputStream(file));
-            LoginRegister.Character character = new LoginRegister.Character();
-            character.id = input.readInt();
-            character.name = name;
-            character.otherStuff = input.readUTF();
-            character.x = input.readInt();
-            character.y = input.readInt();
-            input.close();
-            return character;
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            return null;
-        } finally {
-            try {
-                if (input != null) input.close();
-            } catch (IOException ignored) {
-            }
-        }
+        return instance;
     }
 
     public void stop() {
@@ -274,6 +216,7 @@ public class LoginServer extends DispatchServer implements CmdReceiver {
             Log.info("login-server", "Login server has stopped!");
             isOnline = false;
             dbController.close();
+            removeListener(dbController);
         } else
             Log.info("cmd", "Login server is not running!");
     }

@@ -2,39 +2,45 @@ package com.mygdx.game.network;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputAdapter;
+import com.badlogic.gdx.InputProcessor;
 import com.esotericsoftware.kryonet.Client;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Listener.ThreadedListener;
 import com.mygdx.game.network.GameRegister.AddCharacter;
 import com.mygdx.game.network.GameRegister.Character;
-import com.mygdx.game.network.GameRegister.Login;
 import com.mygdx.game.network.GameRegister.MoveCharacter;
 import com.mygdx.game.network.GameRegister.Register;
 import com.mygdx.game.network.GameRegister.RegistrationRequired;
 import com.mygdx.game.network.GameRegister.RemoveCharacter;
 import com.mygdx.game.network.GameRegister.UpdateCharacter;
+import com.mygdx.game.util.Encoder;
 
 import java.io.IOException;
 import java.util.HashMap;
 
 public class GameClient {
+    private static GameClient instance; // login client instance
+    private InputProcessor oldIProcessor;
     UI ui;
-    Client client;
+    private Client client;
     String name="";
     String host="";
+    public boolean isConnected() {return isConnected;}
+    private boolean isConnected = false;
 
-    public GameClient() {
-        client = new Client();
+    protected GameClient() {
+        client = new Client(65535, 65535);
         client.start();
 
-        Gdx.input.setInputProcessor(new InputAdapter() {
-            @Override
-            public boolean keyTyped (char character) {
-                moveCharacter(character);
-                return true;
-            }
-        });
+//        oldIProcessor = Gdx.input.getInputProcessor();
+//        Gdx.input.setInputProcessor(new InputAdapter() {
+//            @Override
+//            public boolean keyTyped (char character) {
+//                moveCharacter(character);
+//                return true;
+//            }
+//        });
 
         // For consistency, the classes to be sent over the network are
         // registered by the same method for both the client and server.
@@ -43,6 +49,14 @@ public class GameClient {
         // ThreadedListener runs the listener methods on a different thread.
         client.addListener(new ThreadedListener(new Listener() {
             public void connected (Connection connection) {
+                oldIProcessor = Gdx.input.getInputProcessor();
+                Gdx.input.setInputProcessor(new InputAdapter() {
+                    @Override
+                    public boolean keyTyped (char character) {
+                        moveCharacter(character);
+                        return true;
+                    }
+                });
             }
 
             public void received (Connection connection, Object object) {
@@ -72,37 +86,47 @@ public class GameClient {
             }
 
             public void disconnected (Connection connection) {
-                System.exit(0);
+                System.err.println("Disconnected from game server");
+                isConnected = false;
+                Gdx.input.setInputProcessor(oldIProcessor);
             }
         }));
 
         ui = new UI();
         host = "192.168.0.192";
+    }
 
+    public void connect() {
         try {
-            client.connect(5000, host, GameRegister.port);
+            client.connect(5000, host, GameRegister.tcp_port, GameRegister.udp_port);
             // Server communication after connection can go here, or in Listener#connected().
         } catch (IOException ex) {
             ex.printStackTrace();
         }
 
-        name = "b";
-        Login login = new Login();
-        login.name = name;
-        client.sendTCP(login);
+//        name = "b";
+//        Login login = new Login();
+//        login.name = name;
+//        client.sendTCP(login);
 
         // show keyboard on android for testing
         Gdx.input.setOnscreenKeyboardVisible(true);
+    }
+
+    public static GameClient getInstance() {
+        if(instance == null)
+            instance = new GameClient();
+        return instance;
     }
 
     public void moveCharacter(char c) {
         MoveCharacter msg = new MoveCharacter();
         switch (c) {
             case 'w':
-                msg.y = -1;
+                msg.y = 1;
                 break;
             case 's':
-                msg.y = 1;
+                msg.y = -1;
                 break;
             case 'a':
                 msg.x = -1;
@@ -113,7 +137,26 @@ public class GameClient {
             default:
                 msg = null;
         }
-        if (msg != null) client.sendTCP(msg);
+        if (msg != null) client.sendUDP(msg);
+    }
+
+    /**
+     * Logins into game server with token received from login server
+     * @param token the token received from login server for the current authorized user
+     */
+    public void sendTokenAsync(String token) {
+        // Encrypt and send to server on another thread
+        new Thread(() -> {
+            Encoder encoder = new Encoder();
+            byte[] encryptedToken = encoder.signAndEncryptData(token);
+            GameRegister.Token tk = new GameRegister.Token();
+            tk.token = encryptedToken;
+            client.sendTCP(tk);
+        }).start();
+    }
+
+    public HashMap<Integer, Character> getOnlineCharacters() {
+        return ui.characters;
     }
 
     static class UI {

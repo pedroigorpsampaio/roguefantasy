@@ -193,12 +193,9 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 			// starts login server if not online already
 			if(loginServer == null || !loginServer.isOnline()) {
 				Log.info("cmd", "Starting " +serverType.text+ " server...");
-				try {
-					loginServer = new LoginServer();
-					dispatcher.setLoginServer(loginServer);
-				} catch (IOException e) {
-					Log.error("login-server", "Error starting " + serverType.text + "  server: " + e);
-				}
+				loginServer = LoginServer.getInstance(); // get login server instance
+				loginServer.connect(); // connects/starts login server
+				dispatcher.setLoginServer(loginServer);  // sets login server for the command dispatcher
 			} else {
 				Log.info("cmd", "Login server is already running!");
 			}
@@ -211,18 +208,15 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 			// starts login server if not online already
 			if(gameServer == null || !gameServer.isOnline()) {
 				Log.info("cmd", "Starting " +serverType.text+ " server...");
-				try {
-					gameServer = new GameServer();
-					dispatcher.setGameServer(gameServer);
-				} catch (IOException e) {
-					Log.error("game-server", "Error starting " + serverType.text + "  server: " + e);
-				}
+				gameServer = GameServer.getInstance(); // get game server instance
+				gameServer.connect();  // connects/starts game server
+				dispatcher.setGameServer(gameServer); // sets game server for the command dispatcher
 			} else
 				Log.info("cmd", "Game server is already running!");
 		}
 	}
 
-	// just free servers references here
+	// just null servers references here
 	private void stopServer(ServerChannel serverType) {
 		if(serverType == ServerChannel.ALL || serverType == ServerChannel.LOGIN) {loginServer = null;}
 		if(serverType == ServerChannel.ALL || serverType == ServerChannel.CHAT) {
@@ -345,6 +339,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	@Override
 	public void dispose () {
 		loginServer.stop(); // stops server to save it
+		gameServer.stop();
 		batch.dispose();
 		stage.dispose();
 		skin.dispose();

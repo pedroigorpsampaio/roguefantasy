@@ -182,7 +182,8 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
 
     @Override
     public void resize(int width, int height) {
-
+        if(infoDialog != null)
+            infoDialog.setPosition( stage.getWidth() / 2f - infoDialog.getWidth() / 2f, stage.getHeight() / 2f - infoDialog.getHeight() / 2f );
     }
 
     /**
@@ -193,6 +194,8 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
         // if its not listening to login responses, start listening to it
         if(!loginClient.isListening("loginResponse", this))
             loginClient.addListener("loginResponse", this);
+        if(!loginClient.isListening("tokenResponse", this))
+            loginClient.addListener("tokenResponse", this);
     }
 
     /**
@@ -202,6 +205,8 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
         // if its listening to login responses, stops listening to it
         if(loginClient.isListening("loginResponse", this))
             loginClient.removeListener("loginResponse", this);
+        if(loginClient.isListening("tokenResponse", this))
+            loginClient.removeListener("tokenResponse", this);
     }
 
     /**
@@ -222,10 +227,25 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
                                 langBundle.format("loadingCharContent"), true, false,
                                 prefs.getInteger("defaultMaxTimeOutValue", 15000) / 1000f);
                         break;
+                    case USER_ALREADY_LOGGED_IN:
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("contactingServerTitle"),
+                                langBundle.format("userAlreadyLoggedInContent"), false, true);
+                        break;
+                    case GAME_SERVER_OFFLINE:
+                        infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("contactingServerTitle"),
+                                langBundle.format("gameServerOfflineContent"), false, true);
+                        break;
                     default:
                         infoDialog = CommonUI.createDialog(stage, skin, langBundle, iconFont, langBundle.format("loginWrongInfo"),
                             langBundle.format("invalidLoginContent"), false, true);
                         break;
+                }
+            } else if(propertyChangeEvent.getPropertyName().equals("tokenResponse")) { // login authorized, received token to connect to game server
+                LoginRegister.Token token = (LoginRegister.Token) propertyChangeEvent.getNewValue();
+                String decryptedToken = encoder.decryptSignedData(token.token);
+                if(parent instanceof MainMenuScreen) { // perform change screen from menu to game screen
+                    ((MainMenuScreen) parent).update(getInstance(), false, MainMenuScreen.ScreenCommands.DISPOSE);
+                    game.setScreen(new LoadScreen(game, "game", manager, decryptedToken));
                 }
             }
         });

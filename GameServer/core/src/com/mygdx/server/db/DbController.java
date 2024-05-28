@@ -6,6 +6,7 @@ import static com.mygdx.server.network.LoginRegister.Register.isValidAndFitPassw
 import static com.mygdx.server.network.LoginRegister.Register.isValidAndFitUser;
 
 import com.esotericsoftware.minlog.Log;
+import com.mygdx.server.network.GameServer;
 import com.mygdx.server.network.LoginRegister;
 import com.mygdx.server.network.LoginRegister.*;
 import com.mygdx.server.network.LoginServer;
@@ -136,7 +137,7 @@ class PostgresDB {
         // queries for user in database
         String sqlUser = "SELECT * FROM users WHERE LOWER(username)=LOWER(?)";
         String hashPass = null, character = null;
-        int id = -1;
+        int id = -1, roleLevel = 0;
         try {
             PreparedStatement pstmtUser = connection.prepareStatement(sqlUser);
             pstmtUser.setString(1, userName);
@@ -146,6 +147,7 @@ class PostgresDB {
                     id = rs.getInt("id");
                     character = rs.getString("character");
                     hashPass = rs.getString("password");
+                    roleLevel = rs.getInt("role_level");
                 }
             } else // user not found, return null indicating invalid credentials
                 return null;
@@ -157,7 +159,7 @@ class PostgresDB {
         // if user was found, check if password matches with hashed pass
         if (Encoder.verifyBCryptHash(password, hashPass)) { // password matches
             // builds user data into register class to return it
-            return new DbController.CharacterLoginData(id, character);
+            return new DbController.CharacterLoginData(id, roleLevel, character);
         }
          return null;
     }
@@ -212,12 +214,19 @@ class DatabaseConfig {
  */
 public class DbController implements PropertyChangeListener {
     private static DbController instance;
-    private final Encoder encoder;
-    private final PostgresDB postgresDb;
-    private DbController() {
+    private Encoder encoder;
+    private PostgresDB postgresDb;
+    public DbController() {
         encoder = new Encoder();
         postgresDb = new PostgresDB();
     }
+
+    // connects to databases
+    public void connect() {
+        encoder = new Encoder();
+        postgresDb = new PostgresDB();
+    }
+
     // returns DbController instance
     public static DbController getInstance() {
         if(instance == null)
@@ -273,8 +282,9 @@ public class DbController implements PropertyChangeListener {
     /**
      * Tries to login user authenticating it through postgres database
      * @param request   the received client request containing user data
+     * @return true if user was successfully authenticated, false otherwise
      */
-    public void loginUser(LoginServer.Request request) {
+    public boolean loginUser(LoginServer.Request request) {
         LoginServer.CharacterConnection conn = request.getConnection();
         Login login = (Login) request.getContent();
 
@@ -288,7 +298,7 @@ public class DbController implements PropertyChangeListener {
         // invalid data wont be considered, return invalid credentials
         if(!loginIsValid(userName, password)) {
             conn.sendTCP(new LoginRegister.Response(Response.Type.LOGIN_INVALID_CREDENTIALS));
-            return;
+            return false;
         }
 
         // tries to retrieve user from database in case request contains valid data
@@ -298,13 +308,15 @@ public class DbController implements PropertyChangeListener {
             conn.sendTCP(new LoginRegister.Response(Response.Type.LOGIN_SUCCESSFUL)); // sends login success msg to client
             // TODO: SEND CHAR DATA TO GAME SERVER TO LOAD CHAR AND SEND CHAR GAME DATA TO CLIENT
             conn.charData = charData;
-            // gameServer.loginChar(conn); // passes control to game server sending necessary char data
+            GameServer.getInstance().requestToken(conn); // requests a token for game server login to send to client
             Log.debug("login-server", "Result: LOGIN VALID FOR USER ID: "+ charData.id);
+            System.out.println("USER LOGGED IN: " + charData.character +  "\t/ ROLE: "+ conn.charData.roleLevel);
+            return true;
         } else { // user or password did not match
             conn.sendTCP(new LoginRegister.Response(Response.Type.LOGIN_INVALID_CREDENTIALS));
             Log.debug("login-server", "Result: "+ Response.Type.LOGIN_INVALID_CREDENTIALS.name());
+            return false;
         }
-
     }
 
     private boolean loginIsValid (String userName, String password) {
@@ -325,9 +337,11 @@ public class DbController implements PropertyChangeListener {
         switch(propertyChangeEvent.getPropertyName()) {
             case "registerRequest":
                 registerNewUserInDb(request); // register users in db if everything is ok
+                request.getConnection().close(); // closes connection
                 break;
             case "loginRequest":
-                loginUser(request);  // tries to login user if everything is ok
+                if(!loginUser(request))  // tries to login user if everything is ok
+                    request.getConnection().close();// do not close connection for login unless an error happened
                 break;
             default:
                 Log.debug("postgres", "Unknown client request to PostgresDb controller"
@@ -343,9 +357,11 @@ public class DbController implements PropertyChangeListener {
 
     // contains character login data from postgres database
     static public class CharacterLoginData {
-        public int id;
+        public int id, roleLevel;
         public String character;
         public CharacterLoginData(){}
-        public CharacterLoginData(int id, String character){this.id = id; this.character = character;}
+        public CharacterLoginData(int id, int roleLevel, String character){
+            this.id = id; this.roleLevel = roleLevel; this.character = character;
+        }
     }
 }

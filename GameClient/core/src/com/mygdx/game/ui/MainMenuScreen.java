@@ -230,11 +230,11 @@ public class MainMenuScreen implements Screen {
     public void dispose() {
         stage.dispose();
         bgStage.dispose();
-        skin.dispose();
-        manager.dispose();
+        //skin.dispose();
+        //manager.dispose();
         bgTexture.dispose();
         bgm.dispose();
-        VisUI.dispose();
+        //VisUI.dispose();
         loginWindow.stopServerListening();
         registerWindow.stopServerListening();
     }
@@ -266,6 +266,9 @@ public class MainMenuScreen implements Screen {
             switch(cmd) {
                 case LOAD_REGISTER_WINDOW:
                     loadWindow(registerWindow, true); // loads register window
+                    break;
+                case DISPOSE:
+                    dispose();
                     break;
                 default:
                     Gdx.app.error("Unknown Window Command", "Current screen received an unknown command from login window");
@@ -323,6 +326,7 @@ public class MainMenuScreen implements Screen {
         RELOAD_LANGUAGE,
         RELOAD_VOLUME,
         LOAD_REGISTER_WINDOW,
+        DISPOSE,
         LOAD_LOGIN_WINDOW
     }
 

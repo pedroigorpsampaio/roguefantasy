@@ -9,7 +9,8 @@ import com.esotericsoftware.kryonet.EndPoint;
  */
 public class GameRegister {
 
-    static public final int port = 43572; // GAME SERVER PORT
+    static public final int tcp_port = 43572; // GAME SERVER TCP PORT
+    static public final int udp_port = 38572; // GAME SERVER UDP PORT
 
     /**
      * Registers objects that are going to be sent over the network
@@ -19,7 +20,11 @@ public class GameRegister {
      */
     static public void register (EndPoint endPoint) {
         Kryo kryo = endPoint.getKryo();
+        kryo.register(byte[].class);
+        kryo.register(Response.class);
+        kryo.register(Response.Type.class);
         kryo.register(Login.class);
+        kryo.register(Token.class);
         kryo.register(RegistrationRequired.class);
         kryo.register(Register.class);
         kryo.register(AddCharacter.class);
@@ -29,8 +34,23 @@ public class GameRegister {
         kryo.register(MoveCharacter.class);
     }
 
+    // contains information flag data to be shared between client and server
+    static public class Response {
+        public enum Type{
+            DISCARD, // useless response
+        }
+        public Type type;
+        public Response() {this.type = Type.DISCARD;}
+        public Response(Type type) {this.type = type;}
+    }
+
     static public class Login {
         public String name;
+    }
+
+    // contains user generated token data
+    static public class Token {
+        public byte[] token;
     }
 
     static public class RegistrationRequired {

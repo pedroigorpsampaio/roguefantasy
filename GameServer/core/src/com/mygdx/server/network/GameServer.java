@@ -1,11 +1,13 @@
 package com.mygdx.server.network;
 
+import com.badlogic.gdx.Gdx;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
+import com.mygdx.server.util.Encoder;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -13,7 +15,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
@@ -21,12 +25,14 @@ import java.util.HashSet;
  * The server that manages game interactions between players and the game world
  */
 public class GameServer implements CmdReceiver {
+    private static GameServer instance;
     Server server;
-    HashSet<GameRegister.Character> loggedIn = new HashSet();
+    Set<GameRegister.Character> loggedIn = ConcurrentHashMap.newKeySet();
+    Set<GameRegister.Character> registeredTokens = ConcurrentHashMap.newKeySet();
     private boolean isOnline = false; // is this server online?
 
-    public GameServer() throws IOException {
-        server = new Server() {
+    public GameServer() {
+        server = new Server(65535, 65535) {
             protected Connection newConnection () {
                 // By providing our own connection implementation, we can store per
                 // connection state without a connection ID to state look up.
@@ -44,72 +50,70 @@ public class GameServer implements CmdReceiver {
                 CharacterConnection connection = (CharacterConnection)c;
                 GameRegister.Character character = connection.character;
 
-                if (object instanceof GameRegister.Login) {
-                    // Ignore if already logged in.
-                    if (character != null) return;
+                // token login
+                if (object instanceof GameRegister.Token) {
 
-                    // Reject if the name is invalid.
-                    String name = ((GameRegister.Login)object).name;
-                    if (!isValid(name)) {
-                        c.close();
-                        return;
-                    }
+                    GameRegister.Token token = (GameRegister.Token) object; // gets token casting obj
+                    Encoder encoder = new Encoder();
+                    String decryptedToken = encoder.decryptSignedData(token.token); // decrypts token
+                    Log.debug("game-server", "TOKEN AUTH: " + decryptedToken);
 
-                    // Reject if already logged in.
-                    for (GameRegister.Character other : loggedIn) {
-                        if (other.name.equals(name)) {
-                            c.close();
-                            return;
+                    // check if already logged in
+                    synchronized(loggedIn) {
+                        Iterator i = loggedIn.iterator();
+                        while (i.hasNext()) {
+                            GameRegister.Character loggedChar = (GameRegister.Character) i.next();
+                            if(loggedChar.token.equals(decryptedToken)) {
+                                connection.sendTCP(new GameRegister.Response(GameRegister.Response.Type.USER_ALREADY_LOGGED_IN));
+                                connection.close();
+                                return;
+                            }
                         }
                     }
-
-                    character = loadCharacter(name);
-
-                    // Reject if couldn't load character.
-                    if (character == null) {
-                        c.sendTCP(new GameRegister.RegistrationRequired());
-                        return;
+                    // retrieve char data from registered token
+                    synchronized(registeredTokens) {
+                        Iterator i = registeredTokens.iterator();
+                        while (i.hasNext()) {
+                            GameRegister.Character tokenizedChar = (GameRegister.Character) i.next();
+                            if(tokenizedChar.token.equals(decryptedToken)) {
+                                // TODO: ACTUALLY LOAD CHAR FROM PERSISTED STORAGE
+                                loggedIn(connection, tokenizedChar);
+                                //connection.sendUDP(new GameRegister.CharacterState());
+                                return;
+                            }
+                        }
                     }
-
-                    loggedIn(connection, character);
-                    return;
                 }
-
-                if (object instanceof GameRegister.Register) {
-                    // Ignore if already logged in.
-                    if (character != null) return;
-
-                    GameRegister.Register register = (GameRegister.Register)object;
-
-                    // Reject if the login is invalid.
-                    if (!isValid(register.name)) {
-                        c.close();
-                        return;
-                    }
-                    if (!isValid(register.otherStuff)) {
-                        c.close();
-                        return;
-                    }
-
-                    // Reject if character alread exists.
-                    if (loadCharacter(register.name) != null) {
-                        c.close();
-                        return;
-                    }
-
-                    character = new GameRegister.Character();
-                    character.name = register.name;
-                    character.otherStuff = register.otherStuff;
-                    character.x = 0;
-                    character.y = 0;
-                    if (!saveCharacter(character)) {
-                        c.close();
-                        return;
-                    }
-
-                    loggedIn(connection, character);
-                    return;
-                }
+//                if (object instanceof GameRegister.Login) {
+//                    // Ignore if already logged in.
+//                    if (character != null) return;
+//
+//                    // Reject if the name is invalid.
+//                    String name = ((GameRegister.Login)object).name;
+//                    if (!isValid(name)) {
+//                        c.close();
+//                        return;
+//                    }
+//
+//                    // Reject if already logged in.
+//                    for (GameRegister.Character other : loggedIn) {
+//                        if (other.name.equals(name)) {
+//                            c.close();
+//                            return;
+//                        }
+//                    }
+//
+//                    character = loadCharacter(name);
+//
+//                    // Reject if couldn't load character.
+//                    if (character == null) {
+//                        c.sendTCP(new GameRegister.RegistrationRequired());
+//                        return;
+//                    }
+//
+//                    loggedIn(connection, character);
+//                    return;
+//                }
 
                 if (object instanceof GameRegister.MoveCharacter) {
                     // Ignore if not logged in.
@@ -154,16 +158,35 @@ public class GameServer implements CmdReceiver {
                 }
             }
         });
+    }
+
+    public void connect() {
         try {
-            server.bind(GameRegister.port);
+            server.bind(GameRegister.tcp_port, GameRegister.udp_port);
         } catch (IOException e) {
-            Log.info("game-server", "Could not bind port " + GameRegister.port + " and start game server");
+            Log.info("game-server", "Could not bind ports (" + GameRegister.tcp_port
+                                + "/" + GameRegister.udp_port +") and start game server");
+            isOnline = false;
             return;
         }
         // server online
         server.start();
         isOnline = true;
+        // instantiate mongodb controller that will act
+        // on server requests related to the mongo database
+        // and is responsible for the available database ops
+        // mongoController = new MongoController();
+        //mongoController.connect(); // connects to mongo database
+        //addListener(mongoController); // adds mongo controller as listener to all game server requests
+
         Log.info("game-server", "Game Server is running!");
+    }
+
+    public static GameServer getInstance() {
+        if(instance == null)
+            instance = new GameServer();
+
+        return instance;
     }
 
     void loggedIn (CharacterConnection c, GameRegister.Character character) {
@@ -198,7 +221,7 @@ public class GameServer implements CmdReceiver {
         try {
             output = new DataOutputStream(new FileOutputStream(file));
             output.writeInt(character.id);
-            output.writeUTF(character.otherStuff);
+            //output.writeUTF(character.otherStuff);
             output.writeInt(character.x);
             output.writeInt(character.y);
             return true;
@@ -222,7 +245,7 @@ public class GameServer implements CmdReceiver {
             GameRegister.Character character = new GameRegister.Character();
             character.id = input.readInt();
             character.name = name;
-            character.otherStuff = input.readUTF();
+            //character.otherStuff = input.readUTF();
             character.x = input.readInt();
             character.y = input.readInt();
             input.close();
@@ -246,6 +269,7 @@ public class GameServer implements CmdReceiver {
             server.close();
             Log.info("game-server", "Game server has stopped!");
             isOnline = false; // server closed, safe to end
+            //dbController.close();
         } else
             Log.info("cmd", "Game server is not running!");
     }
@@ -271,9 +295,70 @@ public class GameServer implements CmdReceiver {
         return loggedIn.size();
     }
 
-    // This holds per connection state.
-    static class CharacterConnection extends Connection {
-        public GameRegister.Character character;
+    /**
+     * Request game server token for char that was authenticated by the login server into the game server
+     * @param conn  the character connection containing the char data and the connection to the client
+     */
+    public void requestToken(LoginServer.CharacterConnection conn) {
+        // if game server is offline return offline response
+        if(!isOnline) {  // send offline response through login TCP
+            conn.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.GAME_SERVER_OFFLINE));
+            conn.close();
+            return;
+        }
+        // if user is logged in, return and send already logged in msg
+        synchronized(loggedIn) {
+            Iterator i = loggedIn.iterator();
+            while (i.hasNext()) {
+                GameRegister.Character c = (GameRegister.Character) i.next();
+                if(c.id == conn.charData.id) {
+                    conn.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.USER_ALREADY_LOGGED_IN));
+                    conn.close();
+                    return;
+                }
+            }
+        }
+        GameRegister.Character character = null;
+        synchronized(registeredTokens) {
+            Iterator i = registeredTokens.iterator();
+            while (i.hasNext()) {
+                character = (GameRegister.Character) i.next();
+                if(character.id == conn.charData.id) { // has token, send token without generating one
+                    sendTokenAsync(conn, character.token);
+                    Log.debug("login-server", character.name+" is registered and has a token: "+character.token);
+                    return;
+                }
+            }
+            // if char does not have a token, generate a new one
+            // TODO: LOAD CHARACTER FROM PERSISTED STORAGE
+            character = new GameRegister.Character();
+            character.token = Encoder.generateNewToken(); character.id = conn.charData.id;
+            character.name = conn.charData.character; character.role_level = conn.charData.roleLevel;
+            character.x = 0; character.y = 0;
+            Log.debug("login-server", character.name+" is NOT registered, new token generated! "+character.token);
+            registeredTokens.add(character); // adds character to registered list with new token
+            sendTokenAsync(conn, character.token);
+        }
     }
 
+    // sends token to client async when login is successfully authenticated
+    private void sendTokenAsync(LoginServer.CharacterConnection conn, String token) {
+        // Encrypt and send to server on another thread
+        new Thread(() -> {
+            Encoder encoder = new Encoder();
+            byte[] encryptedToken = encoder.signAndEncryptData(token);
+            LoginRegister.Token tk = new LoginRegister.Token();
+            tk.token = encryptedToken;
+            conn.sendTCP(tk);
+            // after thread is done
+            Gdx.app.postRunnable(() -> {
+                conn.close(); // close login connection with client, that will now connect with game server
+            });
+        }).start();
+    }
+
+    // This holds per connection state.
+    public static class CharacterConnection extends Connection {
+        public GameRegister.Character character;
+    }
 }

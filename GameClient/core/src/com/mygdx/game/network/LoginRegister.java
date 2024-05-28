@@ -26,6 +26,7 @@ public class LoginRegister {
         kryo.register(Response.class);
         kryo.register(Response.Type.class);
         kryo.register(Login.class);
+        kryo.register(Token.class);
         kryo.register(RegistrationRequired.class);
         kryo.register(Register.class);
         kryo.register(Character.class);
@@ -41,6 +42,8 @@ public class LoginRegister {
             DB_ERROR, // error while doing operation on database
             LOGIN_SUCCESSFUL, // login was successful
             LOGIN_INVALID_CREDENTIALS, // login failed due to invalid credentials
+            USER_ALREADY_LOGGED_IN, // user already logged in
+            GAME_SERVER_OFFLINE, // game server is offline
             DISCARD, // useless response
         }
         public Type type;
@@ -51,6 +54,11 @@ public class LoginRegister {
     static public class Login {
         public byte[] userName;
         public byte[] password;
+    }
+
+    // contains user generated token data
+    static public class Token {
+        public byte[] token;
     }
 
     static public class RegistrationRequired {
