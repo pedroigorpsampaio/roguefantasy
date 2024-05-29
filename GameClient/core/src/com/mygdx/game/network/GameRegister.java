@@ -31,6 +31,7 @@ public class GameRegister {
         kryo.register(UpdateCharacter.class);
         kryo.register(RemoveCharacter.class);
         kryo.register(Character.class);
+        kryo.register(ClientId.class);
         kryo.register(MoveCharacter.class);
     }
 
@@ -62,7 +63,8 @@ public class GameRegister {
     }
 
     static public class UpdateCharacter {
-        public int id, x, y;
+        public int id;
+        public float x, y;
     }
 
     static public class AddCharacter {
@@ -74,13 +76,16 @@ public class GameRegister {
     }
 
     static public class MoveCharacter {
-        public int x, y;
+        public float x, y;
     }
 
     public static class Character {
         public String name;
-        public String otherStuff;
-        public int id, x, y;
+        public int id, role_level;
+        public float x, y;
     }
 
+    public static class ClientId {
+        int id;
+    }
 }

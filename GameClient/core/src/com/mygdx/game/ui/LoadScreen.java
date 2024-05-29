@@ -45,6 +45,7 @@ import java.util.Locale;
 public class LoadScreen implements Screen {
     final RogueFantasy game;
     final String screen;
+    private String decryptedToken;
     Stage stage;
     AssetManager manager;
     Skin skin;
@@ -178,16 +179,13 @@ public class LoadScreen implements Screen {
         this.game = game;
         this.screen = screen;
         this.manager = manager;
+        this.decryptedToken = decryptedToken;
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
 
         stage = new Stage(new ScreenViewport());
         Gdx.input.setInputProcessor(stage);
-
-        GameClient gameClient = GameClient.getInstance(); // gets gameclient instance
-        gameClient.connect(); // connects gameclient with server
-        gameClient.sendTokenAsync(decryptedToken); // login using token received
 
         // load game specific assets
         skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
@@ -210,7 +208,10 @@ public class LoadScreen implements Screen {
                 // we are done loading, let's move to another screen!
                 game.setScreen(new MainMenuScreen(game, manager, LoginClient.getInstance()));
             } else if(screen.equals("game")) {
-                game.setScreen(new GameScreen(game, manager, GameClient.getInstance()));
+                GameClient gameClient = GameClient.getInstance(); // gets gameclient instance
+                game.setScreen(new GameScreen(game, manager, gameClient));
+                gameClient.connect(); // connects gameclient with server
+                gameClient.sendTokenAsync(decryptedToken); // login using token received
             }
 
         }

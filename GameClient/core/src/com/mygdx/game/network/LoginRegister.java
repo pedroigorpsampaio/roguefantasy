@@ -138,8 +138,7 @@ public class LoginRegister {
 
     public static class Character {
         public String name;
-        public String otherStuff;
-        public int id, x, y;
+        public int id, role_level, x, y;
     }
 
 }

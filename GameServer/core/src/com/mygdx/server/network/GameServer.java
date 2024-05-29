@@ -5,6 +5,7 @@ import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
+import com.mygdx.server.entity.Component;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
 import com.mygdx.server.util.Encoder;
@@ -27,8 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GameServer implements CmdReceiver {
     private static GameServer instance;
     Server server;
-    Set<GameRegister.Character> loggedIn = ConcurrentHashMap.newKeySet();
-    Set<GameRegister.Character> registeredTokens = ConcurrentHashMap.newKeySet();
+    Set<Component.Character> loggedIn = ConcurrentHashMap.newKeySet();
+    Set<Component.Character> registeredTokens = ConcurrentHashMap.newKeySet();
     private boolean isOnline = false; // is this server online?
 
     public GameServer() {
@@ -48,7 +49,7 @@ public class GameServer implements CmdReceiver {
             public void received (Connection c, Object object) {
                 // We know all connections for this server are actually CharacterConnections.
                 CharacterConnection connection = (CharacterConnection)c;
-                GameRegister.Character character = connection.character;
+                Component.Character character = connection.character;
 
                 // token login
                 if (object instanceof GameRegister.Token) {
@@ -62,7 +63,7 @@ public class GameServer implements CmdReceiver {
                     synchronized(loggedIn) {
                         Iterator i = loggedIn.iterator();
                         while (i.hasNext()) {
-                            GameRegister.Character loggedChar = (GameRegister.Character) i.next();
+                            Component.Character loggedChar = (Component.Character) i.next();
                             if(loggedChar.token.equals(decryptedToken)) {
                                 connection.sendTCP(new GameRegister.Response(GameRegister.Response.Type.USER_ALREADY_LOGGED_IN));
                                 connection.close();
@@ -74,11 +75,12 @@ public class GameServer implements CmdReceiver {
                     synchronized(registeredTokens) {
                         Iterator i = registeredTokens.iterator();
                         while (i.hasNext()) {
-                            GameRegister.Character tokenizedChar = (GameRegister.Character) i.next();
+                            Component.Character tokenizedChar = (Component.Character) i.next();
                             if(tokenizedChar.token.equals(decryptedToken)) {
                                 // TODO: ACTUALLY LOAD CHAR FROM PERSISTED STORAGE
-                                loggedIn(connection, tokenizedChar);
-                                //connection.sendUDP(new GameRegister.CharacterState());
+                                character = loadCharacter(tokenizedChar);
+                                login(connection, character);
+                                //connection.sendUDP(new Component.CharacterState());
                                 return;
                             }
                         }
@@ -96,7 +98,7 @@ public class GameServer implements CmdReceiver {
 //                    }
 //
 //                    // Reject if already logged in.
-//                    for (GameRegister.Character other : loggedIn) {
+//                    for (Component.Character other : loggedIn) {
 //                        if (other.name.equals(name)) {
 //                            c.close();
 //                            return;
@@ -122,7 +124,8 @@ public class GameServer implements CmdReceiver {
                     GameRegister.MoveCharacter msg = (GameRegister.MoveCharacter)object;
 
                     // Ignore if invalid move.
-                    if (Math.abs(msg.x) != 1 && Math.abs(msg.y) != 1) return;
+                    //if (Math.abs(msg.x) != 1 && Math.abs(msg.y) != 1) return;
+                    System.out.println(msg.x);
 
                     character.x += msg.x;
                     character.y += msg.y;
@@ -189,25 +192,30 @@ public class GameServer implements CmdReceiver {
         return instance;
     }
 
-    void loggedIn (CharacterConnection c, GameRegister.Character character) {
+    void login (CharacterConnection c, Component.Character character) {
         c.character = character;
 
         // Add existing characters to new logged in connection.
-        for (GameRegister.Character other : loggedIn) {
+        for (Component.Character other : loggedIn) {
             GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
-            addCharacter.character = other;
+            // translate to safe to send character data
+            addCharacter.character = other.toSendToClient();
             c.sendTCP(addCharacter);
         }
 
         loggedIn.add(character);
+        // sends to client his ID so he can distinguish itself from his list of characters
+        GameRegister.ClientId clientId = new GameRegister.ClientId();
+        clientId.id = character.id;
+        c.sendTCP(clientId);
 
         // Add logged in character to all connections.
         GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
-        addCharacter.character = character;
+        addCharacter.character = character.toSendToClient();
         server.sendToAllTCP(addCharacter);
     }
 
-    boolean saveCharacter (GameRegister.Character character) {
+    boolean saveCharacter (Component.Character character) {
         File file = new File("characters", character.name.toLowerCase());
         file.getParentFile().mkdirs();
 
@@ -222,8 +230,9 @@ public class GameServer implements CmdReceiver {
             output = new DataOutputStream(new FileOutputStream(file));
             output.writeInt(character.id);
             //output.writeUTF(character.otherStuff);
-            output.writeInt(character.x);
-            output.writeInt(character.y);
+            output.writeInt(character.role_level);
+            output.writeFloat(character.x);
+            output.writeFloat(character.y);
             return true;
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -236,18 +245,20 @@ public class GameServer implements CmdReceiver {
         }
     }
 
-    GameRegister.Character loadCharacter (String name) {
-        File file = new File("characters", name.toLowerCase());
-        if (!file.exists()) return null;
+    Component.Character loadCharacter (Component.Character character) {
+        File file = new File("characters", character.name.toLowerCase());
+        if (!file.exists()) { // creates char if it does not exist yet
+            saveCharacter(character);
+            return character;
+        }
         DataInputStream input = null;
         try {
             input = new DataInputStream(new FileInputStream(file));
-            GameRegister.Character character = new GameRegister.Character();
             character.id = input.readInt();
-            character.name = name;
+            character.role_level = input.readInt();
             //character.otherStuff = input.readUTF();
-            character.x = input.readInt();
-            character.y = input.readInt();
+            character.x = input.readFloat();
+            character.y = input.readFloat();
             input.close();
             return character;
         } catch (IOException ex) {
@@ -310,7 +321,7 @@ public class GameServer implements CmdReceiver {
         synchronized(loggedIn) {
             Iterator i = loggedIn.iterator();
             while (i.hasNext()) {
-                GameRegister.Character c = (GameRegister.Character) i.next();
+                Component.Character c = (Component.Character) i.next();
                 if(c.id == conn.charData.id) {
                     conn.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.USER_ALREADY_LOGGED_IN));
                     conn.close();
@@ -318,11 +329,11 @@ public class GameServer implements CmdReceiver {
                 }
             }
         }
-        GameRegister.Character character = null;
+        Component.Character character = null;
         synchronized(registeredTokens) {
             Iterator i = registeredTokens.iterator();
             while (i.hasNext()) {
-                character = (GameRegister.Character) i.next();
+                character = (Component.Character) i.next();
                 if(character.id == conn.charData.id) { // has token, send token without generating one
                     sendTokenAsync(conn, character.token);
                     Log.debug("login-server", character.name+" is registered and has a token: "+character.token);
@@ -331,7 +342,7 @@ public class GameServer implements CmdReceiver {
             }
             // if char does not have a token, generate a new one
             // TODO: LOAD CHARACTER FROM PERSISTED STORAGE
-            character = new GameRegister.Character();
+            character = new Component.Character();
             character.token = Encoder.generateNewToken(); character.id = conn.charData.id;
             character.name = conn.charData.character; character.role_level = conn.charData.roleLevel;
             character.x = 0; character.y = 0;
@@ -359,6 +370,6 @@ public class GameServer implements CmdReceiver {
 
     // This holds per connection state.
     public static class CharacterConnection extends Connection {
-        public GameRegister.Character character;
+        public Component.Character character;
     }
 }

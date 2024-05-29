@@ -3,12 +3,14 @@ package com.mygdx.game.network;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.InputProcessor;
+import com.badlogic.gdx.assets.AssetManager;
 import com.esotericsoftware.kryonet.Client;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Listener.ThreadedListener;
+import com.mygdx.game.entity.Component;
 import com.mygdx.game.network.GameRegister.AddCharacter;
-import com.mygdx.game.network.GameRegister.Character;
+import com.mygdx.game.network.GameRegister.ClientId;
 import com.mygdx.game.network.GameRegister.MoveCharacter;
 import com.mygdx.game.network.GameRegister.Register;
 import com.mygdx.game.network.GameRegister.RegistrationRequired;
@@ -26,6 +28,8 @@ public class GameClient {
     private Client client;
     String name="";
     String host="";
+    private int clientCharId; // this client's char id
+
     public boolean isConnected() {return isConnected;}
     private boolean isConnected = false;
 
@@ -49,14 +53,14 @@ public class GameClient {
         // ThreadedListener runs the listener methods on a different thread.
         client.addListener(new ThreadedListener(new Listener() {
             public void connected (Connection connection) {
-                oldIProcessor = Gdx.input.getInputProcessor();
-                Gdx.input.setInputProcessor(new InputAdapter() {
-                    @Override
-                    public boolean keyTyped (char character) {
-                        moveCharacter(character);
-                        return true;
-                    }
-                });
+//                oldIProcessor = Gdx.input.getInputProcessor();
+//                Gdx.input.setInputProcessor(new InputAdapter() {
+//                    @Override
+//                    public boolean keyTyped (char character) {
+//                        moveCharacter(character);
+//                        return true;
+//                    }
+//                });
             }
 
             public void received (Connection connection, Object object) {
@@ -67,9 +71,16 @@ public class GameClient {
                     client.sendTCP(register);
                 }
 
+                if (object instanceof ClientId) {
+                    ClientId msg = (ClientId)object;
+                    clientCharId =  msg.id;
+                    return;
+                }
+
                 if (object instanceof AddCharacter) {
                     AddCharacter msg = (AddCharacter)object;
-                    ui.addCharacter(msg.character);
+                    Component.Character character = Component.Character.toCharacter(msg.character);
+                    ui.addCharacter(character);
                     return;
                 }
 
@@ -88,7 +99,7 @@ public class GameClient {
             public void disconnected (Connection connection) {
                 System.err.println("Disconnected from game server");
                 isConnected = false;
-                Gdx.input.setInputProcessor(oldIProcessor);
+                //Gdx.input.setInputProcessor(oldIProcessor);
             }
         }));
 
@@ -110,7 +121,7 @@ public class GameClient {
 //        client.sendTCP(login);
 
         // show keyboard on android for testing
-        Gdx.input.setOnscreenKeyboardVisible(true);
+        //Gdx.input.setOnscreenKeyboardVisible(true);
     }
 
     public static GameClient getInstance() {
@@ -119,24 +130,7 @@ public class GameClient {
         return instance;
     }
 
-    public void moveCharacter(char c) {
-        MoveCharacter msg = new MoveCharacter();
-        switch (c) {
-            case 'w':
-                msg.y = 1;
-                break;
-            case 's':
-                msg.y = -1;
-                break;
-            case 'a':
-                msg.x = -1;
-                break;
-            case 'd':
-                msg.x = 1;
-                break;
-            default:
-                msg = null;
-        }
+    public void moveCharacter(MoveCharacter msg) {
         if (msg != null) client.sendUDP(msg);
     }
 
@@ -155,13 +149,14 @@ public class GameClient {
         }).start();
     }
 
-    public HashMap<Integer, Character> getOnlineCharacters() {
+    public HashMap<Integer, Component.Character> getOnlineCharacters() {
         return ui.characters;
     }
+    public Component.Character getClientCharacter() {return ui.characters.get(clientCharId);}
 
     static class UI {
 
-        HashMap<Integer, Character> characters = new HashMap();
+        HashMap<Integer, Component.Character> characters = new HashMap();
 
 //
 //        public String inputOtherStuff () {
@@ -171,22 +166,25 @@ public class GameClient {
 //            return input.trim();
 //        }
 
-        public void addCharacter (Character character) {
+        public void addCharacter (Component.Character character) {
             characters.put(character.id, character);
             System.out.println(character.name + " added at " + character.x + ", " + character.y);
+            character.update(character.x, character.y);
         }
 
         public void updateCharacter (UpdateCharacter msg) {
-            Character character = characters.get(msg.id);
+            Component.Character character = characters.get(msg.id);
             if (character == null) return;
-            character.x = msg.x;
-            character.y = msg.y;
-            System.out.println(character.name + " moved to " + character.x + ", " + character.y);
+            character.update(msg.x, msg.y);
+            //System.out.println(character.name + " moved to " + character.x + ", " + character.y);
         }
 
         public void removeCharacter (int id) {
-            Character character = characters.remove(id);
-            if (character != null) System.out.println(character.name + " removed");
+            Component.Character character = characters.remove(id); // remove from list of logged chars
+            if (character != null) {
+                character.dispose();
+                System.out.println(character.name + " removed");
+            }
         }
     }
 }

@@ -328,6 +328,9 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
                         loginBtnOnClick();
                     } else if (keycode == Input.Keys.ESCAPE) {
                         backBtnOnClick();
+                    } else if (keycode == Input.Keys.TAB) {
+                        if(stage.getKeyboardFocus().getClass() != userNameTextField.getClass())
+                            stage.setKeyboardFocus(userNameTextField);
                     }
                     return false;
                 }
