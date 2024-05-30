@@ -11,6 +11,14 @@ import com.esotericsoftware.kryonet.EndPoint;
 public class GameRegister {
     static public final int tcp_port = 43572; // GAME SERVER TCP PORT
     static public final int udp_port = 38572; // GAME SERVER UDP PORT
+    static public boolean serverAuthoritative = true; // server authoritative mode
+    static public boolean lagSimulation = false; // simulate lag
+    static public int lag = 280; // simulated lag value in ms
+    static public boolean clientPrediction = false; // apply client prediction
+    static public boolean serverReconciliation = false; // apply server reconciliation
+    static public boolean entityInterpolation = false; // apply entity interpolation
+    static public boolean lagCompensation = false; // apply lag compensation
+
 
     /**
      * Registers objects that are going to be sent over the network
@@ -21,11 +29,11 @@ public class GameRegister {
     static public void register (EndPoint endPoint) {
         Kryo kryo = endPoint.getKryo();
         kryo.register(byte[].class);
+        kryo.register(Ping.class);
         kryo.register(Response.class);
         kryo.register(Response.Type.class);
         kryo.register(Login.class);
         kryo.register(Token.class);
-        kryo.register(RegistrationRequired.class);
         kryo.register(Register.class);
         kryo.register(AddCharacter.class);
         kryo.register(UpdateCharacter.class);
@@ -33,6 +41,12 @@ public class GameRegister {
         kryo.register(Character.class);
         kryo.register(ClientId.class);
         kryo.register(MoveCharacter.class);
+    }
+
+    static public class Ping {
+        public boolean isReply;
+        public Ping() {}
+        public Ping(boolean isReply) {this.isReply = isReply;}
     }
 
     // contains information flag data to be shared between client and server
@@ -55,9 +69,6 @@ public class GameRegister {
         public byte[] token;
     }
 
-    static public class RegistrationRequired {
-    }
-
     static public class Register {
         public String name;
         public String otherStuff;
@@ -77,7 +88,8 @@ public class GameRegister {
     }
 
     static public class MoveCharacter {
-        public float x, y;
+        public float x, y, xEnd, yEnd, deltaTime;
+        public boolean hasEndPoint;
     }
 
     public static class Character {

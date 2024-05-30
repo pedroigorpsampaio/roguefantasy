@@ -13,6 +13,7 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.Vector4;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -39,10 +40,10 @@ public class GameScreen implements Screen {
     private static GameScreen instance;
     private static GameClient gameClient;
     private final Font font;
-    private Vector2 velocity; // player velocity (for tests rn)
     private Skin skin;
     private Stage stage;
     private Label fpsLabel;
+    private Label pingLabel;
     private Stage bgStage;
     private static AssetManager manager;
     private Music bgm;
@@ -53,13 +54,12 @@ public class GameScreen implements Screen {
     private Texture bgTexture;
     private Image bg;
     private SpriteBatch batch;
-    private boolean isCharacterLoaded = false;
-    private boolean serverAuthoritative = true;
-    private boolean lagSimulation = false;
-    private boolean clientPrediction = false;
-    private boolean serverReconciliation = false;
-    private boolean entityInterpolation = false;
-    private boolean lagCompensation = false;
+    private boolean isCharacterLoaded = true;
+    private Vector3 vec3;
+    private Vector2 touchPos;
+    private Vector2 clientPos;
+    private Vector2 deltaVec;
+    private GameRegister.MoveCharacter movement; // player movement message (for tests rn)
 
     public GameScreen(RogueFantasy game, AssetManager manager, GameClient gameClient) {
         this.game = game;
@@ -85,58 +85,69 @@ public class GameScreen implements Screen {
         skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
         //skin.add("fontMedium", fontMedium, BitmapFont.class);
 
-        stage = new Stage(new StretchViewport(1280, 720));
+        stage = new Stage(new ExtendViewport(1280, 720));
         Gdx.input.setInputProcessor(stage);
         font = skin.get("emojiFont", Font.class); // gets typist font with icons
 
-        fpsLabel = new Label("fps:", skin, "fontMedium", Color.WHITE);
-        fpsLabel.setAlignment(Align.center);
-        fpsLabel.setX(32);
+        fpsLabel = new Label("fps: 144", skin, "fontMedium", Color.WHITE);
+        fpsLabel.setAlignment(Align.left);
+        fpsLabel.setX(12);
+
+        pingLabel = new Label("ping: 333", skin, "fontMedium", Color.WHITE);
+        pingLabel.setAlignment(Align.left);
+        pingLabel.setX(fpsLabel.getX()+fpsLabel.getWidth()+22);
 
         stage.addActor(fpsLabel);
+        stage.addActor(pingLabel);
 
         // updates camera zoom based on current device screen
 //        float uiZoomFactor = 720f / Gdx.graphics.getHeight();
 //        if(Gdx.app.getType() == Application.ApplicationType.Android) // zoom menu if user is using android device
 //            ((OrthographicCamera)stage.getCamera()).zoom = uiZoomFactor; // zoom in  window menu
 
-        velocity = new Vector2(0,0);
+        // character current movement
+        movement = new GameRegister.MoveCharacter();
+
         stage.addListener(new InputListener(){
             @Override
             public boolean keyDown(InputEvent event, int keycode) {
-                if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) velocity.y += 1;
-                else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) velocity.y += 1;
+                if(Gdx.input.isTouched(0)) return false; // ignore if there is clicking/touching
 
-                if (keycode == Input.Keys.S && !Gdx.input.isKeyPressed(Input.Keys.DOWN)) velocity.y += -1;
-                else if (keycode == Input.Keys.DOWN && !Gdx.input.isKeyPressed(Input.Keys.S)) velocity.y += -1;
+                if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) movement.y += 1;
+                else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) movement.y += 1;
 
-                if (keycode == Input.Keys.A && !Gdx.input.isKeyPressed(Input.Keys.LEFT)) velocity.x += -1;
-                else if (keycode == Input.Keys.LEFT && !Gdx.input.isKeyPressed(Input.Keys.A)) velocity.x += -1;
+                if (keycode == Input.Keys.S && !Gdx.input.isKeyPressed(Input.Keys.DOWN)) movement.y += -1;
+                else if (keycode == Input.Keys.DOWN && !Gdx.input.isKeyPressed(Input.Keys.S)) movement.y += -1;
 
-                if (keycode == Input.Keys.D && !Gdx.input.isKeyPressed(Input.Keys.RIGHT)) velocity.x += 1;
-                else if (keycode == Input.Keys.RIGHT && !Gdx.input.isKeyPressed(Input.Keys.D)) velocity.x += 1;
+                if (keycode == Input.Keys.A && !Gdx.input.isKeyPressed(Input.Keys.LEFT)) movement.x += -1;
+                else if (keycode == Input.Keys.LEFT && !Gdx.input.isKeyPressed(Input.Keys.A)) movement.x += -1;
 
-                if(velocity.x > 1) velocity.x = 1; if(velocity.y > 1) velocity.y = 1;
-                if(velocity.x < -1) velocity.x = -1; if(velocity.y < -1) velocity.y = -1;
+                if (keycode == Input.Keys.D && !Gdx.input.isKeyPressed(Input.Keys.RIGHT)) movement.x += 1;
+                else if (keycode == Input.Keys.RIGHT && !Gdx.input.isKeyPressed(Input.Keys.D)) movement.x += 1;
+
+                if(movement.x > 1) movement.x = 1; if(movement.y > 1) movement.y = 1;
+                if(movement.x < -1) movement.x = -1; if(movement.y < -1) movement.y = -1;
                 return super.keyDown(event, keycode);
             }
 
             @Override
             public boolean keyUp(InputEvent event, int keycode) {
-                if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) velocity.y -= 1;
-                else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) velocity.y -= 1;
+                if(Gdx.input.isTouched(0)) return false; // ignore if there is clicking/touching
 
-                if (keycode == Input.Keys.S && !Gdx.input.isKeyPressed(Input.Keys.DOWN)) velocity.y -= -1;
-                else if (keycode == Input.Keys.DOWN && !Gdx.input.isKeyPressed(Input.Keys.S)) velocity.y -= -1;
+                if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) movement.y -= 1;
+                else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) movement.y -= 1;
 
-                if (keycode == Input.Keys.A && !Gdx.input.isKeyPressed(Input.Keys.LEFT)) velocity.x -= -1;
-                else if (keycode == Input.Keys.LEFT && !Gdx.input.isKeyPressed(Input.Keys.A)) velocity.x -= -1;
+                if (keycode == Input.Keys.S && !Gdx.input.isKeyPressed(Input.Keys.DOWN)) movement.y -= -1;
+                else if (keycode == Input.Keys.DOWN && !Gdx.input.isKeyPressed(Input.Keys.S)) movement.y -= -1;
 
-                if (keycode == Input.Keys.D && !Gdx.input.isKeyPressed(Input.Keys.RIGHT)) velocity.x -= 1;
-                else if (keycode == Input.Keys.RIGHT && !Gdx.input.isKeyPressed(Input.Keys.D)) velocity.x -= 1;
+                if (keycode == Input.Keys.A && !Gdx.input.isKeyPressed(Input.Keys.LEFT)) movement.x -= -1;
+                else if (keycode == Input.Keys.LEFT && !Gdx.input.isKeyPressed(Input.Keys.A)) movement.x -= -1;
 
-                if(velocity.x > 1) velocity.x = 1; if(velocity.y > 1) velocity.y = 1;
-                if(velocity.x < -1) velocity.x = -1; if(velocity.y < -1) velocity.y = -1;
+                if (keycode == Input.Keys.D && !Gdx.input.isKeyPressed(Input.Keys.RIGHT)) movement.x -= 1;
+                else if (keycode == Input.Keys.RIGHT && !Gdx.input.isKeyPressed(Input.Keys.D)) movement.x -= 1;
+
+                if(movement.x > 1) movement.x = 1; if(movement.y > 1) movement.y = 1;
+                if(movement.x < -1) movement.x = -1; if(movement.y < -1) movement.y = -1;
                 return super.keyUp(event, keycode);
             }
         });
@@ -150,12 +161,16 @@ public class GameScreen implements Screen {
     }
 
     private void moveCharacter(float deltaTime) {
-        GameRegister.MoveCharacter msg = new GameRegister.MoveCharacter();
-        Vector2 normalizedVec = new Vector2(velocity.x, velocity.y);
+        Vector2 normalizedVec = new Vector2(movement.x, movement.y);
         normalizedVec = normalizedVec.nor();
+        GameRegister.MoveCharacter msg = new GameRegister.MoveCharacter();
         msg.x = normalizedVec.x * deltaTime * 250f;
         msg.y = normalizedVec.y * deltaTime * 250f;
-        if(serverAuthoritative)
+        msg.hasEndPoint = movement.hasEndPoint;
+        msg.xEnd = movement.xEnd; msg.yEnd = movement.yEnd;
+        msg.deltaTime = deltaTime;
+
+        if(GameRegister.serverAuthoritative)
             gameClient.moveCharacter(msg);
         else {
             gameClient.getClientCharacter().update(gameClient.getClientCharacter().x + msg.x,
@@ -168,53 +183,43 @@ public class GameScreen implements Screen {
     public void render(float delta) {
         if(!isCharacterLoaded) // character not loaded yet
         {
-            HashMap<Integer, Component.Character> onlineChars = gameClient.getOnlineCharacters();
-            synchronized(onlineChars) { // checks if client character is loaded
-                Iterator<Map.Entry<Integer, Component.Character>> i = onlineChars.entrySet().iterator();
-                while (i.hasNext()) {
-                    Map.Entry<Integer, Component.Character> entry = i.next();
-                    Component.Character c = entry.getValue();
-                    if(gameClient.getClientCharacter() != null)
-                        isCharacterLoaded = true;
-                }
-            }
+            if(gameClient.getClientCharacter() != null)
+                isCharacterLoaded = true;
+            else
+                return; // wait until character is loaded
         }
-
-        // waits for the client character to be loaded before game start
-        if(!isCharacterLoaded)
-            return;
 
         ScreenUtils.clear(0.2f, 0.6f, 0.2f, 1);
 
         fpsLabel.setText("fps: " + Gdx.graphics.getFramesPerSecond());
+        pingLabel.setText("ping: " + gameClient.getAvgLatency());
 
         // correct velocity
         if(!Gdx.input.isKeyPressed(Input.Keys.W) && !Gdx.input.isKeyPressed(Input.Keys.UP) &&
-                !Gdx.input.isKeyPressed(Input.Keys.S) && !Gdx.input.isKeyPressed(Input.Keys.DOWN))
-            velocity.y = 0;
+                !Gdx.input.isKeyPressed(Input.Keys.S) && !Gdx.input.isKeyPressed(Input.Keys.DOWN) && !Gdx.input.isTouched(0))
+            movement.y = 0;
         if(!Gdx.input.isKeyPressed(Input.Keys.A) && !Gdx.input.isKeyPressed(Input.Keys.LEFT) &&
-                !Gdx.input.isKeyPressed(Input.Keys.D) && !Gdx.input.isKeyPressed(Input.Keys.RIGHT))
-            velocity.x = 0;
+                !Gdx.input.isKeyPressed(Input.Keys.D) && !Gdx.input.isKeyPressed(Input.Keys.RIGHT) && !Gdx.input.isTouched(0))
+            movement.x = 0;
 
         // check if there is touch velocity
         if(Gdx.input.isTouched(0)){
-            Component.Character clientChar = gameClient.getClientCharacter();
-            Vector3 vec=new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
-            vec = stage.getCamera().unproject(vec); // unproject screen touch
-            Vector2 touchPos = new Vector2(vec.x, vec.y);
-            Vector2 clientPos = clientChar.getCenter();
-            Vector2 deltaVec = new Vector2(touchPos).sub(clientPos);
-            if(touchPos.dst(clientPos) > 10f) // only moves if distance is long enough for it
-                velocity = deltaVec;
+            vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
+            vec3 = stage.getCamera().unproject(vec3); // unproject screen touch
+            touchPos = new Vector2(vec3.x, vec3.y);
+            movement.xEnd = touchPos.x; movement.yEnd = touchPos.y;
+            movement.hasEndPoint = true;
+        } else { // if no click/touch is made, there is no end point goal of movement
+            movement.xEnd = 0; movement.yEnd = 0;
+            movement.hasEndPoint = false;
         }
 
-        if(!velocity.isZero())
-            moveCharacter(Gdx.graphics.getDeltaTime()); // moves character if there is velocity
+        if(movement.x != 0 || movement.y != 0 || movement.hasEndPoint)
+            moveCharacter(delta); // moves character if there is velocity or endpoint
 
         // draws stage
-        stage.act(Math.min(Gdx.graphics.getDeltaTime(), 1 / 30f));
+        stage.act(Math.min(delta, 1 / 30f));
         stage.draw();
-        //});
     }
 
     @Override

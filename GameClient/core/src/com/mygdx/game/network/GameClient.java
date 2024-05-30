@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.utils.Timer;
 import com.esotericsoftware.kryonet.Client;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
@@ -12,13 +13,14 @@ import com.mygdx.game.entity.Component;
 import com.mygdx.game.network.GameRegister.AddCharacter;
 import com.mygdx.game.network.GameRegister.ClientId;
 import com.mygdx.game.network.GameRegister.MoveCharacter;
-import com.mygdx.game.network.GameRegister.Register;
-import com.mygdx.game.network.GameRegister.RegistrationRequired;
 import com.mygdx.game.network.GameRegister.RemoveCharacter;
 import com.mygdx.game.network.GameRegister.UpdateCharacter;
+import com.mygdx.game.util.Common;
 import com.mygdx.game.util.Encoder;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 public class GameClient {
@@ -29,9 +31,14 @@ public class GameClient {
     String name="";
     String host="";
     private int clientCharId; // this client's char id
+    private int latWindowSize = 10;
+    private long avgLatency = 0;
 
     public boolean isConnected() {return isConnected;}
     private boolean isConnected = false;
+    private ArrayList<Long> latencies; // list of last calculated latencies
+    private long lastPingTs = 0;
+    private LagNetwork lagNetwork; // for lag simulation
 
     protected GameClient() {
         client = new Client(65535, 65535);
@@ -53,30 +60,31 @@ public class GameClient {
         // ThreadedListener runs the listener methods on a different thread.
         client.addListener(new ThreadedListener(new Listener() {
             public void connected (Connection connection) {
-//                oldIProcessor = Gdx.input.getInputProcessor();
-//                Gdx.input.setInputProcessor(new InputAdapter() {
-//                    @Override
-//                    public boolean keyTyped (char character) {
-//                        moveCharacter(character);
-//                        return true;
-//                    }
-//                });
+                //client.updateReturnTripTime(); // for ping measurement
+                isConnected = true;
+                lagNetwork = new LagNetwork(client); // to simulate lag when desired
+                latencies = new ArrayList<>();
+                sendPing();
             }
 
             public void received (Connection connection, Object object) {
-                if (object instanceof RegistrationRequired) {
-                    Register register = new Register();
-                    register.name = name;
-                    register.otherStuff = "ui.inputOtherStuff()";
-                    client.sendTCP(register);
+                if (object instanceof GameRegister.Ping) { // calculates latency accordingly
+                    GameRegister.Ping ping = (GameRegister.Ping)object;
+                    if (ping.isReply) {
+                        long now = System.currentTimeMillis();
+                        latencies.add(now - lastPingTs); // calculates delta since last ping
+                        if(latencies.size() > latWindowSize) // keep within desired window size
+                            latencies.remove(0); // remove oldest latency
+                        //System.out.println("Ping: " + Common.calculateAverage(latencies));
+                        avgLatency = Common.calculateAverage(latencies); // stores avg ping value
+                    }
+                    Timer.schedule(pingDelay, 5f); // delay new ping update
                 }
-
                 if (object instanceof ClientId) {
                     ClientId msg = (ClientId)object;
                     clientCharId =  msg.id;
                     return;
                 }
-
                 if (object instanceof AddCharacter) {
                     AddCharacter msg = (AddCharacter)object;
                     Component.Character character = Component.Character.toCharacter(msg.character);
@@ -100,6 +108,7 @@ public class GameClient {
                 System.err.println("Disconnected from game server");
                 isConnected = false;
                 //Gdx.input.setInputProcessor(oldIProcessor);
+                //game.setScreen(new LoadScreen(game, "menu", manager));
             }
         }));
 
@@ -110,7 +119,6 @@ public class GameClient {
     public void connect() {
         try {
             client.connect(5000, host, GameRegister.tcp_port, GameRegister.udp_port);
-            // Server communication after connection can go here, or in Listener#connected().
         } catch (IOException ex) {
             ex.printStackTrace();
         }
@@ -130,8 +138,37 @@ public class GameClient {
         return instance;
     }
 
+    public long getAvgLatency() {
+        return avgLatency;
+    }
+
+    private void sendPing() {
+        if(client == null || !isConnected) return;
+
+        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+            lagNetwork.send(new GameRegister.Ping(false));
+        } else {
+            client.sendUDP(new GameRegister.Ping(false));
+        }
+        lastPingTs = System.currentTimeMillis(); // updates last ping sent timestamp
+    }
+
+    // send ping message with delay
+    private Timer.Task pingDelay = new Timer.Task() {
+        @Override
+        public void run() {
+            sendPing();
+        }
+    };
+
     public void moveCharacter(MoveCharacter msg) {
-        if (msg != null) client.sendUDP(msg);
+        if (client == null || msg == null || !isConnected) return;
+
+        // if lag simulation is on, add to queue with a timer to be sent
+        if(lagNetwork != null && GameRegister.lagSimulation)
+            lagNetwork.send(msg);
+        else
+            client.sendUDP(msg);
     }
 
     /**
@@ -182,7 +219,7 @@ public class GameClient {
         public void removeCharacter (int id) {
             Component.Character character = characters.remove(id); // remove from list of logged chars
             if (character != null) {
-                character.dispose();
+                character.removeFromStage();
                 System.out.println(character.name + " removed");
             }
         }

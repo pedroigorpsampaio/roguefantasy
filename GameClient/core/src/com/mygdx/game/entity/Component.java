@@ -31,7 +31,6 @@ public class Component {
     public static class Character {
         private final Skin skin;
         private final Font font;
-        private final Color color;
         private Texture spriteSheet;
         private TextureRegion spriteTex;
         public String name;
@@ -41,21 +40,27 @@ public class Component {
         public TypingLabel nameLabel;
         private Sprite sprite;
         private Image spriteImg;
+        private Vector2 centerPos;
 
         public Character(String name, int id, int role_level, float x, float y) {
             this.name = name; this.id = id; this.role_level = role_level;
             this.x = x; this.y = y;
             skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             font = skin.get("emojiFont", Font.class); // gets typist font with icons
-            nameLabel = new TypingLabel("{SIZE=95%}{COLOR=SKY}{RAINBOW=0.5;0.3}"+this.name+"{ENDRAINBOW}", font);
-            nameLabel.setBounds(this.x - nameLabel.getWidth()/2f, this.y + nameLabel.getHeight()/2f, 32, 32);
+            if(role_level == 0)
+                nameLabel = new TypingLabel("{SIZE=95%}{COLOR=SKY}"+this.name+"{ENDRAINBOW}", font);
+            else if(role_level == 4)
+                nameLabel = new TypingLabel("{SIZE=95%}{COLOR=RED}{RAINBOW=0.5;0.3}[[adm]"+this.name+"{ENDRAINBOW}", font);
+            System.out.println(nameLabel.getWidth());
+            nameLabel.setBounds(this.x - nameLabel.getWidth()/2f, this.y + nameLabel.getHeight()/2f, nameLabel.getWidth(), nameLabel.getHeight());
+            nameLabel.skipToTheEnd();
             stage.addActor(nameLabel);
-            Random rand = new Random();
-            // Will produce only bright / light colours:
-            float r = rand.nextFloat() / 2f + 0.5f;
-            float g = rand.nextFloat() / 2f + 0.5f;
-            float b = rand.nextFloat() / 2f + 0.5f;
-            this.color = new Color(r,g,b,1);
+//            Random rand = new Random();
+//            // Will produce only bright / light colours:
+//            float r = rand.nextFloat() / 2f + 0.5f;
+//            float g = rand.nextFloat() / 2f + 0.5f;
+//            float b = rand.nextFloat() / 2f + 0.5f;
+//            this.color = new Color(r,g,b,1);
             // char sprite placeholder
 
             //stage.addActor(img);
@@ -64,10 +69,12 @@ public class Component {
             Gdx.app.postRunnable(() -> {
                 // process the result, e.g. add it to an Array<Result> field of the ApplicationListener.
                 spriteSheet = new Texture(Gdx.files.internal("img/SpriteSheet.png"));
+                spriteSheet.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
                 spriteTex = new TextureRegion(spriteSheet, 0, 0, 23, 36);
                 spriteImg = new Image(spriteTex);
                 //sprite = new Sprite(spriteTex);
                 stage.addActor(spriteImg);
+                centerPos = new Vector2(this.x+spriteImg.getWidth()/2f, this.y+spriteImg.getHeight()/2f);
             });
 
         }
@@ -77,8 +84,12 @@ public class Component {
             Gdx.app.postRunnable(() -> {
                 this.x = x;
                 this.y = y;
-                nameLabel.setBounds(this.x - nameLabel.getWidth()/2f, this.y + nameLabel.getHeight()/1.5f, 32, 32);
-                spriteImg.setBounds(this.x, this.y, 23, 36);
+                float screenX = this.x - spriteImg.getWidth()/2f;
+                float screenY = this.y - spriteImg.getHeight()/2f;
+                nameLabel.setBounds(this.x - nameLabel.getWidth()/2f, this.y + spriteImg.getHeight()/1.5f+nameLabel.getHeight(), nameLabel.getWidth(), nameLabel.getHeight());
+                spriteImg.setBounds(screenX, screenY, spriteImg.getWidth(), spriteImg.getHeight());
+                centerPos.x = this.x;
+                centerPos.y = this.y;
             });
         }
 
@@ -95,11 +106,15 @@ public class Component {
         }
 
         /**
-         * called to dispose scene2d - stage components
+         * called to remove scene2d - stage components
          */
-        public void dispose() {
+        public void removeFromStage() {
             nameLabel.remove();
             spriteImg.remove();
+        }
+
+        public void dispose() {
+            spriteSheet.dispose();
         }
 
         public static Character toCharacter(GameRegister.Character charData) {
@@ -118,7 +133,7 @@ public class Component {
         }
 
         public Vector2 getCenter() {
-            return new Vector2(this.x+11, this.y+11);
+            return centerPos;
         }
     }
 }

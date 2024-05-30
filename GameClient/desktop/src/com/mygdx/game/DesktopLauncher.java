@@ -7,9 +7,11 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 public class DesktopLauncher {
 	public static void main (String[] arg) {
 		Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
-		config.setForegroundFPS(60);
+		config.setForegroundFPS(0);
+		config.setIdleFPS(0);
 		config.setWindowedMode(1280, 720);
 		config.setTitle("project-rogue-fantasy");
+		config.useVsync(true);
 
 		new Lwjgl3Application(new RogueFantasy(), config);
 	}

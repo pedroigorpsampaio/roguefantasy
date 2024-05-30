@@ -1,6 +1,7 @@
 package com.mygdx.server.network;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.math.Vector2;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
@@ -18,6 +19,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 
 
@@ -50,6 +52,11 @@ public class GameServer implements CmdReceiver {
                 // We know all connections for this server are actually CharacterConnections.
                 CharacterConnection connection = (CharacterConnection)c;
                 Component.Character character = connection.character;
+
+                if (object instanceof GameRegister.Ping) { // if it is ping, just send it back asap
+                    connection.sendUDP(new GameRegister.Ping(true));
+                    return;
+                }
 
                 // token login
                 if (object instanceof GameRegister.Token) {
@@ -125,10 +132,24 @@ public class GameServer implements CmdReceiver {
 
                     // Ignore if invalid move.
                     //if (Math.abs(msg.x) != 1 && Math.abs(msg.y) != 1) return;
-                    System.out.println(msg.x);
 
-                    character.x += msg.x;
-                    character.y += msg.y;
+                    if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
+                        Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
+                        Vector2 charPos = new Vector2(character.x, character.y);
+                        Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
+                        if(msg.deltaTime > 0.05f) msg.deltaTime = 0.016f;
+                        deltaVec.nor().scl(250f*msg.deltaTime);
+                        Vector2 futurePos = new Vector2(charPos).add(deltaVec);
+
+                        if(touchPos.dst(futurePos) <= 10f) // close enough, do not move anymore
+                            return;
+
+                        character.x += deltaVec.x; character.y += deltaVec.y;
+                    } else { // wasd movement already calculated
+                        character.x += msg.x;
+                        character.y += msg.y;
+                    }
+
                     if (!saveCharacter(character)) {
                         connection.close();
                         return;
