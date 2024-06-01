@@ -55,14 +55,12 @@ public class LoadScreen implements Screen {
 
     /**
      * Loads the resources for the desired screen to be loaded
-     *
-     * @param  game  the reference to the game object that controls game screens
      * @param screen the screen to be loaded ("menu" or "game")
      */
-    public LoadScreen(RogueFantasy game, String screen, AssetManager manager) {
-        this.game = game;
+    public LoadScreen(String screen) {
+        this.game = RogueFantasy.getInstance();
         this.screen = screen;
-        this.manager = manager;
+        this.manager = new AssetManager();
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
@@ -154,7 +152,8 @@ public class LoadScreen implements Screen {
             liStyle.font = fontMedium;
             skin.add("newListStyle", liStyle, List.ListStyle.class);
 
-            VisUI.load(skin); //load VisUI
+            if(!VisUI.isLoaded())
+                VisUI.load(skin); //load VisUI
         }
 
         // loads assets based on the next screen
@@ -175,8 +174,8 @@ public class LoadScreen implements Screen {
     }
 
     // to be used for game screen
-    public LoadScreen(RogueFantasy game, String screen, AssetManager manager, String decryptedToken) {
-        this.game = game;
+    public LoadScreen(String screen, AssetManager manager, String decryptedToken) {
+        this.game = RogueFantasy.getInstance();
         this.screen = screen;
         this.manager = manager;
         this.decryptedToken = decryptedToken;
@@ -206,10 +205,10 @@ public class LoadScreen implements Screen {
             dispose();
             if(screen.equals("menu")) {
                 // we are done loading, let's move to another screen!
-                game.setScreen(new MainMenuScreen(game, manager, LoginClient.getInstance()));
+                game.setScreen(new MainMenuScreen(manager, LoginClient.getInstance()));
             } else if(screen.equals("game")) {
                 GameClient gameClient = GameClient.getInstance(); // gets gameclient instance
-                game.setScreen(new GameScreen(game, manager, gameClient));
+                game.setScreen(new GameScreen(manager, gameClient));
                 gameClient.connect(); // connects gameclient with server
                 gameClient.sendTokenAsync(decryptedToken); // login using token received
             }

@@ -18,7 +18,7 @@ import com.mygdx.game.network.LoginRegister.RegistrationRequired;
 import com.mygdx.game.network.LoginRegister.Character;
 import com.esotericsoftware.minlog.Log;
 
-public class LoginClient extends DispatchServer{
+public class LoginClient extends DispatchServer {
     private static LoginClient instance; // login client instance
     private Client client;
     String name="";

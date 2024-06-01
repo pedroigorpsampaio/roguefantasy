@@ -59,13 +59,12 @@ public class MainMenuScreen implements Screen {
     /**
      * Builds the game main menu screen with login, register and options menu (prototype version)
      *
-     * @param game     the reference to the game object that controls game screens
      * @param manager  the asset manager containing assets loaded from the loading process
      * @param loginClient the login client instance that handles communication with login server
      */
-    public MainMenuScreen(RogueFantasy game, AssetManager manager, LoginClient loginClient) {
+    public MainMenuScreen(AssetManager manager, LoginClient loginClient) {
         this.manager = manager;
-        this.game = game;
+        this.game = RogueFantasy.getInstance();
         this.loginClient = loginClient;
         loginClient.connect();
         loginClient.sendHello();

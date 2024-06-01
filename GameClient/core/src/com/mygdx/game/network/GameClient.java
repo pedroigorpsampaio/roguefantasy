@@ -1,9 +1,8 @@
 package com.mygdx.game.network;
 
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.InputProcessor;
-import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Timer;
 import com.esotericsoftware.kryonet.Client;
 import com.esotericsoftware.kryonet.Connection;
@@ -18,12 +17,18 @@ import com.mygdx.game.network.GameRegister.UpdateCharacter;
 import com.mygdx.game.util.Common;
 import com.mygdx.game.util.Encoder;
 
+import java.beans.PropertyChangeSupport;
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public class GameClient {
+public class GameClient extends DispatchServer {
     private static GameClient instance; // login client instance
     private InputProcessor oldIProcessor;
     UI ui;
@@ -33,29 +38,34 @@ public class GameClient {
     private int clientCharId; // this client's char id
     private int latWindowSize = 10;
     private long avgLatency = 0;
-
+    private List<MoveCharacter> moveMsgs; // will contain a copy of all MoveMessages sent (for server recon.)
+    private float updateDelta;
+    public float getUpdateDelta() {return updateDelta;}
     public boolean isConnected() {return isConnected;}
     private boolean isConnected = false;
     private ArrayList<Long> latencies; // list of last calculated latencies
     private long lastPingTs = 0;
     private LagNetwork lagNetwork; // for lag simulation
+    public AtomicBoolean isPredictingRecon = new AtomicBoolean(false);
+    private Map<Class<?>, Long> requestsCounter;
+    public Map<Class<?>, Long> getRequestsCounter() {return requestsCounter;}
 
     protected GameClient() {
         client = new Client(65535, 65535);
         client.start();
 
-//        oldIProcessor = Gdx.input.getInputProcessor();
-//        Gdx.input.setInputProcessor(new InputAdapter() {
-//            @Override
-//            public boolean keyTyped (char character) {
-//                moveCharacter(character);
-//                return true;
-//            }
-//        });
-
         // For consistency, the classes to be sent over the network are
         // registered by the same method for both the client and server.
         GameRegister.register(client);
+
+        // counts requests of each type of request
+        // for server reconciliation
+        requestsCounter = new ConcurrentHashMap<>();
+        // instantiates move msgs as sync list (iterator should use sync block)
+        moveMsgs = Collections.synchronizedList(new ArrayList<>());
+
+        // listeners that are going to be notified on server responses
+        listeners = new PropertyChangeSupport(this);
 
         // ThreadedListener runs the listener methods on a different thread.
         client.addListener(new ThreadedListener(new Listener() {
@@ -107,8 +117,10 @@ public class GameClient {
             public void disconnected (Connection connection) {
                 System.err.println("Disconnected from game server");
                 isConnected = false;
-                //Gdx.input.setInputProcessor(oldIProcessor);
-                //game.setScreen(new LoadScreen(game, "menu", manager));
+                // tell interested listeners that server has lost connection
+                listeners.firePropertyChange("lostConnection", null, true);
+                // disposes list of characters
+                ui.dispose();
             }
         }));
 
@@ -164,11 +176,30 @@ public class GameClient {
     public void moveCharacter(MoveCharacter msg) {
         if (client == null || msg == null || !isConnected) return;
 
+        // keeps a copy of the sent message for server reconciliation
+        moveMsgs.add(msg);
+
         // if lag simulation is on, add to queue with a timer to be sent
         if(lagNetwork != null && GameRegister.lagSimulation)
             lagNetwork.send(msg);
         else
             client.sendUDP(msg);
+    }
+
+    public List<MoveCharacter> getMoveMsgListCopy() {
+        return moveMsgs;
+    }
+
+    // gets request ids for messages that need it
+    public long getRequestId(Class<?> msgClass) {
+        long reqId = 0;
+
+        if(requestsCounter.containsKey(msgClass))
+            reqId = requestsCounter.get(msgClass);
+
+        requestsCounter.put(msgClass, ++reqId);
+
+        return reqId;
     }
 
     /**
@@ -191,6 +222,10 @@ public class GameClient {
     }
     public Component.Character getClientCharacter() {return ui.characters.get(clientCharId);}
 
+    public void setUpdateDelta(float delta) {
+        this.updateDelta = delta;
+    }
+
     static class UI {
 
         HashMap<Integer, Component.Character> characters = new HashMap();
@@ -212,16 +247,66 @@ public class GameClient {
         public void updateCharacter (UpdateCharacter msg) {
             Component.Character character = characters.get(msg.id);
             if (character == null) return;
-            character.update(msg.x, msg.y);
+
+            // do server reconciliation if its enabled and is the client char
+            if(GameRegister.serverReconciliation && GameClient.getInstance().clientCharId == msg.id) {
+                GameClient.getInstance().isPredictingRecon.set(true);
+                if(!GameRegister.entityInterpolation)
+                    character.update(msg.x, msg.y);
+                character.lastRequestId = msg.lastRequestId;
+                List<MoveCharacter> movesCpy = GameClient.getInstance().getMoveMsgListCopy();
+                //long lastMoveSent = movesCpy.get(movesCpy.size() - 1).requestId;
+                // System.out.println("Last move sent: " + lastMoveSent + " | last processed: " + msg.lastRequestId);
+                // discards already processed msgs from copy list
+                MoveCharacter moveMsg = null;
+                synchronized (movesCpy) {
+                    // must be in synchronized block
+                    Iterator it = movesCpy.iterator();
+
+                    while (it.hasNext()) {
+                        moveMsg = (MoveCharacter) it.next();
+                        if (moveMsg.requestId <= msg.lastRequestId) // removed all processed msgs
+                            it.remove(); // removes this msg
+                        else { // process the inputs that are not processed by the server still
+                            if(GameRegister.entityInterpolation) { // interpolate
+                                character.virtualMove(moveMsg); // updates position virtually
+                                //character.predictMovement(moveMsg);
+                            }
+                            else // apply each movement
+                                character.predictMovement(moveMsg);
+                        }
+                    }
+                }
+                GameClient.getInstance().isPredictingRecon.set(false);
+
+                if(GameRegister.entityInterpolation) {
+                    character.update(character.virtualX, character.virtualY);
+                    // if its the answer to the last movement not processed goes to server last pos
+                    // to avoid drifting accumulation
+                    if(msg.lastRequestId == instance.getRequestsCounter().get(MoveCharacter.class))
+                        character.addMovePos(new Vector2(msg.x, msg.y));
+                }
+
+            } else { // server reconciliation disabled or it isnt client char
+                character.update(msg.x, msg.y);
+            }
             //System.out.println(character.name + " moved to " + character.x + ", " + character.y);
         }
 
         public void removeCharacter (int id) {
             Component.Character character = characters.remove(id); // remove from list of logged chars
             if (character != null) {
-                character.removeFromStage();
+                character.dispose();
                 System.out.println(character.name + " removed");
             }
+        }
+
+        // disposes list of characters online
+        public void dispose() {
+            for (Component.Character c : characters.values()) {
+                c.dispose();
+            }
+            characters.clear();
         }
     }
 }

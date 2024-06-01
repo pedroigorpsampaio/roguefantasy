@@ -9,6 +9,7 @@ public class Component {
         public String token;
         public int id, role_level;
         public float x, y;
+        public float speed;
 
         /**
          * Prepares character data to be sent to clients with
@@ -17,7 +18,7 @@ public class Component {
          */
         public GameRegister.Character toSendToClient() {
             GameRegister.Character charData = new GameRegister.Character();
-            charData.role_level = this.role_level; charData.id = this.id;
+            charData.role_level = this.role_level; charData.id = this.id; charData.speed = this.speed;
             charData.x = this.x; charData.y = this.y; charData.name = this.name;
             return charData;
         }

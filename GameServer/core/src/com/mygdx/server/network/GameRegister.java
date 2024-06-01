@@ -11,14 +11,19 @@ import com.esotericsoftware.kryonet.EndPoint;
 public class GameRegister {
     static public final int tcp_port = 43572; // GAME SERVER TCP PORT
     static public final int udp_port = 38572; // GAME SERVER UDP PORT
+    static private final int serverTickrate = 33; // the amount of communication updates per second in server
+    static public final int clientTickrate = 20; // the amount of communication updates per second in client
     static public boolean serverAuthoritative = true; // server authoritative mode
-    static public boolean lagSimulation = false; // simulate lag
-    static public int lag = 280; // simulated lag value in ms
-    static public boolean clientPrediction = false; // apply client prediction
-    static public boolean serverReconciliation = false; // apply server reconciliation
+    static public boolean lagSimulation = true; // simulate lag
+    static public int lag = 140; // simulated lag value in ms
+    static public boolean clientPrediction = true; // apply client prediction
+    static public boolean serverReconciliation = true; // apply server reconciliation
     static public boolean entityInterpolation = false; // apply entity interpolation
     static public boolean lagCompensation = false; // apply lag compensation
 
+    /** gets Tick rates interval in seconds **/
+    static public float serverTickrate() {return 1f/serverTickrate;}
+    static public float clientTickrate() {return 1f/clientTickrate;}
 
     /**
      * Registers objects that are going to be sent over the network
@@ -77,6 +82,7 @@ public class GameRegister {
     static public class UpdateCharacter {
         public int id;
         public float x, y;
+        public long lastRequestId; // the last move request processed that resulted in this x,y
     }
 
     static public class AddCharacter {
@@ -88,14 +94,15 @@ public class GameRegister {
     }
 
     static public class MoveCharacter {
-        public float x, y, xEnd, yEnd, deltaTime;
+        public float x, y, xEnd, yEnd;
         public boolean hasEndPoint;
+        public long requestId; // id of this request (to be used for server reconciliation)
     }
 
     public static class Character {
         public String name;
         public int id, role_level;
-        public float x, y;
+        public float x, y, speed;
     }
 
     public static class ClientId {

@@ -23,6 +23,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.badlogic.gdx.utils.Timer;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.badlogic.gdx.utils.viewport.StretchViewport;
@@ -31,12 +32,18 @@ import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.entity.Component;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
+import com.mygdx.game.util.Common;
 
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-public class GameScreen implements Screen {
+/**
+ * Implements the game screen
+ */
+public class GameScreen implements Screen, PropertyChangeListener {
     private static GameScreen instance;
     private static GameClient gameClient;
     private final Font font;
@@ -44,6 +51,7 @@ public class GameScreen implements Screen {
     private Stage stage;
     private Label fpsLabel;
     private Label pingLabel;
+    private Label ramLabel;
     private Stage bgStage;
     private static AssetManager manager;
     private Music bgm;
@@ -60,9 +68,17 @@ public class GameScreen implements Screen {
     private Vector2 clientPos;
     private Vector2 deltaVec;
     private GameRegister.MoveCharacter movement; // player movement message (for tests rn)
+    // time counters
+    private float timeForUpdate = 0f;
 
-    public GameScreen(RogueFantasy game, AssetManager manager, GameClient gameClient) {
-        this.game = game;
+    /**
+     * Prepares the screen/stage of the game
+     * @param manager       the asset manager containing loaded assets
+     * @param gameClient    the reference to the game client responsible for the communication with
+     *                      the game server
+     */
+    public GameScreen(AssetManager manager, GameClient gameClient) {
+        this.game = RogueFantasy.getInstance();
         this.manager = manager;
         this.gameClient = gameClient;
         Component.assetManager = manager;
@@ -85,20 +101,25 @@ public class GameScreen implements Screen {
         skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
         //skin.add("fontMedium", fontMedium, BitmapFont.class);
 
-        stage = new Stage(new ExtendViewport(1280, 720));
+        stage = new Stage(new StretchViewport(1280, 720));
         Gdx.input.setInputProcessor(stage);
         font = skin.get("emojiFont", Font.class); // gets typist font with icons
 
-        fpsLabel = new Label("fps: 144", skin, "fontMedium", Color.WHITE);
+        fpsLabel = new Label("fps: 1441", skin, "fontMedium", Color.WHITE);
         fpsLabel.setAlignment(Align.left);
         fpsLabel.setX(12);
 
-        pingLabel = new Label("ping: 333", skin, "fontMedium", Color.WHITE);
+        pingLabel = new Label("ping: 3334", skin, "fontMedium", Color.WHITE);
         pingLabel.setAlignment(Align.left);
         pingLabel.setX(fpsLabel.getX()+fpsLabel.getWidth()+22);
 
+        ramLabel = new Label("RAM: "+Common.getRamUsage(), skin, "fontMedium", Color.WHITE);
+        ramLabel.setAlignment(Align.left);
+        ramLabel.setX(pingLabel.getX()+pingLabel.getWidth()+22);
+
         stage.addActor(fpsLabel);
         stage.addActor(pingLabel);
+        stage.addActor(ramLabel);
 
         // updates camera zoom based on current device screen
 //        float uiZoomFactor = 720f / Gdx.graphics.getHeight();
@@ -153,6 +174,13 @@ public class GameScreen implements Screen {
         });
 
         Component.stage = stage;
+
+        // if its not listening to game server responses, start listening to it
+        if(!gameClient.isListening(this))
+            gameClient.addListener(this);
+
+        // starts update timer that control user inputs and server communication
+        //Timer.schedule(update, 0f, GameRegister.clientTickrate());
     }
 
     @Override
@@ -160,40 +188,63 @@ public class GameScreen implements Screen {
 
     }
 
-    private void moveCharacter(float deltaTime) {
-        Vector2 normalizedVec = new Vector2(movement.x, movement.y);
-        normalizedVec = normalizedVec.nor();
+//    private Timer.Task update = new Timer.Task() {
+//        @Override
+//        public void run() {
+//            if(!isCharacterLoaded) // character not loaded yet
+//            {
+//                if(gameClient.getClientCharacter() != null)
+//                    isCharacterLoaded = true;
+//                else
+//                    return; // wait until character is loaded
+//            }
+//            // correct velocity
+//            if(!Gdx.input.isKeyPressed(Input.Keys.W) && !Gdx.input.isKeyPressed(Input.Keys.UP) &&
+//                    !Gdx.input.isKeyPressed(Input.Keys.S) && !Gdx.input.isKeyPressed(Input.Keys.DOWN) && !Gdx.input.isTouched(0))
+//                movement.y = 0;
+//            if(!Gdx.input.isKeyPressed(Input.Keys.A) && !Gdx.input.isKeyPressed(Input.Keys.LEFT) &&
+//                    !Gdx.input.isKeyPressed(Input.Keys.D) && !Gdx.input.isKeyPressed(Input.Keys.RIGHT) && !Gdx.input.isTouched(0))
+//                movement.x = 0;
+//
+//            // check if there is touch velocity
+//            if(Gdx.input.isTouched(0)){
+//                vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
+//                vec3 = stage.getCamera().unproject(vec3); // unproject screen touch
+//                touchPos = new Vector2(vec3.x, vec3.y);
+//                movement.xEnd = touchPos.x; movement.yEnd = touchPos.y;
+//                movement.hasEndPoint = true;
+//            } else { // if no click/touch is made, there is no end point goal of movement
+//                movement.xEnd = 0; movement.yEnd = 0;
+//                movement.hasEndPoint = false;
+//            }
+//
+//            if(movement.x != 0 || movement.y != 0 || movement.hasEndPoint)
+//                moveCharacter(); // moves character if there is velocity or endpoint
+//        }
+//    };
+
+    /**
+     * Apply movement to the character based on current client-server strategies enabled
+     */
+    private void moveCharacter() {
         GameRegister.MoveCharacter msg = new GameRegister.MoveCharacter();
-        msg.x = normalizedVec.x * deltaTime * 250f;
-        msg.y = normalizedVec.y * deltaTime * 250f;
+        msg.x = movement.x;
+        msg.y = movement.y;
         msg.hasEndPoint = movement.hasEndPoint;
         msg.xEnd = movement.xEnd; msg.yEnd = movement.yEnd;
-        msg.deltaTime = deltaTime;
+        msg.requestId = gameClient.getRequestId(GameRegister.MoveCharacter.class);
 
-        if(GameRegister.serverAuthoritative)
-            gameClient.moveCharacter(msg);
-        else {
-            gameClient.getClientCharacter().update(gameClient.getClientCharacter().x + msg.x,
-                    gameClient.getClientCharacter().y + msg.y);
-        }
-
+        // sends to server the raw movement to be calculated by the authoritative server
+        gameClient.moveCharacter(msg);
+        // if client prediction is enabled, try to predict the movement calculating it locally
+        if(GameRegister.clientPrediction)
+            gameClient.getClientCharacter().predictMovement(msg);
     }
 
-    @Override
-    public void render(float delta) {
-        if(!isCharacterLoaded) // character not loaded yet
-        {
-            if(gameClient.getClientCharacter() != null)
-                isCharacterLoaded = true;
-            else
-                return; // wait until character is loaded
-        }
-
-        ScreenUtils.clear(0.2f, 0.6f, 0.2f, 1);
-
-        fpsLabel.setText("fps: " + Gdx.graphics.getFramesPerSecond());
-        pingLabel.setText("ping: " + gameClient.getAvgLatency());
-
+    /**
+     * Should update game using fixed step defined by GameRegister.clientTickrate()
+     */
+    public void update() {
         // correct velocity
         if(!Gdx.input.isKeyPressed(Input.Keys.W) && !Gdx.input.isKeyPressed(Input.Keys.UP) &&
                 !Gdx.input.isKeyPressed(Input.Keys.S) && !Gdx.input.isKeyPressed(Input.Keys.DOWN) && !Gdx.input.isTouched(0))
@@ -215,7 +266,35 @@ public class GameScreen implements Screen {
         }
 
         if(movement.x != 0 || movement.y != 0 || movement.hasEndPoint)
-            moveCharacter(delta); // moves character if there is velocity or endpoint
+            moveCharacter(); // moves character if there is velocity or endpoint
+    }
+
+    @Override
+    public void render(float delta) {
+        if(!isCharacterLoaded) // character not loaded yet
+        {
+            if(gameClient.getClientCharacter() != null)
+                isCharacterLoaded = true;
+            else
+                return; // wait until character is loaded
+        }
+
+//        if(gameClient.isPredictingRecon.get())
+//            return;
+
+        // checks if its time to update game
+        timeForUpdate += delta;
+        if(timeForUpdate >= GameRegister.clientTickrate()) {
+            update();
+            gameClient.setUpdateDelta(timeForUpdate);
+            timeForUpdate = 0f;
+        }
+
+        ScreenUtils.clear(0.2f, 0.6f, 0.2f, 1);
+
+        fpsLabel.setText("fps: " + Gdx.graphics.getFramesPerSecond());
+        pingLabel.setText("ping: " + gameClient.getAvgLatency());
+        ramLabel.setText("RAM: " + Common.getRamUsage() + " MB");
 
         // draws stage
         stage.act(Math.min(delta, 1 / 30f));
@@ -244,7 +323,25 @@ public class GameScreen implements Screen {
 
     @Override
     public void dispose() {
-
+        stage.dispose();
     }
 
+//    public void stopUpdateTimer() {
+//        if(update.isScheduled()) update.cancel();
+//    }
+
+    /**
+     * Method that reacts on game server responses
+     * NOTE:  Gdx.app.postRunnable(() makes it thread-safe with libGDX UI
+     * @param propertyChangeEvent   the server response encapsulated in PCE
+     */
+    @Override
+    public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
+        Gdx.app.postRunnable(() -> {
+            // loads main menu
+            RogueFantasy.getInstance().setScreen(new LoadScreen("menu"));
+            // stops update timer
+            //stopUpdateTimer();
+        });
+    }
 }

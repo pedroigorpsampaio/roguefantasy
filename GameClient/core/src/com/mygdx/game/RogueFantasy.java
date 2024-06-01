@@ -10,8 +10,11 @@ import com.mygdx.game.ui.LoadScreen;
 
 public class RogueFantasy extends Game {
 
+	private static RogueFantasy instance = null;
+
 	// sets defaults and loads first screen
 	public void create() {
+		instance = this;
 		// gets preferences reference, that stores simple data persisted between executions
 		Preferences prefs = Gdx.app.getPreferences("globalPrefs");
 
@@ -22,7 +25,11 @@ public class RogueFantasy extends Game {
 		
 		prefs.flush();
 
-		this.setScreen(new LoadScreen(this, "menu", new AssetManager()));
+		this.setScreen(new LoadScreen("menu"));
+	}
+
+	public static RogueFantasy getInstance() {
+		return instance;
 	}
 
 	public void render() {

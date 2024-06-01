@@ -17,6 +17,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.Vector;
@@ -33,6 +34,7 @@ public class GameServer implements CmdReceiver {
     Set<Component.Character> loggedIn = ConcurrentHashMap.newKeySet();
     Set<Component.Character> registeredTokens = ConcurrentHashMap.newKeySet();
     private boolean isOnline = false; // is this server online?
+    private LagNetwork lagNetwork; // for lag simulation
 
     public GameServer() {
         server = new Server(65535, 65535) {
@@ -42,6 +44,9 @@ public class GameServer implements CmdReceiver {
                 return new CharacterConnection();
             }
         };
+
+        // instantiates LagNetwork instance to be used for simulated lag
+        lagNetwork = new LagNetwork();
 
         // For consistency, the classes to be sent over the network are
         // registered by the same method for both the client and server.
@@ -54,7 +59,10 @@ public class GameServer implements CmdReceiver {
                 Component.Character character = connection.character;
 
                 if (object instanceof GameRegister.Ping) { // if it is ping, just send it back asap
-                    connection.sendUDP(new GameRegister.Ping(true));
+                    if(lagNetwork != null && GameRegister.lagSimulation) // send with simulated lag
+                        lagNetwork.send(new GameRegister.Ping(true), connection);
+                    else
+                        connection.sendUDP(new GameRegister.Ping(true));
                     return;
                 }
 
@@ -84,7 +92,7 @@ public class GameServer implements CmdReceiver {
                         while (i.hasNext()) {
                             Component.Character tokenizedChar = (Component.Character) i.next();
                             if(tokenizedChar.token.equals(decryptedToken)) {
-                                // TODO: ACTUALLY LOAD CHAR FROM PERSISTED STORAGE
+                                // TODO: ACTUALLY LOAD CHAR FROM PERSISTED STORAGE MONGODB
                                 character = loadCharacter(tokenizedChar);
                                 login(connection, character);
                                 //connection.sendUDP(new Component.CharacterState());
@@ -93,36 +101,6 @@ public class GameServer implements CmdReceiver {
                         }
                     }
                 }
-//                if (object instanceof GameRegister.Login) {
-//                    // Ignore if already logged in.
-//                    if (character != null) return;
-//
-//                    // Reject if the name is invalid.
-//                    String name = ((GameRegister.Login)object).name;
-//                    if (!isValid(name)) {
-//                        c.close();
-//                        return;
-//                    }
-//
-//                    // Reject if already logged in.
-//                    for (Component.Character other : loggedIn) {
-//                        if (other.name.equals(name)) {
-//                            c.close();
-//                            return;
-//                        }
-//                    }
-//
-//                    character = loadCharacter(name);
-//
-//                    // Reject if couldn't load character.
-//                    if (character == null) {
-//                        c.sendTCP(new GameRegister.RegistrationRequired());
-//                        return;
-//                    }
-//
-//                    loggedIn(connection, character);
-//                    return;
-//                }
 
                 if (object instanceof GameRegister.MoveCharacter) {
                     // Ignore if not logged in.
@@ -137,17 +115,17 @@ public class GameServer implements CmdReceiver {
                         Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
                         Vector2 charPos = new Vector2(character.x, character.y);
                         Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
-                        if(msg.deltaTime > 0.05f) msg.deltaTime = 0.016f;
-                        deltaVec.nor().scl(250f*msg.deltaTime);
+                        deltaVec.nor().scl(character.speed*GameRegister.clientTickrate());
                         Vector2 futurePos = new Vector2(charPos).add(deltaVec);
 
                         if(touchPos.dst(futurePos) <= 10f) // close enough, do not move anymore
                             return;
 
                         character.x += deltaVec.x; character.y += deltaVec.y;
-                    } else { // wasd movement already calculated
-                        character.x += msg.x;
-                        character.y += msg.y;
+                    } else { // wasd movement already has direction in it, just normalize and scale
+                        Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(character.speed*GameRegister.clientTickrate());
+                        character.x += moveVec.x;
+                        character.y += moveVec.y;
                     }
 
                     if (!saveCharacter(character)) {
@@ -159,7 +137,19 @@ public class GameServer implements CmdReceiver {
                     update.id = character.id;
                     update.x = character.x;
                     update.y = character.y;
-                    server.sendToAllTCP(update);
+                    update.lastRequestId = msg.requestId;
+
+                    System.out.println("pos server: " + character.x + " / " + character.y);
+
+                    if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+                        Collection<Connection> connections = server.getConnections();
+                        Iterator<Connection> it = connections.iterator();
+                        for (int i = 0, n = connections.size(); i < n; i++) {
+                            lagNetwork.send(update, (CharacterConnection)it.next());
+                        }
+                    } else
+                        server.sendToAllUDP(update);
+
                     return;
                 }
             }
@@ -250,10 +240,10 @@ public class GameServer implements CmdReceiver {
         try {
             output = new DataOutputStream(new FileOutputStream(file));
             output.writeInt(character.id);
-            //output.writeUTF(character.otherStuff);
             output.writeInt(character.role_level);
             output.writeFloat(character.x);
             output.writeFloat(character.y);
+            output.writeFloat(character.speed);
             return true;
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -277,9 +267,9 @@ public class GameServer implements CmdReceiver {
             input = new DataInputStream(new FileInputStream(file));
             character.id = input.readInt();
             character.role_level = input.readInt();
-            //character.otherStuff = input.readUTF();
             character.x = input.readFloat();
             character.y = input.readFloat();
+            character.speed = input.readFloat();
             input.close();
             return character;
         } catch (IOException ex) {
@@ -366,7 +356,7 @@ public class GameServer implements CmdReceiver {
             character = new Component.Character();
             character.token = Encoder.generateNewToken(); character.id = conn.charData.id;
             character.name = conn.charData.character; character.role_level = conn.charData.roleLevel;
-            character.x = 0; character.y = 0;
+            character.x = 0; character.y = 0; character.speed = 250f;
             Log.debug("login-server", character.name+" is NOT registered, new token generated! "+character.token);
             registeredTokens.add(character); // adds character to registered list with new token
             sendTokenAsync(conn, character.token);

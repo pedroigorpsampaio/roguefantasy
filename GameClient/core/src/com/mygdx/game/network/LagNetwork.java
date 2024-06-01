@@ -6,7 +6,7 @@ import com.esotericsoftware.kryonet.Client;
 import java.util.ArrayList;
 
 /**
- * A class to help simulate lag between client and server
+ * A class to help simulate lag between client and game server
  */
 public class LagNetwork {
     private ArrayList<QueuedMessage> messages;
@@ -23,7 +23,7 @@ public class LagNetwork {
     private Timer.Task messageTimer = new Timer.Task() {
         @Override
         public void run() {
-            if(client == null || !client.isConnected()) return;
+            if(client == null || !client.isConnected()) { messages.clear(); return ; }
 
             if(messages != null && messages.size() > 0) {
                 for(int i = 0; i < messages.size(); i++) {
@@ -50,19 +50,5 @@ class QueuedMessage {
     public QueuedMessage(Object message, long timeToSend) {
         this.message = message; this.timeToSend = timeToSend;
     }
-
-//    enum Type {
-//        MOVEMENT("MoveCharacter"),
-//        PING("Ping"),
-//        ATTACK("Attack");
-//        private String register;
-//        Type(String register) {
-//            this.register = register;
-//        }
-//        public String getRegisterName() {
-//            return this.register;
-//        }
-//    }
-
 
 }
