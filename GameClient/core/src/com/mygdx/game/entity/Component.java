@@ -18,7 +18,10 @@ import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 
+import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class Component {
     public static AssetManager assetManager; // screen asset manager
@@ -27,25 +30,29 @@ public class Component {
     public static class Character extends Actor {
         private final Skin skin;
         private final Font font;
-        public long lastRequestId;
+        public AtomicLong lastRequestId;
+        public float lastServerPosX, lastServerPosY;
         private Texture spriteSheet;
         private TextureRegion spriteTex;
         public String name;
         public int id, role_level;
         public float x, y, speed;
         public float virtualX, virtualY; // used for interpolation
-        public ConcurrentLinkedQueue<Vector2> posQueue;
+        public ConcurrentSkipListMap<Long, Vector2> posQueue;
         public TypingLabel nameLabel;
         private Sprite sprite;
         private Image spriteImg;
         private Vector2 centerPos;
         private Vector2 startPos; // used for interpolation
+        private Vector2 goalPos;
+        private Map.Entry<Long, Vector2> oldestEntry;
 
         public Character(String name, int id, int role_level, float x, float y, float speed) {
             this.name = name; this.id = id; this.role_level = role_level;
-            this.x = x; this.y = y; this.speed = speed; lastRequestId = 0;
+            this.x = x; this.y = y; this.speed = speed; lastRequestId = new AtomicLong(0);
+            lastServerPosX = x; lastServerPosY = y;
             startPos = new Vector2(this.x, this.y);
-            posQueue = new ConcurrentLinkedQueue<>();
+            posQueue = new ConcurrentSkipListMap<>();
             skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             font = skin.get("emojiFont", Font.class); // gets typist font with icons
             if(role_level == 0)
@@ -85,11 +92,11 @@ public class Component {
 
         // updates based on character changes
         public void update(float x, float y) {
+            this.x = x;
+            this.y = y;
+            this.virtualX = this.x;
+            this.virtualY = this.y;
             Gdx.app.postRunnable(() -> {
-                this.x = x;
-                this.y = y;
-                this.virtualX = this.x;
-                this.virtualY = this.y;
                 float screenX = this.x - spriteImg.getWidth()/2f;
                 float screenY = this.y - spriteImg.getHeight()/2f;
                 nameLabel.setBounds(this.x - nameLabel.getWidth()/2f, this.y + spriteImg.getHeight()/1.5f+nameLabel.getHeight(), nameLabel.getWidth(), nameLabel.getHeight());
@@ -100,11 +107,11 @@ public class Component {
         }
 
         public void move(Vector2 movement) {
+            this.x += movement.x;
+            this.y += movement.y;
+            this.virtualX = this.x;
+            this.virtualY = this.y;
             Gdx.app.postRunnable(() -> {
-                this.x += movement.x;
-                this.y += movement.y;
-                this.virtualX = this.x;
-                this.virtualY = this.y;
                 float screenX = this.x - spriteImg.getWidth()/2f;
                 float screenY = this.y - spriteImg.getHeight()/2f;
                 nameLabel.setBounds(this.x - nameLabel.getWidth()/2f, this.y + spriteImg.getHeight()/1.5f+nameLabel.getHeight(), nameLabel.getWidth(), nameLabel.getHeight());
@@ -115,36 +122,14 @@ public class Component {
         }
 
         // adds a new moving position to the move queue to be interpolated by render
-        public void addMovePos(Vector2 movePos) {
-            posQueue.add(movePos);
+        public void addMovePos(Long requestId, Vector2 movePos) {
+            synchronized (posQueue) {
+                posQueue.putIfAbsent(requestId, movePos);
+            }
         }
 
         public void virtualMove(GameRegister.MoveCharacter msg) {
-            Gdx.app.postRunnable(() -> {
-                if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
-                    Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
-                    Vector2 charPos = new Vector2(this.x, this.y);
-                    Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
-                    deltaVec.nor().scl(this.speed*GameRegister.clientTickrate());
-                    Vector2 futurePos = new Vector2(charPos).add(deltaVec);
-
-                    if(touchPos.dst(futurePos) <= 10f) // close enough, do not move anymore
-                        return;
-
-                    virtualX += deltaVec.x; virtualY += deltaVec.y;
-                } else { // wasd movement already has direction in it, just normalize and scale
-                    Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(this.speed*GameRegister.clientTickrate());
-                    virtualX += moveVec.x; virtualY += moveVec.y;
-                }
-            });
-        }
-
-        /**
-         * Given a movement msg that is to be sent to the server, tries
-         * to predict the outcome before receiving server answer updating character pos
-         * @param msg   the message containing the raw movement from inputs
-         */
-        public void predictMovement(GameRegister.MoveCharacter msg) {
+//            Gdx.app.postRunnable(() -> {
             if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
                 Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
                 Vector2 charPos = new Vector2(this.x, this.y);
@@ -155,22 +140,84 @@ public class Component {
                 if(touchPos.dst(futurePos) <= 10f) // close enough, do not move anymore
                     return;
 
-                //this.move(deltaVec);
-                if(!GameRegister.entityInterpolation)
-                    this.move(deltaVec);
-                else if(!GameClient.getInstance().isPredictingRecon.get())
-                    posQueue.add(futurePos);
-                //else
-                    //this.move(deltaVec);
+                virtualX += deltaVec.x; virtualY += deltaVec.y;
             } else { // wasd movement already has direction in it, just normalize and scale
                 Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(this.speed*GameRegister.clientTickrate());
+                virtualX += moveVec.x; virtualY += moveVec.y;
+            }
+            //           });
+        }
+
+        /**
+         * Given a movement msg that is to be sent to the server, tries
+         * to predict the outcome before receiving server answer updating character pos
+         * @param msg   the message containing the raw movement from inputs
+         */
+        public void predictMovement(GameRegister.MoveCharacter msg) {
+            //Gdx.app.postRunnable(() -> {
+                if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
+                    Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
+                    Vector2 charPos = new Vector2(this.x, this.y);
+                    Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
+                    deltaVec.nor().scl(this.speed * GameRegister.clientTickrate());
+                    Vector2 futurePos = new Vector2(charPos).add(deltaVec);
+
+                    if (touchPos.dst(futurePos) <= 10f) // close enough, do not move anymore
+                        return;
+
+                    //this.move(deltaVec);
+                    if (!GameRegister.entityInterpolation)
+                        this.move(deltaVec);
+                    else if (!GameClient.getInstance().isPredictingRecon.get())
+                        addMovePos(msg.requestId, futurePos);
+                    //posQueue.add(futurePos);
+                    //else
+                    //this.move(deltaVec);
+                } else { // wasd movement already has direction in it, just normalize and scale
+                    Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(this.speed * GameRegister.clientTickrate());
+                    Vector2 charPos = new Vector2(this.x, this.y);
+                    Vector2 futurePos = new Vector2(charPos).add(moveVec);
+                    //this.move(moveVec);
+                    if (!GameRegister.entityInterpolation)
+                        this.move(moveVec);
+                    else if (!GameClient.getInstance().isPredictingRecon.get())
+                        addMovePos(msg.requestId, futurePos);
+                    //posQueue.add(futurePos);
+//                else
+//                    this.move(moveVec);
+                }
+            //});
+        }
+
+        public void predictMovementNoBlocking(GameRegister.MoveCharacter msg) {
+            if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
+                Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
+                Vector2 charPos = new Vector2(this.x, this.y);
+                Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
+                deltaVec.nor().scl(this.speed * GameRegister.clientTickrate());
+                Vector2 futurePos = new Vector2(charPos).add(deltaVec);
+
+                if (touchPos.dst(futurePos) <= 10f) // close enough, do not move anymore
+                    return;
+
+                //this.move(deltaVec);
+                if (!GameRegister.entityInterpolation)
+                    this.move(deltaVec);
+                else if (!GameClient.getInstance().isPredictingRecon.get())
+                    addMovePos(msg.requestId, futurePos);
+                //posQueue.add(futurePos);
+                //else
+                //this.move(deltaVec);
+            } else { // wasd movement already has direction in it, just normalize and scale
+                Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(this.speed * GameRegister.clientTickrate());
                 Vector2 charPos = new Vector2(this.x, this.y);
                 Vector2 futurePos = new Vector2(charPos).add(moveVec);
                 //this.move(moveVec);
-                if(!GameRegister.entityInterpolation)
+                if (!GameRegister.entityInterpolation)
                     this.move(moveVec);
-                else if(!GameClient.getInstance().isPredictingRecon.get())
-                    posQueue.add(futurePos);
+                else if (!GameClient.getInstance().isPredictingRecon.get())
+                    addMovePos(msg.requestId, futurePos);
+                //posQueue.add(futurePos);
 //                else
 //                    this.move(moveVec);
             }
@@ -199,6 +246,7 @@ public class Component {
             spriteImg.draw(batch, parentAlpha);
 
             System.out.println("pos client: " + this.x + " / " + this.y);
+            //System.out.println(this.lastRequestId + " / " + GameClient.getInstance().getRequestsCounter().get(GameRegister.MoveCharacter.class));
 
             //batch.draw(nameLabel, 400, 90, 900, 600);
         }
@@ -211,9 +259,13 @@ public class Component {
             if(spriteImg == null) return; // sprite not loaded
             if(GameClient.getInstance().isPredictingRecon.get()) return;
             if(posQueue.size() == 0) return; // only proceeds if there is a queued pos to go to
+            if(this.id != GameClient.getInstance().getClientCharacter().id) return;
 
             // get oldest position not achieved
-            Vector2 goalPos = posQueue.element();
+            synchronized (posQueue) {
+                oldestEntry = posQueue.firstEntry();
+                goalPos = oldestEntry.getValue();
+            }
 
             elapsed += Gdx.graphics.getDeltaTime();
 
@@ -245,21 +297,36 @@ public class Component {
                 //float startPosY = charPos.y + spriteImg.getHeight()/1.5f+nameLabel.getHeight();
                 //float moveY = this.y - lastY;
                 float newPosY = startPos.y + ((goalPos.y - startPos.y) * progress);
-                this.x = newPosX;
-                this.y = newPosY;
-                this.virtualX = this.x;
-                this.virtualY = this.y;
+//                this.x = newPosX;
+//                this.y = newPosY;
+//                this.virtualX = this.x;
+//                this.virtualY = this.y;
                 this.update(newPosX, newPosY);
             } else {
                 elapsed = 0f;
-                this.x = goalPos.x;
-                this.y = goalPos.y;
-                this.virtualX = this.x;
-                this.virtualY = this.y;
-                this.update(goalPos.x, goalPos.y);  // makes sure it finished in the goal position
+//                this.x = goalPos.x;
+//                this.y = goalPos.y;
+//                this.virtualX = this.x;
+//                this.virtualY = this.y;
+                synchronized (posQueue) {
+                    posQueue.remove(oldestEntry.getKey());
+
+//                    if(posQueue.size() == 0 && (this.id == GameClient.getInstance().getClientCharacter().id)) {
+//                        System.out.println(this.lastRequestId + " / " + GameClient.getInstance().getRequestsCounter().get(GameRegister.MoveCharacter.class));
+//                        if(this.x != lastServerPosX || this.y != lastServerPosY) {
+////                            this.x = lastServerPosX;
+////                            this.y = lastServerPosY;
+//                            this.update(lastServerPosX, lastServerPosY);
+//                        }
+//                    }
+                }
+
                 startPos = new Vector2(this.x, this.y);
+
+                //this.update(goalPos.x, goalPos.y);  // makes sure it finished in the goal position
+
                 //System.out.println(new Vector2(this.x, this.y).dst(goalPos));
-                posQueue.remove();
+                //posQueue.remove();
             }
 
             // nameLabel.setBounds(this.x - nameLabel.getWidth()/2f, this.y + spriteImg.getHeight()/1.5f+nameLabel.getHeight(), nameLabel.getWidth(), nameLabel.getHeight());

@@ -26,6 +26,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class GameClient extends DispatchServer {
@@ -38,7 +39,7 @@ public class GameClient extends DispatchServer {
     private int clientCharId; // this client's char id
     private int latWindowSize = 10;
     private long avgLatency = 0;
-    private List<MoveCharacter> moveMsgs; // will contain a copy of all MoveMessages sent (for server recon.)
+    private ConcurrentLinkedQueue<MoveCharacter> pendingMoves; // will contain a copy of all MoveMessages sent (for server recon.)
     private float updateDelta;
     public float getUpdateDelta() {return updateDelta;}
     public boolean isConnected() {return isConnected;}
@@ -61,8 +62,8 @@ public class GameClient extends DispatchServer {
         // counts requests of each type of request
         // for server reconciliation
         requestsCounter = new ConcurrentHashMap<>();
-        // instantiates move msgs as sync list (iterator should use sync block)
-        moveMsgs = Collections.synchronizedList(new ArrayList<>());
+        // instantiates pending move msgs
+        pendingMoves = new ConcurrentLinkedQueue<>();
 
         // listeners that are going to be notified on server responses
         listeners = new PropertyChangeSupport(this);
@@ -177,7 +178,7 @@ public class GameClient extends DispatchServer {
         if (client == null || msg == null || !isConnected) return;
 
         // keeps a copy of the sent message for server reconciliation
-        moveMsgs.add(msg);
+        pendingMoves.offer(msg);
 
         // if lag simulation is on, add to queue with a timer to be sent
         if(lagNetwork != null && GameRegister.lagSimulation)
@@ -186,8 +187,8 @@ public class GameClient extends DispatchServer {
             client.sendUDP(msg);
     }
 
-    public List<MoveCharacter> getMoveMsgListCopy() {
-        return moveMsgs;
+    public ConcurrentLinkedQueue<MoveCharacter> getMoveMsgListCopy() {
+        return pendingMoves;
     }
 
     // gets request ids for messages that need it
@@ -245,51 +246,119 @@ public class GameClient extends DispatchServer {
         }
 
         public void updateCharacter (UpdateCharacter msg) {
+//            entity.x = state.position;
+//
+//            if (this.server_reconciliation) {
+//                // Server Reconciliation. Re-apply all the inputs not yet processed by
+//                // the server.
+//                var j = 0;
+//                while (j < this.pending_inputs.length) {
+//                    var input = this.pending_inputs[j];
+//                    if (input.input_sequence_number <= state.last_processed_input) {
+//                        // Already processed. Its effect is already taken into account into the world update
+//                        // we just got, so we can drop it.
+//                        this.pending_inputs.splice(j, 1);
+//                    } else {
+//                        // Not processed by the server yet. Re-apply it.
+//                        entity.applyInput(input);
+//                        j++;
+//                    }
+//                }
+//            } else {
+//                // Reconciliation is disabled, so drop all the saved inputs.
+//                this.pending_inputs = [];
+
             Component.Character character = characters.get(msg.id);
             if (character == null) return;
 
-            // do server reconciliation if its enabled and is the client char
-            if(GameRegister.serverReconciliation && GameClient.getInstance().clientCharId == msg.id) {
-                GameClient.getInstance().isPredictingRecon.set(true);
-                if(!GameRegister.entityInterpolation)
-                    character.update(msg.x, msg.y);
-                character.lastRequestId = msg.lastRequestId;
-                List<MoveCharacter> movesCpy = GameClient.getInstance().getMoveMsgListCopy();
-                //long lastMoveSent = movesCpy.get(movesCpy.size() - 1).requestId;
-                // System.out.println("Last move sent: " + lastMoveSent + " | last processed: " + msg.lastRequestId);
-                // discards already processed msgs from copy list
-                MoveCharacter moveMsg = null;
-                synchronized (movesCpy) {
-                    // must be in synchronized block
-                    Iterator it = movesCpy.iterator();
+            character.update(msg.x, msg.y);
 
-                    while (it.hasNext()) {
-                        moveMsg = (MoveCharacter) it.next();
-                        if (moveMsg.requestId <= msg.lastRequestId) // removed all processed msgs
-                            it.remove(); // removes this msg
-                        else { // process the inputs that are not processed by the server still
-                            if(GameRegister.entityInterpolation) { // interpolate
-                                character.virtualMove(moveMsg); // updates position virtually
-                                //character.predictMovement(moveMsg);
-                            }
-                            else // apply each movement
-                                character.predictMovement(moveMsg);
+            if(GameClient.getInstance().clientCharId == msg.id) {
+                if(GameRegister.serverReconciliation) {
+                    GameClient.getInstance().isPredictingRecon.set(true);
+                    ConcurrentLinkedQueue<GameRegister.MoveCharacter> pending = GameClient.getInstance().getMoveMsgListCopy();
+                    Iterator iterator = pending.iterator();
+                    while (iterator.hasNext()) {
+                        MoveCharacter pendingInput = (MoveCharacter) iterator.next();
+                        if (pendingInput.requestId <= msg.lastRequestId) {
+                            // Already processed. Its effect is already taken into account into the world update
+                            // we just got, so we can drop it.
+                            iterator.remove();
+                        } else {
+                            // Not processed by the server yet. Re-apply it.
+//                            entity.applyInput(input);
+//                            j++;
+                            character.predictMovement(pendingInput);
                         }
                     }
+                    GameClient.getInstance().isPredictingRecon.set(false);
+                } else {
+                    GameClient.getInstance().getMoveMsgListCopy().clear();
                 }
-                GameClient.getInstance().isPredictingRecon.set(false);
-
-                if(GameRegister.entityInterpolation) {
-                    character.update(character.virtualX, character.virtualY);
-                    // if its the answer to the last movement not processed goes to server last pos
-                    // to avoid drifting accumulation
-                    if(msg.lastRequestId == instance.getRequestsCounter().get(MoveCharacter.class))
-                        character.addMovePos(new Vector2(msg.x, msg.y));
-                }
-
-            } else { // server reconciliation disabled or it isnt client char
-                character.update(msg.x, msg.y);
             }
+
+//            Component.Character character = characters.get(msg.id);
+//            if (character == null) return;
+//
+//            // do server reconciliation if its enabled and is the client char
+//            if(GameRegister.serverReconciliation && GameClient.getInstance().clientCharId == msg.id) {
+//                GameClient.getInstance().isPredictingRecon.set(true);
+//                if(!GameRegister.entityInterpolation)
+//                    character.update(msg.x, msg.y);
+//
+//                character.lastRequestId.set(msg.lastRequestId);
+//
+//                if(msg.lastRequestId < character.lastRequestId.get()) return; // already processed a more up to date msg
+//
+//                List<MoveCharacter> movesCpy = GameClient.getInstance().getMoveMsgListCopy();
+//                //long lastMoveSent = movesCpy.get(movesCpy.size() - 1).requestId;
+//                // System.out.println("Last move sent: " + lastMoveSent + " | last processed: " + msg.lastRequestId);
+//                // discards already processed msgs from copy list
+//                MoveCharacter moveMsg = null;
+//
+//                synchronized (movesCpy) {
+//                    // must be in synchronized block
+//                    Iterator it = movesCpy.iterator();
+//
+//                    float startX = 0;
+//                    float startY = 0;
+//                    while (it.hasNext()) {
+//                        moveMsg = (MoveCharacter) it.next();
+//                        if (moveMsg.requestId == msg.lastRequestId) {
+//                            //character.update(msg.x, msg.y);
+//                            character.virtualX = msg.x; character.virtualY = msg.y;
+//                        }
+//                        if (moveMsg.requestId <= msg.lastRequestId) // removed all processed msgs
+//                            it.remove(); // removes this msg
+//                        else { // process the inputs that are not processed by the server still
+//                            if(GameRegister.entityInterpolation) { // interpolate
+//                                character.virtualMove(moveMsg); // updates position virtually
+//                                //character.predictMovement(moveMsg);
+//                            }
+//                            else // apply each movement
+//                                character.predictMovement(moveMsg);
+//                        }
+//                    }
+//                }
+//                GameClient.getInstance().isPredictingRecon.set(false);
+//
+//                if(GameRegister.entityInterpolation) {
+//                    //character.update(character.virtualX, character.virtualY);
+//                    character.addMovePos(msg.lastRequestId, new Vector2(character.virtualX, character.virtualY));
+//                    // if its the answer to the last movement not processed goes to server last pos
+//                    // to avoid drifting accumulation
+//                    if(msg.lastRequestId == instance.getRequestsCounter().get(MoveCharacter.class)) {
+//                        System.out.println("lastMoveServer: " + msg.x + " / " + msg.y);
+//                        character.lastServerPosX = msg.x; character.lastServerPosY = msg.y;
+//                        //character.addMovePos(msg.lastRequestId, new Vector2(msg.x, msg.y));
+//                    }
+////                        character.update(msg.x, msg.y);
+//                    //character.addMovePos(msg.lastRequestId, new Vector2(msg.x, msg.y));
+//                }
+//
+//            } else { // server reconciliation disabled or it isnt client char
+//                character.update(msg.x, msg.y);
+//            }
             //System.out.println(character.name + " moved to " + character.x + ", " + character.y);
         }
 

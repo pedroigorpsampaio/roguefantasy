@@ -19,7 +19,7 @@ public class GameRegister {
     static public int lag = 340; // simulated lag value in ms
     static public boolean clientPrediction = true; // apply client prediction
     static public boolean serverReconciliation = true; // apply server reconciliation
-    static public boolean entityInterpolation = true; // apply entity interpolation
+    static public boolean entityInterpolation = false; // apply entity interpolation
     static public boolean lagCompensation = false; // apply lag compensation
 
     /** gets Tick rates interval in seconds **/

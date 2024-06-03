@@ -14,7 +14,7 @@ public class GameRegister {
     static private final int serverTickrate = 33; // the amount of communication updates per second in server
     static public final int clientTickrate = 20; // the amount of communication updates per second in client
     static public boolean serverAuthoritative = true; // server authoritative mode
-    static public boolean lagSimulation = true; // simulate lag
+    static public boolean lagSimulation = false; // simulate lag
     static public int lag = 140; // simulated lag value in ms
     static public boolean clientPrediction = true; // apply client prediction
     static public boolean serverReconciliation = true; // apply server reconciliation
