@@ -237,8 +237,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // sends to server the raw movement to be calculated by the authoritative server
         gameClient.moveCharacter(msg);
         // if client prediction is enabled, try to predict the movement calculating it locally
-        if(GameRegister.clientPrediction)
-            gameClient.getClientCharacter().predictMovementNoBlocking(msg);
+        if(Common.clientPrediction)
+            gameClient.getClientCharacter().predictMovement(msg);
     }
 
     /**

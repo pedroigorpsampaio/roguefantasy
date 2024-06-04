@@ -14,13 +14,9 @@ public class GameRegister {
     static public final int udp_port = 38572; // GAME SERVER UDP PORT
     static private final int serverTickrate = 33; // the amount of communication updates per second in server
     public static final int clientTickrate = 20; // the amount of communication updates per second in client
-    static public boolean serverAuthoritative = true; // server authoritative mode
     static public boolean lagSimulation = true; // simulate lag
     static public int lag = 340; // simulated lag value in ms
-    static public boolean clientPrediction = true; // apply client prediction
-    static public boolean serverReconciliation = true; // apply server reconciliation
-    static public boolean entityInterpolation = false; // apply entity interpolation
-    static public boolean lagCompensation = false; // apply lag compensation
+
 
     /** gets Tick rates interval in seconds **/
     static public float serverTickrate() {return 1f/serverTickrate;}

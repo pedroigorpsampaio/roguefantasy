@@ -31,7 +31,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class GameClient extends DispatchServer {
     private static GameClient instance; // login client instance
-    private InputProcessor oldIProcessor;
     UI ui;
     private Client client;
     String name="";
@@ -136,11 +135,6 @@ public class GameClient extends DispatchServer {
             ex.printStackTrace();
         }
 
-//        name = "b";
-//        Login login = new Login();
-//        login.name = name;
-//        client.sendTCP(login);
-
         // show keyboard on android for testing
         //Gdx.input.setOnscreenKeyboardVisible(true);
     }
@@ -231,14 +225,6 @@ public class GameClient extends DispatchServer {
 
         HashMap<Integer, Component.Character> characters = new HashMap();
 
-//
-//        public String inputOtherStuff () {
-//            String input = (String)JOptionPane.showInputDialog(null, "Other Stuff:", "Create account", JOptionPane.QUESTION_MESSAGE,
-//                    null, null, "other stuff");
-//            if (input == null || input.trim().length() == 0) System.exit(1);
-//            return input.trim();
-//        }
-
         public void addCharacter (Component.Character character) {
             characters.put(character.id, character);
             System.out.println(character.name + " added at " + character.x + ", " + character.y);
@@ -246,35 +232,13 @@ public class GameClient extends DispatchServer {
         }
 
         public void updateCharacter (UpdateCharacter msg) {
-//            entity.x = state.position;
-//
-//            if (this.server_reconciliation) {
-//                // Server Reconciliation. Re-apply all the inputs not yet processed by
-//                // the server.
-//                var j = 0;
-//                while (j < this.pending_inputs.length) {
-//                    var input = this.pending_inputs[j];
-//                    if (input.input_sequence_number <= state.last_processed_input) {
-//                        // Already processed. Its effect is already taken into account into the world update
-//                        // we just got, so we can drop it.
-//                        this.pending_inputs.splice(j, 1);
-//                    } else {
-//                        // Not processed by the server yet. Re-apply it.
-//                        entity.applyInput(input);
-//                        j++;
-//                    }
-//                }
-//            } else {
-//                // Reconciliation is disabled, so drop all the saved inputs.
-//                this.pending_inputs = [];
-
             Component.Character character = characters.get(msg.id);
             if (character == null) return;
 
             character.update(msg.x, msg.y);
 
             if(GameClient.getInstance().clientCharId == msg.id) {
-                if(GameRegister.serverReconciliation) {
+                if(Common.serverReconciliation) {
                     GameClient.getInstance().isPredictingRecon.set(true);
                     ConcurrentLinkedQueue<GameRegister.MoveCharacter> pending = GameClient.getInstance().getMoveMsgListCopy();
                     Iterator iterator = pending.iterator();
@@ -286,8 +250,6 @@ public class GameClient extends DispatchServer {
                             iterator.remove();
                         } else {
                             // Not processed by the server yet. Re-apply it.
-//                            entity.applyInput(input);
-//                            j++;
                             character.predictMovement(pendingInput);
                         }
                     }
@@ -296,70 +258,6 @@ public class GameClient extends DispatchServer {
                     GameClient.getInstance().getMoveMsgListCopy().clear();
                 }
             }
-
-//            Component.Character character = characters.get(msg.id);
-//            if (character == null) return;
-//
-//            // do server reconciliation if its enabled and is the client char
-//            if(GameRegister.serverReconciliation && GameClient.getInstance().clientCharId == msg.id) {
-//                GameClient.getInstance().isPredictingRecon.set(true);
-//                if(!GameRegister.entityInterpolation)
-//                    character.update(msg.x, msg.y);
-//
-//                character.lastRequestId.set(msg.lastRequestId);
-//
-//                if(msg.lastRequestId < character.lastRequestId.get()) return; // already processed a more up to date msg
-//
-//                List<MoveCharacter> movesCpy = GameClient.getInstance().getMoveMsgListCopy();
-//                //long lastMoveSent = movesCpy.get(movesCpy.size() - 1).requestId;
-//                // System.out.println("Last move sent: " + lastMoveSent + " | last processed: " + msg.lastRequestId);
-//                // discards already processed msgs from copy list
-//                MoveCharacter moveMsg = null;
-//
-//                synchronized (movesCpy) {
-//                    // must be in synchronized block
-//                    Iterator it = movesCpy.iterator();
-//
-//                    float startX = 0;
-//                    float startY = 0;
-//                    while (it.hasNext()) {
-//                        moveMsg = (MoveCharacter) it.next();
-//                        if (moveMsg.requestId == msg.lastRequestId) {
-//                            //character.update(msg.x, msg.y);
-//                            character.virtualX = msg.x; character.virtualY = msg.y;
-//                        }
-//                        if (moveMsg.requestId <= msg.lastRequestId) // removed all processed msgs
-//                            it.remove(); // removes this msg
-//                        else { // process the inputs that are not processed by the server still
-//                            if(GameRegister.entityInterpolation) { // interpolate
-//                                character.virtualMove(moveMsg); // updates position virtually
-//                                //character.predictMovement(moveMsg);
-//                            }
-//                            else // apply each movement
-//                                character.predictMovement(moveMsg);
-//                        }
-//                    }
-//                }
-//                GameClient.getInstance().isPredictingRecon.set(false);
-//
-//                if(GameRegister.entityInterpolation) {
-//                    //character.update(character.virtualX, character.virtualY);
-//                    character.addMovePos(msg.lastRequestId, new Vector2(character.virtualX, character.virtualY));
-//                    // if its the answer to the last movement not processed goes to server last pos
-//                    // to avoid drifting accumulation
-//                    if(msg.lastRequestId == instance.getRequestsCounter().get(MoveCharacter.class)) {
-//                        System.out.println("lastMoveServer: " + msg.x + " / " + msg.y);
-//                        character.lastServerPosX = msg.x; character.lastServerPosY = msg.y;
-//                        //character.addMovePos(msg.lastRequestId, new Vector2(msg.x, msg.y));
-//                    }
-////                        character.update(msg.x, msg.y);
-//                    //character.addMovePos(msg.lastRequestId, new Vector2(msg.x, msg.y));
-//                }
-//
-//            } else { // server reconciliation disabled or it isnt client char
-//                character.update(msg.x, msg.y);
-//            }
-            //System.out.println(character.name + " moved to " + character.x + ", " + character.y);
         }
 
         public void removeCharacter (int id) {
