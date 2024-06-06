@@ -102,6 +102,11 @@ public class GameClient extends DispatchServer {
                     return;
                 }
 
+                if (object instanceof GameRegister.UpdateState) {
+                    ui.updateState((GameRegister.UpdateState)object);
+                    return;
+                }
+
                 if (object instanceof UpdateCharacter) {
                     ui.updateCharacter((UpdateCharacter)object);
                     return;
@@ -231,6 +236,12 @@ public class GameClient extends DispatchServer {
             character.update(character.x, character.y);
         }
 
+        public void updateState(GameRegister.UpdateState state) {
+            if(state.characterUpdates != null) // there are character updates
+                for(UpdateCharacter charUpdate : state.characterUpdates)
+                    updateCharacter(charUpdate);
+        }
+
         public void updateCharacter (UpdateCharacter msg) {
             Component.Character character = characters.get(msg.id);
             if (character == null) return;
@@ -238,6 +249,7 @@ public class GameClient extends DispatchServer {
             character.update(msg.x, msg.y);
 
             if(GameClient.getInstance().clientCharId == msg.id) {
+
                 if(Common.serverReconciliation) {
                     GameClient.getInstance().isPredictingRecon.set(true);
                     ConcurrentLinkedQueue<GameRegister.MoveCharacter> pending = GameClient.getInstance().getMoveMsgListCopy();
@@ -275,5 +287,6 @@ public class GameClient extends DispatchServer {
             }
             characters.clear();
         }
+
     }
 }

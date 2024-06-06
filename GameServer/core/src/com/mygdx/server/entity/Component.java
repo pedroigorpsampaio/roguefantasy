@@ -1,6 +1,7 @@
 package com.mygdx.server.entity;
 
 import com.mygdx.server.network.GameRegister;
+import com.mygdx.server.network.LoginServer;
 
 
 public class Component {
@@ -10,6 +11,8 @@ public class Component {
         public int id, role_level;
         public float x, y;
         public float speed;
+        public long lastMoveId = 0;
+        public long lastMoveTs = 0;
 
         /**
          * Prepares character data to be sent to clients with
@@ -19,7 +22,7 @@ public class Component {
         public GameRegister.Character toSendToClient() {
             GameRegister.Character charData = new GameRegister.Character();
             charData.role_level = this.role_level; charData.id = this.id; charData.speed = this.speed;
-            charData.x = this.x; charData.y = this.y; charData.name = this.name;
+            charData.x = this.x; charData.y = this.y; charData.name = this.name; this.lastMoveId = 0;
             return charData;
         }
     }

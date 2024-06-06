@@ -19,7 +19,10 @@ import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.util.Common;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -40,18 +43,26 @@ public class Component {
         public int id, role_level;
         public Vector2 position, interPos;
         public float x, y, speed;
-        public ConcurrentSkipListMap<Long, Vector2> posQueue;
         public TypingLabel nameLabel;
         private Image spriteImg;
         private Vector2 centerPos;
         private Vector2 startPos; // used for interpolation
+        public ConcurrentSkipListMap<Long, Vector2> bufferedPos;
+        private Map.Entry<Long, Vector2> oldestEntry;
+        public ArrayList<EntityInterPos> buffer = new ArrayList<>();
+        private Vector2 goalPos;
+
+        public static class EntityInterPos {
+            public long timestamp;
+            public Vector2 position;
+        }
 
         public Character(String name, int id, int role_level, float x, float y, float speed) {
             this.name = name; this.id = id; this.role_level = role_level;
             this.position = new Vector2(x, y); this.interPos = new Vector2(x, y);
             this.x = x; this.y = y; this.speed = speed; lastRequestId = new AtomicLong(0);
+            this.bufferedPos = new ConcurrentSkipListMap<>();
             startPos = new Vector2(this.x, this.y);
-            posQueue = new ConcurrentSkipListMap<>();
             skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             font = skin.get("emojiFont", Font.class); // gets typist font with icons
             if(role_level == 0)
@@ -155,12 +166,12 @@ public class Component {
         @Override
         public void draw(Batch batch, float parentAlpha) {
             if(spriteImg == null) return; // sprite not loaded
+            if(GameClient.getInstance().getClientCharacter() == null) return;
 
             nameLabel.draw(batch, parentAlpha);
             spriteImg.draw(batch, parentAlpha);
 
-            // if there is interpolation to be made and entity interpolation is active, interpolate
-            if(interPos.dst(position) != 0f && Common.entityInterpolation)
+            if (interPos.dst(position) != 0f && Common.entityInterpolation) // simple interpolation
                 interpolate();
         }
 

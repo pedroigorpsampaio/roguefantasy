@@ -10,7 +10,6 @@ import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.audio.Music;
-import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.scenes.scene2d.Actor;
@@ -36,8 +35,8 @@ import com.mygdx.server.network.GameServer;
 import com.mygdx.server.network.LoginServer;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
+import com.mygdx.server.util.Common;
 
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.management.ManagementFactory;
@@ -48,10 +47,10 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Map;
 
 public class RogueFantasyServer extends ApplicationAdapter implements CmdReceiver {
 	// game servers
@@ -81,6 +80,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	private double cpuLoad;
 	private long ramLoad;
 	private Music timeCommandoSong, corneriaSong, demonBlueSong; // songs for gimmick purposes
+	private HashMap<String, Music> musics; // map of available musics accessible via file name as key
 
 	@Override
 	public void create ()  {
@@ -91,10 +91,8 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		lStyle.font.getData().markupEnabled = true;
 		skin.add("newLabelStyle", lStyle, Label.LabelStyle.class);
 
-		// gimmick musics (use play command)
-		timeCommandoSong = Gdx.audio.newMusic(Gdx.files.internal("music/time_commando.mp3"));
-		corneriaSong = Gdx.audio.newMusic(Gdx.files.internal("music/corneria.mp3"));
-		demonBlueSong = Gdx.audio.newMusic(Gdx.files.internal("music/demon_blue.mp3"));
+		// load musics into map of available musics
+		loadMusics();
 
 		// initialize linked lists of logs
 		globalLogs = Collections.synchronizedList(new ArrayList<>());
@@ -133,7 +131,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		bgTabs.setMaxCheckCount(1);
 		bgTabs.setUncheckLast(true);
 		globalTabBtn.setChecked(true); // global is selected at the start
-		
+
 		// command input textfield
 		cmdField = new TextField("", skin);
 		cmdField.setMessageText("enter command...");
@@ -186,6 +184,20 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		dispatcher = new CommandDispatcher(this, loginServer, gameServer);
 		// starts all servers
 		startServer(ServerChannel.ALL);
+	}
+
+	// loads existing song files into map of available songs to play
+	private void loadMusics() {
+		musics = new HashMap<>();
+		ArrayList<String> songFileNames = Common.getListOfSongs();
+		for(String song : songFileNames) {
+			musics.put(song, Gdx.audio.newMusic(Gdx.files.internal("music/"+song)));
+		}
+
+		// gimmick musics (use play command)
+//		timeCommandoSong = Gdx.audio.newMusic(Gdx.files.internal("music/time_commando.mp3"));
+//		corneriaSong = Gdx.audio.newMusic(Gdx.files.internal("music/corneria.mp3"));
+//		demonBlueSong = Gdx.audio.newMusic(Gdx.files.internal("music/demon_blue.mp3"));
 	}
 
 	private void startServer(ServerChannel serverType) {
@@ -335,7 +347,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		float uiZoomFactor = 720f / Gdx.graphics.getHeight();
 		((OrthographicCamera)stage.getCamera()).zoom = uiZoomFactor; // zoom in console
 	}
-	
+
 	@Override
 	public void dispose () {
 		loginServer.stop(); // stops server to save it
@@ -681,31 +693,28 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 
 		// plays song from loaded musics
 		private void playSong(String name, boolean exclusive) {
-			if(exclusive) {
-				timeCommandoSong.stop(); demonBlueSong.stop(); corneriaSong.stop();
+			String fileName = name+".mp3";
+
+			if(musics.get(fileName) == null) {
+				Log.info("cmd", "Could not find music with this name: "+name);
+				return;
 			}
-			switch (name) {
-				case "time_commando":
-					timeCommandoSong.play();
-					Log.info("cmd", "Now playing: "+name);
-					break;
-				case "corneria":
-					Log.info("cmd", "Now playing: "+name);
-					corneriaSong.play();
-					break;
-				case "demon_blue":
-					Log.info("cmd", "Now playing: "+name);
-					demonBlueSong.play();
-					break;
-				default:
-					Log.info("cmd", "Unknown song to play: "+name);
-					break;
-			}
+
+			if(exclusive)
+				stopSongs();
+
+			musics.get(fileName).play();
+			Log.info("cmd", "Now playing: "+name);
 		}
 
 		// stops songs being played
 		private void stopSongs() {
-			timeCommandoSong.stop(); demonBlueSong.stop(); corneriaSong.stop();
+			Iterator<Map.Entry<String, Music>> iterator = musics.entrySet().iterator();
+
+			while (iterator.hasNext()) {
+				Map.Entry<String, Music> entry = iterator.next();
+				entry.getValue().stop();
+			}
 		}
 	}
 

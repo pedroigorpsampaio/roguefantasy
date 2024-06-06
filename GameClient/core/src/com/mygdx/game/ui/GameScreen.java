@@ -180,48 +180,19 @@ public class GameScreen implements Screen, PropertyChangeListener {
             gameClient.addListener(this);
 
         // starts update timer that control user inputs and server communication
-        //Timer.schedule(update, 0f, GameRegister.clientTickrate());
+        Timer timer=new Timer();
+        timer.scheduleTask(new Timer.Task() {
+            @Override
+            public void run() {
+                update();
+            }
+        },0,GameRegister.clientTickrate());
     }
 
     @Override
     public void show() {
 
     }
-
-//    private Timer.Task update = new Timer.Task() {
-//        @Override
-//        public void run() {
-//            if(!isCharacterLoaded) // character not loaded yet
-//            {
-//                if(gameClient.getClientCharacter() != null)
-//                    isCharacterLoaded = true;
-//                else
-//                    return; // wait until character is loaded
-//            }
-//            // correct velocity
-//            if(!Gdx.input.isKeyPressed(Input.Keys.W) && !Gdx.input.isKeyPressed(Input.Keys.UP) &&
-//                    !Gdx.input.isKeyPressed(Input.Keys.S) && !Gdx.input.isKeyPressed(Input.Keys.DOWN) && !Gdx.input.isTouched(0))
-//                movement.y = 0;
-//            if(!Gdx.input.isKeyPressed(Input.Keys.A) && !Gdx.input.isKeyPressed(Input.Keys.LEFT) &&
-//                    !Gdx.input.isKeyPressed(Input.Keys.D) && !Gdx.input.isKeyPressed(Input.Keys.RIGHT) && !Gdx.input.isTouched(0))
-//                movement.x = 0;
-//
-//            // check if there is touch velocity
-//            if(Gdx.input.isTouched(0)){
-//                vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
-//                vec3 = stage.getCamera().unproject(vec3); // unproject screen touch
-//                touchPos = new Vector2(vec3.x, vec3.y);
-//                movement.xEnd = touchPos.x; movement.yEnd = touchPos.y;
-//                movement.hasEndPoint = true;
-//            } else { // if no click/touch is made, there is no end point goal of movement
-//                movement.xEnd = 0; movement.yEnd = 0;
-//                movement.hasEndPoint = false;
-//            }
-//
-//            if(movement.x != 0 || movement.y != 0 || movement.hasEndPoint)
-//                moveCharacter(); // moves character if there is velocity or endpoint
-//        }
-//    };
 
     /**
      * Apply movement to the character based on current client-server strategies enabled
@@ -277,17 +248,6 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 isCharacterLoaded = true;
             else
                 return; // wait until character is loaded
-        }
-
-//        if(gameClient.isPredictingRecon.get())
-//            return;
-
-        // checks if its time to update game
-        timeForUpdate += delta;
-        if(timeForUpdate >= GameRegister.clientTickrate()) {
-            update();
-            gameClient.setUpdateDelta(timeForUpdate);
-            timeForUpdate = 0f;
         }
 
         ScreenUtils.clear(0.2f, 0.6f, 0.2f, 1);

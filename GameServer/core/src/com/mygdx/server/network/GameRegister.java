@@ -4,6 +4,8 @@ package com.mygdx.server.network;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryonet.EndPoint;
 
+import java.util.ArrayList;
+
 /**
  * The register for the GAME SERVER
  * Contains all the necessary structures common to login server-client communication
@@ -11,10 +13,10 @@ import com.esotericsoftware.kryonet.EndPoint;
 public class GameRegister {
     static public final int tcp_port = 43572; // GAME SERVER TCP PORT
     static public final int udp_port = 38572; // GAME SERVER UDP PORT
-    static private final int serverTickrate = 33; // the amount of communication updates per second in server
+    static public final int serverTickrate = 15; // the amount of communication updates per second in server
     static public final int clientTickrate = 20; // the amount of communication updates per second in client
-    static public boolean lagSimulation = false; // simulate lag
-    static public int lag = 340; // simulated lag value in ms
+    static public boolean lagSimulation = true; // simulate lag
+    static public int lag = 150; // simulated lag value in ms
 
     /** gets Tick rates interval in seconds **/
     static public float serverTickrate() {return 1f/serverTickrate;}
@@ -29,6 +31,7 @@ public class GameRegister {
     static public void register (EndPoint endPoint) {
         Kryo kryo = endPoint.getKryo();
         kryo.register(byte[].class);
+        kryo.register(ArrayList.class);
         kryo.register(Ping.class);
         kryo.register(Response.class);
         kryo.register(Response.Type.class);
@@ -37,6 +40,7 @@ public class GameRegister {
         kryo.register(Register.class);
         kryo.register(AddCharacter.class);
         kryo.register(UpdateCharacter.class);
+        kryo.register(UpdateState.class);
         kryo.register(RemoveCharacter.class);
         kryo.register(Character.class);
         kryo.register(ClientId.class);
@@ -78,6 +82,10 @@ public class GameRegister {
         public int id;
         public float x, y;
         public long lastRequestId; // the last move request processed that resulted in this x,y
+    }
+
+    static public class UpdateState {
+        ArrayList<UpdateCharacter> characterUpdates = new ArrayList<>();
     }
 
     static public class AddCharacter {

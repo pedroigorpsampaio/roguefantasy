@@ -2,6 +2,7 @@ package com.mygdx.server.network;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.utils.Timer;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
@@ -20,7 +21,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Set;
-import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 
 
@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GameServer implements CmdReceiver {
     private static GameServer instance;
     Server server;
-    Set<Component.Character> loggedIn = ConcurrentHashMap.newKeySet();
+    Set<CharacterConnection> loggedIn = ConcurrentHashMap.newKeySet();
     Set<Component.Character> registeredTokens = ConcurrentHashMap.newKeySet();
     private boolean isOnline = false; // is this server online?
     private LagNetwork lagNetwork; // for lag simulation
@@ -78,7 +78,8 @@ public class GameServer implements CmdReceiver {
                     synchronized(loggedIn) {
                         Iterator i = loggedIn.iterator();
                         while (i.hasNext()) {
-                            Component.Character loggedChar = (Component.Character) i.next();
+                            CharacterConnection charConn = (CharacterConnection) i.next();
+                            Component.Character loggedChar = charConn.character;
                             if(loggedChar.token.equals(decryptedToken)) {
                                 connection.sendTCP(new GameRegister.Response(GameRegister.Response.Type.USER_ALREADY_LOGGED_IN));
                                 connection.close();
@@ -108,8 +109,15 @@ public class GameServer implements CmdReceiver {
 
                     GameRegister.MoveCharacter msg = (GameRegister.MoveCharacter)object;
 
-                    // Ignore if invalid move.
-                    //if (Math.abs(msg.x) != 1 && Math.abs(msg.y) != 1) return;
+                    long now = System.currentTimeMillis();
+                    System.out.println(now - character.lastMoveTs);
+                    // possibly cheat - check if its at least a little bit faster than expected
+                    if(now - character.lastMoveTs < GameRegister.clientTickrate()*450f) {
+                        // Log.warn("cheat", "Possible move spam cheating - player: " + character.name);
+                        //return; // ignore possible cheat movement
+                        //TODO: FIND A WAY TO DETECT HACKED MOVE SPAM CLIENTS
+                    }
+                    character.lastMoveTs = System.currentTimeMillis();
 
                     if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
                         Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
@@ -128,27 +136,29 @@ public class GameServer implements CmdReceiver {
                         character.y += moveVec.y;
                     }
 
+                    character.lastMoveId = msg.requestId;
+
                     if (!saveCharacter(character)) {
                         connection.close();
                         return;
                     }
 
-                    GameRegister.UpdateCharacter update = new GameRegister.UpdateCharacter();
-                    update.id = character.id;
-                    update.x = character.x;
-                    update.y = character.y;
-                    update.lastRequestId = msg.requestId;
-
-                    System.out.println("pos server: " + character.x + " / " + character.y);
-
-                    if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
-                        Collection<Connection> connections = server.getConnections();
-                        Iterator<Connection> it = connections.iterator();
-                        for (int i = 0, n = connections.size(); i < n; i++) {
-                            lagNetwork.send(update, (CharacterConnection)it.next());
-                        }
-                    } else
-                        server.sendToAllUDP(update);
+//                    GameRegister.UpdateCharacter update = new GameRegister.UpdateCharacter();
+//                    update.id = character.id;
+//                    update.x = character.x;
+//                    update.y = character.y;
+//                    update.lastRequestId = msg.requestId;
+//
+//                    System.out.println("pos server: " + character.x + " / " + character.y);
+//
+//                    if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+//                        Collection<Connection> connections = server.getConnections();
+//                        Iterator<Connection> it = connections.iterator();
+//                        for (int i = 0, n = connections.size(); i < n; i++) {
+//                            lagNetwork.send(update, (CharacterConnection)it.next());
+//                        }
+//                    } else
+//                        server.sendToAllUDP(update);
 
                     return;
                 }
@@ -164,7 +174,7 @@ public class GameServer implements CmdReceiver {
             public void disconnected (Connection c) {
                 CharacterConnection connection = (CharacterConnection)c;
                 if (connection.character != null) {
-                    loggedIn.remove(connection.character);
+                    loggedIn.remove(connection);
 
                     GameRegister.RemoveCharacter removeCharacter = new GameRegister.RemoveCharacter();
                     removeCharacter.id = connection.character.id;
@@ -179,7 +189,7 @@ public class GameServer implements CmdReceiver {
             server.bind(GameRegister.tcp_port, GameRegister.udp_port);
         } catch (IOException e) {
             Log.info("game-server", "Could not bind ports (" + GameRegister.tcp_port
-                                + "/" + GameRegister.udp_port +") and start game server");
+                    + "/" + GameRegister.udp_port +") and start game server");
             isOnline = false;
             return;
         }
@@ -192,6 +202,15 @@ public class GameServer implements CmdReceiver {
         // mongoController = new MongoController();
         //mongoController.connect(); // connects to mongo database
         //addListener(mongoController); // adds mongo controller as listener to all game server requests
+
+        // initiates timer that updates game state to all connections
+        Timer timer=new Timer();
+        timer.scheduleTask(new Timer.Task() {
+            @Override
+            public void run() {
+                sendStateToAll();
+            }
+        },0,GameRegister.serverTickrate());
 
         Log.info("game-server", "Game Server is running!");
     }
@@ -207,14 +226,14 @@ public class GameServer implements CmdReceiver {
         c.character = character;
 
         // Add existing characters to new logged in connection.
-        for (Component.Character other : loggedIn) {
+        for (CharacterConnection other : loggedIn) {
             GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
             // translate to safe to send character data
-            addCharacter.character = other.toSendToClient();
+            addCharacter.character = other.character.toSendToClient();
             c.sendTCP(addCharacter);
         }
 
-        loggedIn.add(character);
+        loggedIn.add(c);
         // sends to client his ID so he can distinguish itself from his list of characters
         GameRegister.ClientId clientId = new GameRegister.ClientId();
         clientId.id = character.id;
@@ -254,6 +273,34 @@ public class GameServer implements CmdReceiver {
             } catch (IOException ignored) {
             }
         }
+    }
+
+    public void sendStateToAll() {
+        GameRegister.UpdateState state = new GameRegister.UpdateState();
+        synchronized(loggedIn) {
+            Iterator i = loggedIn.iterator();
+            while (i.hasNext()) {
+                CharacterConnection charConn = (CharacterConnection) i.next();
+                Component.Character loggedChar = charConn.character;
+                GameRegister.UpdateCharacter update = new GameRegister.UpdateCharacter();
+                update.id = loggedChar.id;
+                update.x = loggedChar.x;
+                update.y = loggedChar.y;
+                update.lastRequestId = loggedChar.lastMoveId;
+                state.characterUpdates.add(update);
+            }
+        }
+
+        //System.out.println("pos server: " + character.x + " / " + character.y);
+
+        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+            Collection<Connection> connections = server.getConnections();
+            Iterator<Connection> it = connections.iterator();
+            for (int i = 0, n = connections.size(); i < n; i++) {
+                lagNetwork.send(state, (CharacterConnection)it.next());
+            }
+        } else
+            server.sendToAllUDP(state);
     }
 
     Component.Character loadCharacter (Component.Character character) {
@@ -332,7 +379,8 @@ public class GameServer implements CmdReceiver {
         synchronized(loggedIn) {
             Iterator i = loggedIn.iterator();
             while (i.hasNext()) {
-                Component.Character c = (Component.Character) i.next();
+                CharacterConnection connectChar = (CharacterConnection) i.next();
+                Component.Character c = connectChar.character;
                 if(c.id == conn.charData.id) {
                     conn.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.USER_ALREADY_LOGGED_IN));
                     conn.close();
