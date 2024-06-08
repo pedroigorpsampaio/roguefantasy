@@ -16,7 +16,7 @@ public class GameRegister {
     static public final int serverTickrate = 15; // the amount of communication updates per second in server
     static public final int clientTickrate = 20; // the amount of communication updates per second in client
     static public boolean lagSimulation = true; // simulate lag
-    static public int lag = 150; // simulated lag value in ms
+    static public int lag = 450; // simulated lag value in ms
 
     /** gets Tick rates interval in seconds **/
     static public float serverTickrate() {return 1f/serverTickrate;}
@@ -39,6 +39,7 @@ public class GameRegister {
         kryo.register(Token.class);
         kryo.register(Register.class);
         kryo.register(AddCharacter.class);
+        kryo.register(UpdateCreature.class);
         kryo.register(UpdateCharacter.class);
         kryo.register(UpdateState.class);
         kryo.register(RemoveCharacter.class);
@@ -84,8 +85,16 @@ public class GameRegister {
         public long lastRequestId; // the last move request processed that resulted in this x,y
     }
 
+    static public class UpdateCreature {
+        public long spawnId;
+        public int creatureId;
+        public float x, y, speed, lastVelocityX, lastVelocityY;
+        public String name;
+    }
+
     static public class UpdateState {
         ArrayList<UpdateCharacter> characterUpdates = new ArrayList<>();
+        ArrayList<UpdateCreature> creatureUpdates = new ArrayList<>();
     }
 
     static public class AddCharacter {

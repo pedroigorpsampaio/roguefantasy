@@ -67,5 +67,6 @@ project(":core") {
         implementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
         implementation("at.favre.lib:bcrypt:0.10.2")
         implementation 'org.postgresql:postgresql:42.7.3'
+        implementation 'dev.dominion.ecs:dominion-ecs-engine:0.9.0'
     }
 }

@@ -1,29 +1,26 @@
 package com.mygdx.game.network;
 
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Timer;
 import com.esotericsoftware.kryonet.Client;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Listener.ThreadedListener;
-import com.mygdx.game.entity.Component;
+import com.mygdx.game.entity.Entity;
 import com.mygdx.game.network.GameRegister.AddCharacter;
 import com.mygdx.game.network.GameRegister.ClientId;
 import com.mygdx.game.network.GameRegister.MoveCharacter;
 import com.mygdx.game.network.GameRegister.RemoveCharacter;
 import com.mygdx.game.network.GameRegister.UpdateCharacter;
+import com.mygdx.game.network.GameRegister.UpdateCreature;
 import com.mygdx.game.util.Common;
 import com.mygdx.game.util.Encoder;
 
 import java.beans.PropertyChangeSupport;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -31,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class GameClient extends DispatchServer {
     private static GameClient instance; // login client instance
-    UI ui;
+    private ServerController serverController;
     private Client client;
     String name="";
     String host="";
@@ -46,6 +43,7 @@ public class GameClient extends DispatchServer {
     private ArrayList<Long> latencies; // list of last calculated latencies
     private long lastPingTs = 0;
     private LagNetwork lagNetwork; // for lag simulation
+    public boolean firstStateProcessed = false; // processed first game state received
     public AtomicBoolean isPredictingRecon = new AtomicBoolean(false);
     private Map<Class<?>, Long> requestsCounter;
     public Map<Class<?>, Long> getRequestsCounter() {return requestsCounter;}
@@ -97,24 +95,24 @@ public class GameClient extends DispatchServer {
                 }
                 if (object instanceof AddCharacter) {
                     AddCharacter msg = (AddCharacter)object;
-                    Component.Character character = Component.Character.toCharacter(msg.character);
-                    ui.addCharacter(character);
+                    Entity.Character character = Entity.Character.toCharacter(msg.character);
+                    serverController.addCharacter(character);
                     return;
                 }
 
                 if (object instanceof GameRegister.UpdateState) {
-                    ui.updateState((GameRegister.UpdateState)object);
+                    serverController.updateState((GameRegister.UpdateState)object);
                     return;
                 }
 
                 if (object instanceof UpdateCharacter) {
-                    ui.updateCharacter((UpdateCharacter)object);
+                    serverController.updateCharacter((UpdateCharacter)object);
                     return;
                 }
 
                 if (object instanceof RemoveCharacter) {
                     RemoveCharacter msg = (RemoveCharacter)object;
-                    ui.removeCharacter(msg.id);
+                    serverController.removeCharacter(msg.id);
                     return;
                 }
             }
@@ -124,12 +122,12 @@ public class GameClient extends DispatchServer {
                 isConnected = false;
                 // tell interested listeners that server has lost connection
                 listeners.firePropertyChange("lostConnection", null, true);
-                // disposes list of characters
-                ui.dispose();
+                // disposes lists of entities
+                serverController.dispose();
             }
         }));
 
-        ui = new UI();
+        serverController = new ServerController();
         host = "192.168.0.192";
     }
 
@@ -217,20 +215,25 @@ public class GameClient extends DispatchServer {
         }).start();
     }
 
-    public HashMap<Integer, Component.Character> getOnlineCharacters() {
-        return ui.characters;
+    public HashMap<Integer, Entity.Character> getOnlineCharacters() {
+        return serverController.characters;
     }
-    public Component.Character getClientCharacter() {return ui.characters.get(clientCharId);}
+    public Map<Long, Entity.Creature> getCreatures() {
+        return serverController.creatures;
+    }
+
+    public Entity.Character getClientCharacter() {return serverController.characters.get(clientCharId);}
 
     public void setUpdateDelta(float delta) {
         this.updateDelta = delta;
     }
 
-    static class UI {
+    static class ServerController {
 
-        HashMap<Integer, Component.Character> characters = new HashMap();
+        HashMap<Integer, Entity.Character> characters = new HashMap();
+        Map<Long, Entity.Creature> creatures = new ConcurrentHashMap<>();
 
-        public void addCharacter (Component.Character character) {
+        public void addCharacter (Entity.Character character) {
             characters.put(character.id, character);
             System.out.println(character.name + " added at " + character.x + ", " + character.y);
             character.update(character.x, character.y);
@@ -240,11 +243,38 @@ public class GameClient extends DispatchServer {
             if(state.characterUpdates != null) // there are character updates
                 for(UpdateCharacter charUpdate : state.characterUpdates)
                     updateCharacter(charUpdate);
+            if(state.creatureUpdates != null) // there are game creature updates
+                for(UpdateCreature creatureUpdate : state.creatureUpdates)
+                    updateCreature(creatureUpdate);
+            // sets flag to inform that first update was processed
+            if(!instance.firstStateProcessed)
+                instance.firstStateProcessed = true;
+        }
+
+        private void updateCreature(UpdateCreature creatureUpdate) {
+//            System.out.printf("Creature %s moved with %s to %s\n",
+//                    creatureUpdate.name, new Vector2(creatureUpdate.lastVelocityX, creatureUpdate.lastVelocityY),
+//                    new Vector2(creatureUpdate.x, creatureUpdate.y));
+
+            Entity.Creature creature = null;
+            if(!creatures.containsKey(creatureUpdate.spawnId)) { // if creature spawn is not in client list, create and add it
+                creature = Entity.Creature.toCreature(creatureUpdate);
+                creatures.put(creatureUpdate.spawnId, creature);
+            } else // if its already on list, get it to update it
+                creature = creatures.get(creatureUpdate.spawnId);
+
+            creature.update(creatureUpdate.x, creatureUpdate.y, creatureUpdate.lastVelocityX,
+                                creatureUpdate.lastVelocityY, creatureUpdate.speed);
+
+            //TODO: REMOVAL OF LIST WHEN NOT VISIBLE OR AFTER DEATH ANIMATION
         }
 
         public void updateCharacter (UpdateCharacter msg) {
-            Component.Character character = characters.get(msg.id);
+            Entity.Character character = characters.get(msg.id);
             if (character == null) return;
+
+            // if there is no change in pos, ignore
+            if(character.x - msg.x == 0 && character.y - msg.y == 0) return;
 
             character.update(msg.x, msg.y);
 
@@ -269,23 +299,52 @@ public class GameClient extends DispatchServer {
                 } else {
                     GameClient.getInstance().getMoveMsgListCopy().clear();
                 }
-            }
+            }// else { // other character
+//                if(Common.entityInterpolation) {
+//                    //character.update(msg.x, msg.y);
+//                    //character.bufferedPos.putIfAbsent(System.currentTimeMillis(), new Vector2(msg.x, msg.y));
+//                    Entity.Character.EntityInterPos eip = new Entity.Character.EntityInterPos();
+//                    eip.position = new Vector2(msg.x, msg.y); eip.timestamp = System.currentTimeMillis();
+//                    character.buffer.add(eip);
+//                } else {
+//                    character.update(msg.x, msg.y);
+//                }
+//            }
         }
 
         public void removeCharacter (int id) {
-            Component.Character character = characters.remove(id); // remove from list of logged chars
+            Entity.Character character = characters.remove(id); // remove from list of logged chars
             if (character != null) {
                 character.dispose();
                 System.out.println(character.name + " removed");
             }
         }
 
+        public void removeAllCreatures() {
+            for (Entity.Creature c : creatures.values()) {
+                c.dispose();
+            }
+            creatures.clear();
+        }
+
+        public void removeCreature(long id) {
+            Entity.Creature creature = creatures.remove(id); // remove from list of creatures
+            if (creature != null) {
+                creature.dispose();
+                System.out.println(creature.name + " removed");
+            }
+        }
+
         // disposes list of characters online
         public void dispose() {
-            for (Component.Character c : characters.values()) {
+            for (Entity.Character c : characters.values()) {
+                c.dispose();
+            }
+            for (Entity.Creature c : creatures.values()) {
                 c.dispose();
             }
             characters.clear();
+            creatures.clear();
         }
 
     }

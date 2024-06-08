@@ -1,6 +1,5 @@
 package com.mygdx.game.ui;
 
-import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Preferences;
@@ -8,12 +7,14 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.math.Vector4;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -24,19 +25,16 @@ import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.Timer;
-import com.badlogic.gdx.utils.viewport.ExtendViewport;
-import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.badlogic.gdx.utils.viewport.StretchViewport;
 import com.github.tommyettinger.textra.Font;
 import com.mygdx.game.RogueFantasy;
-import com.mygdx.game.entity.Component;
+import com.mygdx.game.entity.Entity;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.util.Common;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -46,7 +44,10 @@ import java.util.Map;
 public class GameScreen implements Screen, PropertyChangeListener {
     private static GameScreen instance;
     private static GameClient gameClient;
-    private final Font font;
+    private Font font;
+    private Timer updateTimer;
+    private Sprite mapSprite;
+    private Texture mapTexture;
     private Skin skin;
     private Stage stage;
     private Label fpsLabel;
@@ -62,7 +63,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Texture bgTexture;
     private Image bg;
     private SpriteBatch batch;
-    private boolean isCharacterLoaded = true;
+    private OrthographicCamera camera;
+    static final int WORLD_WIDTH = 1000;
+    static final int WORLD_HEIGHT = 1000;
+    private float rotationSpeed;
+    private boolean playerIsTarget = false;
     private Vector3 vec3;
     private Vector2 touchPos;
     private Vector2 clientPos;
@@ -70,6 +75,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private GameRegister.MoveCharacter movement; // player movement message (for tests rn)
     // time counters
     private float timeForUpdate = 0f;
+    private float aimZoom;
+    private static boolean isInputHappening = false;
 
     /**
      * Prepares the screen/stage of the game
@@ -81,9 +88,26 @@ public class GameScreen implements Screen, PropertyChangeListener {
         this.game = RogueFantasy.getInstance();
         this.manager = manager;
         this.gameClient = gameClient;
-        Component.assetManager = manager;
+        Entity.assetManager = manager;
 
         batch = new SpriteBatch();
+        float w = Gdx.graphics.getWidth();
+        float h = Gdx.graphics.getHeight();
+
+        // Constructs a new OrthographicCamera, using the given viewport width and height
+        // Height is multiplied by aspect ratio.
+        camera = new OrthographicCamera(30, 30 * (h / w));
+        camera.position.set(camera.viewportWidth / 2f, camera.viewportHeight / 2f, 0);
+        camera.zoom = 25f;
+        aimZoom = camera.zoom;
+
+        camera.update();
+
+        mapTexture = new Texture(Gdx.files.internal("sc_map.png"));
+        mapTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        mapSprite = new Sprite(mapTexture);
+        mapSprite.setPosition(0, 0);
+        mapSprite.setSize(WORLD_WIDTH, WORLD_HEIGHT);
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
@@ -171,17 +195,24 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 if(movement.x < -1) movement.x = -1; if(movement.y < -1) movement.y = -1;
                 return super.keyUp(event, keycode);
             }
+
+            @Override
+            public boolean scrolled(InputEvent event, float x, float y, float amountX, float amountY) {
+                aimZoom = camera.zoom + amountY * 2f;
+                //camera.zoom += amountY;
+                return super.scrolled(event, x, y, amountX, amountY);
+            }
         });
 
-        Component.stage = stage;
+        Entity.stage = stage;
 
         // if its not listening to game server responses, start listening to it
         if(!gameClient.isListening(this))
             gameClient.addListener(this);
 
         // starts update timer that control user inputs and server communication
-        Timer timer=new Timer();
-        timer.scheduleTask(new Timer.Task() {
+        updateTimer=new Timer();
+        updateTimer.scheduleTask(new Timer.Task() {
             @Override
             public void run() {
                 update();
@@ -227,7 +258,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // check if there is touch velocity
         if(Gdx.input.isTouched(0)){
             vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
-            vec3 = stage.getCamera().unproject(vec3); // unproject screen touch
+            vec3 = camera.unproject(vec3); // unproject screen touch
             touchPos = new Vector2(vec3.x, vec3.y);
             movement.xEnd = touchPos.x; movement.yEnd = touchPos.y;
             movement.hasEndPoint = true;
@@ -236,34 +267,116 @@ public class GameScreen implements Screen, PropertyChangeListener {
             movement.hasEndPoint = false;
         }
 
-        if(movement.x != 0 || movement.y != 0 || movement.hasEndPoint)
+        if(movement.x != 0 || movement.y != 0 || movement.hasEndPoint) {
             moveCharacter(); // moves character if there is velocity or endpoint
+            isInputHappening = true;
+        } else {
+            isInputHappening = false;
+        }
     }
 
-    @Override
-    public void render(float delta) {
-        if(!isCharacterLoaded) // character not loaded yet
-        {
-            if(gameClient.getClientCharacter() != null)
-                isCharacterLoaded = true;
-            else
-                return; // wait until character is loaded
+    private void updateCamera() {
+        // updates zoom
+        if(camera.zoom != aimZoom) {
+            Vector2 tst = new Vector2(camera.zoom, 0);
+            tst.lerp(new Vector2(aimZoom, 0), 0.1f);
+            camera.zoom = tst.x;
+        }
+        // clamp zoom values
+        camera.zoom = MathUtils.clamp(camera.zoom, 0.1f, WORLD_HEIGHT/camera.viewportWidth);
+
+        // updates position based on client player
+        Entity.Character player = gameClient.getClientCharacter();
+        if(player != null && player.assetsLoaded) {
+            if(playerIsTarget) {
+                float lerp = 6.66f * Gdx.graphics.getDeltaTime();
+                camera.position.x += (player.getCenter().x - camera.position.x) * lerp;
+                camera.position.y += (player.getCenter().y - camera.position.y) * lerp;
+                if (new Vector2(camera.position.x, camera.position.y).dst(player.getCenter()) < lerp) {
+                    camera.position.x = player.getCenter().x;
+                    camera.position.y = player.getCenter().y;
+                }
+            } else {
+                camera.position.x = player.getCenter().x;
+                camera.position.y = player.getCenter().y;
+                playerIsTarget = true; // sets player as camera target
+            }
         }
 
-        ScreenUtils.clear(0.2f, 0.6f, 0.2f, 1);
+        // clamp values for camera
+        float effectiveViewportWidth = camera.viewportWidth * camera.zoom;
+        float effectiveViewportHeight = camera.viewportHeight * camera.zoom;
+        camera.position.x = MathUtils.clamp(camera.position.x, effectiveViewportWidth / 2f, WORLD_WIDTH - effectiveViewportWidth / 2f);
+        camera.position.y = MathUtils.clamp(camera.position.y, effectiveViewportHeight / 2f, WORLD_HEIGHT - effectiveViewportHeight / 2f);
+        // updates camera
+        camera.update();
+    }
+
+    float timeElapsed = 0f;
+    boolean startDelay = true;
+    @Override
+    public void render(float delta) {
+        if(gameClient.getClientCharacter() == null) return;
+
+        updateCamera(); // updates camera
+        batch.setProjectionMatrix(camera.combined); // sets camera for projection
+
+        //ScreenUtils.clear(0.2f, 0.6f, 0.2f, 1);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+
+        // wait until player is camera target and first state is received to start rendering
+        if(!playerIsTarget && !gameClient.firstStateProcessed) return;
+
+        if(startDelay)
+            timeElapsed+=Gdx.graphics.getDeltaTime();
+
+        if(timeElapsed < 0.67f) { // TODO: ACTUALLY DO A LOAD SCREEN AND W8 FIRST STATE TO BE FULLY LOADED
+            return;
+        }
+        startDelay = false;
+
+        batch.begin();
+        mapSprite.draw(batch);
+
+
+        // draw creatures
+        Map<Long, Entity.Creature> creatures = gameClient.getCreatures();
+        synchronized (creatures) {
+            Iterator<Map.Entry<Long, Entity.Creature>> iterator = creatures.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<Long, Entity.Creature> entry = iterator.next();
+                Entity.Creature creature = entry.getValue();
+                creature.render(batch);
+            }
+        }
+        // draw characters
+        Map<Integer, Entity.Character> characters = gameClient.getOnlineCharacters();
+        synchronized (characters) {
+            Iterator<Map.Entry<Integer, Entity.Character>> iterator = characters.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<Integer, Entity.Character> entry = iterator.next();
+                Entity.Character character = entry.getValue();
+                character.render(batch);
+            }
+        }
+
+        batch.end();
 
         fpsLabel.setText("fps: " + Gdx.graphics.getFramesPerSecond());
         pingLabel.setText("ping: " + gameClient.getAvgLatency());
         ramLabel.setText("RAM: " + Common.getRamUsage() + " MB");
 
         // draws stage
-        stage.act(Math.min(delta, 1 / 30f));
+        stage.act(Math.min(delta, 1 / 60f));
         stage.draw();
     }
 
     @Override
     public void resize(int width, int height) {
         stage.getViewport().update(width, height, true);
+        camera.viewportWidth = 30f;
+        camera.viewportHeight = 30f * height/width;
+        camera.update();
     }
 
     @Override
@@ -283,6 +396,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
     @Override
     public void dispose() {
+        mapSprite.getTexture().dispose();
         stage.dispose();
     }
 
@@ -299,9 +413,15 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
         Gdx.app.postRunnable(() -> {
             // loads main menu
-            RogueFantasy.getInstance().setScreen(new LoadScreen("menu"));
-            // stops update timer
-            //stopUpdateTimer();
+            if(propertyChangeEvent.getPropertyName().equals("lostConnection")) {
+                RogueFantasy.getInstance().setScreen(new LoadScreen("menu"));
+                // stops update timer
+                updateTimer.stop();
+            }
         });
+    }
+
+    public static boolean isInputHappening() {
+        return isInputHappening;
     }
 }

@@ -41,6 +41,7 @@ public class GameRegister {
         kryo.register(Token.class);
         kryo.register(Register.class);
         kryo.register(AddCharacter.class);
+        kryo.register(UpdateCreature.class);
         kryo.register(UpdateCharacter.class);
         kryo.register(UpdateState.class);
         kryo.register(RemoveCharacter.class);
@@ -85,8 +86,16 @@ public class GameRegister {
         public long lastRequestId; // the last move request processed that resulted in this x,y
     }
 
+    static public class UpdateCreature {
+        public long spawnId;
+        public int creatureId;
+        public float x, y, speed, lastVelocityX, lastVelocityY;
+        public String name;
+    }
+
     static public class UpdateState {
         ArrayList<UpdateCharacter> characterUpdates = new ArrayList<>();
+        ArrayList<UpdateCreature> creatureUpdates = new ArrayList<>();
     }
 
     static public class AddCharacter {

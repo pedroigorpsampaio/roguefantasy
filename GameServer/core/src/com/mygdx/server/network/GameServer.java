@@ -8,10 +8,12 @@ import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
 import com.mygdx.server.entity.Component;
+import com.mygdx.server.entity.EntityController;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
 import com.mygdx.server.util.Encoder;
 
+import java.beans.Visibility;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -22,6 +24,12 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import javax.swing.text.Position;
+
+import dev.dominion.ecs.api.Dominion;
+import dev.dominion.ecs.api.Results;
+import dev.dominion.ecs.api.Scheduler;
 
 
 /**
@@ -35,6 +43,7 @@ public class GameServer implements CmdReceiver {
     Set<Component.Character> registeredTokens = ConcurrentHashMap.newKeySet();
     private boolean isOnline = false; // is this server online?
     private LagNetwork lagNetwork; // for lag simulation
+    private EntityController entityController; // controls server entities
 
     public GameServer() {
         server = new Server(65535, 65535) {
@@ -110,7 +119,7 @@ public class GameServer implements CmdReceiver {
                     GameRegister.MoveCharacter msg = (GameRegister.MoveCharacter)object;
 
                     long now = System.currentTimeMillis();
-                    System.out.println(now - character.lastMoveTs);
+                    //System.out.println(now - character.lastMoveTs);
                     // possibly cheat - check if its at least a little bit faster than expected
                     if(now - character.lastMoveTs < GameRegister.clientTickrate()*450f) {
                         // Log.warn("cheat", "Possible move spam cheating - player: " + character.name);
@@ -203,6 +212,9 @@ public class GameServer implements CmdReceiver {
         //mongoController.connect(); // connects to mongo database
         //addListener(mongoController); // adds mongo controller as listener to all game server requests
 
+        // instantiates ECS Dominion object that controls server entities (excluding players)
+        entityController = new EntityController();
+
         // initiates timer that updates game state to all connections
         Timer timer=new Timer();
         timer.scheduleTask(new Timer.Task() {
@@ -277,7 +289,7 @@ public class GameServer implements CmdReceiver {
 
     public void sendStateToAll() {
         GameRegister.UpdateState state = new GameRegister.UpdateState();
-        synchronized(loggedIn) {
+        synchronized(loggedIn) { // prepare character updates
             Iterator i = loggedIn.iterator();
             while (i.hasNext()) {
                 CharacterConnection charConn = (CharacterConnection) i.next();
@@ -289,6 +301,8 @@ public class GameServer implements CmdReceiver {
                 update.lastRequestId = loggedChar.lastMoveId;
                 state.characterUpdates.add(update);
             }
+            // prepare creature updates
+            state.creatureUpdates = entityController.getCreaturesData();
         }
 
         //System.out.println("pos server: " + character.x + " / " + character.y);
@@ -337,6 +351,7 @@ public class GameServer implements CmdReceiver {
             server.stop();
             server.close();
             Log.info("game-server", "Game server has stopped!");
+            entityController.dispose();
             isOnline = false; // server closed, safe to end
             //dbController.close();
         } else
@@ -431,4 +446,5 @@ public class GameServer implements CmdReceiver {
     public static class CharacterConnection extends Connection {
         public Component.Character character;
     }
+
 }

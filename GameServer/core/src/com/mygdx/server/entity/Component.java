@@ -26,4 +26,63 @@ public class Component {
             return charData;
         }
     }
+
+    public static class Position {
+        public float x, y;
+        public float lastVelocityX = 0, lastVelocityY = 0; // the last velocities that changed the position values
+
+        public Position(float x, float y) {this.x = x; this.y = y;}
+
+        @Override
+        public String toString() {
+            return "Position: {x=" + x + ", y=" + y + '}';
+        }
+    }
+
+    public static class Velocity {
+        public float x, y;
+
+        public Velocity(float x, float y) {this.x = x; this.y = y;}
+
+        @Override
+        public String toString() {
+            return "Velocity: {x=" + x + ", y=" + y + '}';
+        }
+    }
+
+    public static class Tag {
+        public int id;
+        public String name;
+        public Tag(int id) {this.id = id;}
+        public Tag(int id, String name) {this.id = id; this.name = name;}
+    }
+
+    public static class Attributes {
+        public float speed;
+        public Attributes(float speed) {this.speed = speed;}
+    }
+
+    public static class Spawn {
+        public long id; // spawn id
+        public Position position; // spawn position
+        public float respawnTime; // time between respawns in seconds
+
+        public Spawn(long id, Position position, float respawnTime) {
+            this.position = position; this.respawnTime = respawnTime;
+        }
+    }
+
+    public static class AI {
+        public Character target = null;
+        public State state = State.IDLE;
+        public enum State {
+            WALKING,
+            RUNNING,
+            IDLE,
+            ATTACKING,
+            FLEEING,
+            DYING
+        }
+    }
+
 }
