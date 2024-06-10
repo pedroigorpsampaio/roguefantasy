@@ -22,7 +22,9 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,7 +43,8 @@ import dev.dominion.ecs.api.Scheduler;
 public class GameServer implements CmdReceiver {
     private static GameServer instance;
     Server server;
-    Set<CharacterConnection> loggedIn = ConcurrentHashMap.newKeySet();
+    //Set<CharacterConnection> loggedIn = ConcurrentHashMap.newKeySet();
+    Map<Integer, CharacterConnection> loggedIn = new ConcurrentHashMap<>();
     Set<Component.Character> registeredTokens = ConcurrentHashMap.newKeySet();
     private boolean isOnline = false; // is this server online?
     private LagNetwork lagNetwork; // for lag simulation
@@ -87,9 +90,10 @@ public class GameServer implements CmdReceiver {
 
                     // check if already logged in
                     synchronized(loggedIn) {
-                        Iterator i = loggedIn.iterator();
+                        Iterator<Map.Entry<Integer, CharacterConnection>> i = loggedIn.entrySet().iterator();
                         while (i.hasNext()) {
-                            CharacterConnection charConn = (CharacterConnection) i.next();
+                            Map.Entry<Integer, CharacterConnection> entry = i.next();
+                            CharacterConnection charConn = entry.getValue();
                             Entity loggedChar = charConn.character;
                             Component.Character charComp = loggedChar.get(Component.Character.class);
                             if(charComp.token.equals(decryptedToken)) {
@@ -125,7 +129,7 @@ public class GameServer implements CmdReceiver {
                     //System.out.println(now - character.lastMoveTs);
                     // possibly cheat - check if its at least a little bit faster than expected
                     if(now - character.lastMoveTs < GameRegister.clientTickrate()*450f) {
-                        // Log.warn("cheat", "Possible move spam cheating - player: " + character.name);
+                        // Log.warn("cheat", "Possible move spam cheating - player: " + character.tag.name);
                         //return; // ignore possible cheat movement
                         //TODO: FIND A WAY TO DETECT HACKED MOVE SPAM CLIENTS
                     }
@@ -133,21 +137,21 @@ public class GameServer implements CmdReceiver {
 
                     if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
                         Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
-                        Vector2 charPos = new Vector2(character.x, character.y);
+                        Vector2 charPos = new Vector2(character.position.x, character.position.y);
                         Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
-                        deltaVec.nor().scl(character.speed*GameRegister.clientTickrate());
+                        deltaVec.nor().scl(character.attr.speed*GameRegister.clientTickrate());
                         Vector2 futurePos = new Vector2(charPos).add(deltaVec);
                         character.dir = new Vector2(deltaVec.x, deltaVec.y).nor();
 
                         if(touchPos.dst(futurePos) <= deltaVec.len()) // close enough, do not move anymore
                             return;
 
-                        character.x += deltaVec.x; character.y += deltaVec.y;
+                        character.position.x += deltaVec.x; character.position.y += deltaVec.y;
                     } else { // wasd movement already has direction in it, just normalize and scale
-                        Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(character.speed*GameRegister.clientTickrate());
+                        Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(character.attr.speed*GameRegister.clientTickrate());
                         character.dir = new Vector2(msg.x, msg.y).nor();
-                        character.x += moveVec.x;
-                        character.y += moveVec.y;
+                        character.position.x += moveVec.x;
+                        character.position.y += moveVec.y;
                     }
 
                     character.lastMoveId = msg.requestId;
@@ -156,25 +160,6 @@ public class GameServer implements CmdReceiver {
                         connection.close();
                         return;
                     }
-
-//                    GameRegister.UpdateCharacter update = new GameRegister.UpdateCharacter();
-//                    update.id = character.id;
-//                    update.x = character.x;
-//                    update.y = character.y;
-//                    update.lastRequestId = msg.requestId;
-//
-//                    System.out.println("pos server: " + character.x + " / " + character.y);
-//
-//                    if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
-//                        Collection<Connection> connections = server.getConnections();
-//                        Iterator<Connection> it = connections.iterator();
-//                        for (int i = 0, n = connections.size(); i < n; i++) {
-//                            lagNetwork.send(update, (CharacterConnection)it.next());
-//                        }
-//                    } else
-//                        server.sendToAllUDP(update);
-
-                    return;
                 }
             }
 
@@ -188,13 +173,19 @@ public class GameServer implements CmdReceiver {
             public void disconnected (Connection c) {
                 CharacterConnection connection = (CharacterConnection)c;
                 if (connection.character != null) {
-                    loggedIn.remove(connection); // remove from logged in list
+                    synchronized (loggedIn) {
+                        loggedIn.remove(connection.character.get(Component.Character.class).tag.id); // remove from logged in list
+                    }
 
                     GameRegister.RemoveCharacter removeCharacter = new GameRegister.RemoveCharacter();
                     Entity loggedChar = connection.character;
                     Component.Character charComp = loggedChar.get(Component.Character.class);
-                    removeCharacter.id = charComp.id;
+                    removeCharacter.id = charComp.tag.id;
                     server.sendToAllTCP(removeCharacter);
+
+                    // dispatch event for ai reactors
+                    EntityController.getInstance().dispatchEventToAll
+                            (new Component.Event(Component.Event.Type.PLAYER_LEFT_AOI,  connection.character));
 
                     EntityController.getInstance().removeEntity(connection.character); // remove from entity dominion
                 }
@@ -246,15 +237,19 @@ public class GameServer implements CmdReceiver {
     void login (CharacterConnection c, Component.Character character) {
         // fill entity with character information
         Component.Character charComp = c.character.get(Component.Character.class);
-        Component.Tag tag = new Component.Tag(character.id, character.name);
-        Component.Attributes attr = new Component.Attributes(character.speed);
-        Component.Position pos = new Component.Position(character.x, character.y);
+        character.dir = new Vector2(0, -1); // start looking south
+        character.tag = new Component.Tag(character.tag.id, character.tag.name);
+        character.attr = new Component.Attributes(32f, 48f, character.attr.speed, character.attr.attackSpeed, 10f);
+        character.position = new Component.Position(character.position.x, character.position.y);
         c.character.remove(charComp);
         //charComp.lastMoveTs = character.lastMoveTs;
-        c.character.add(character); c.character.add(tag); c.character.add(attr); c.character.add(pos);
+        c.character.add(character);
 
         // Add existing characters to new logged in connection.
-        for (CharacterConnection other : loggedIn) {
+        Iterator<Map.Entry<Integer, CharacterConnection>> i = loggedIn.entrySet().iterator();
+        while (i.hasNext()) {
+            Map.Entry<Integer, CharacterConnection> entry = i.next();
+            CharacterConnection other = entry.getValue();
             GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
             // translate to safe to send character data
             Component.Character comp = other.character.get(Component.Character.class);
@@ -262,10 +257,23 @@ public class GameServer implements CmdReceiver {
             c.sendTCP(addCharacter);
         }
 
-        loggedIn.add(c);
+//        for (CharacterConnection other : loggedIn) {
+//            GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
+//            // translate to safe to send character data
+//            Component.Character comp = other.character.get(Component.Character.class);
+//            addCharacter.character = comp.toSendToClient();
+//            c.sendTCP(addCharacter);
+//        }
+
+        loggedIn.putIfAbsent(character.tag.id, c);
+
+        // dispatch event for ai reactors
+        EntityController.getInstance().dispatchEventToAll
+                (new Component.Event(Component.Event.Type.PLAYER_ENTERED_AOI,  c.character));
+
         // sends to client his ID so he can distinguish itself from his list of characters
         GameRegister.ClientId clientId = new GameRegister.ClientId();
-        clientId.id = character.id;
+        clientId.id = character.tag.id;
         c.sendTCP(clientId);
 
         // Add logged in character to all connections.
@@ -275,23 +283,23 @@ public class GameServer implements CmdReceiver {
     }
 
     boolean saveCharacter (Component.Character character) {
-        File file = new File("characters", character.name.toLowerCase());
+        File file = new File("characters", character.tag.name.toLowerCase());
         file.getParentFile().mkdirs();
 
-        if (character.id == 0) {
+        if (character.tag.id == 0) {
             String[] children = file.getParentFile().list();
             if (children == null) return false;
-            character.id = children.length + 1;
+            character.tag.id = children.length + 1;
         }
 
         DataOutputStream output = null;
         try {
             output = new DataOutputStream(new FileOutputStream(file));
-            output.writeInt(character.id);
+            output.writeInt(character.tag.id);
             output.writeInt(character.role_level);
-            output.writeFloat(character.x);
-            output.writeFloat(character.y);
-            output.writeFloat(character.speed);
+            output.writeFloat(character.position.x);
+            output.writeFloat(character.position.y);
+            output.writeFloat(character.attr.speed);
             return true;
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -307,15 +315,16 @@ public class GameServer implements CmdReceiver {
     public void sendStateToAll() {
         GameRegister.UpdateState state = new GameRegister.UpdateState();
         synchronized(loggedIn) { // prepare character updates
-            Iterator i = loggedIn.iterator();
+            Iterator<Map.Entry<Integer, CharacterConnection>> i = loggedIn.entrySet().iterator();
             while (i.hasNext()) {
-                CharacterConnection charConn = (CharacterConnection) i.next();
+                Map.Entry<Integer, CharacterConnection> entry = i.next();
+                CharacterConnection charConn = entry.getValue();
                 Entity loggedChar = charConn.character;
                 Component.Character charComp = loggedChar.get(Component.Character.class);
                 GameRegister.UpdateCharacter update = new GameRegister.UpdateCharacter();
-                update.id = charComp.id;
-                update.x = charComp.x;
-                update.y = charComp.y;
+                update.id = charComp.tag.id;
+                update.x = charComp.position.x;
+                update.y = charComp.position.y;
                 update.dir = charComp.dir;
                 update.lastRequestId = charComp.lastMoveId;
                 state.characterUpdates.add(update);
@@ -324,7 +333,7 @@ public class GameServer implements CmdReceiver {
             state.creatureUpdates = entityController.getCreaturesData();
         }
 
-        //System.out.println("pos server: " + character.x + " / " + character.y);
+        //System.out.println("pos server: " + character.position.x + " / " + character.position.y);
 
         if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
             Collection<Connection> connections = server.getConnections();
@@ -337,7 +346,7 @@ public class GameServer implements CmdReceiver {
     }
 
     Component.Character loadCharacter (Component.Character character) {
-        File file = new File("characters", character.name.toLowerCase());
+        File file = new File("characters", character.tag.name.toLowerCase());
         if (!file.exists()) { // creates char if it does not exist yet
             saveCharacter(character);
             return character;
@@ -345,11 +354,11 @@ public class GameServer implements CmdReceiver {
         DataInputStream input = null;
         try {
             input = new DataInputStream(new FileInputStream(file));
-            character.id = input.readInt();
+            character.tag.id = input.readInt();
             character.role_level = input.readInt();
-            character.x = input.readFloat();
-            character.y = input.readFloat();
-            character.speed = input.readFloat();
+            character.position.x = input.readFloat();
+            character.position.y = input.readFloat();
+            character.attr.speed = input.readFloat();
             input.close();
             return character;
         } catch (IOException ex) {
@@ -411,12 +420,13 @@ public class GameServer implements CmdReceiver {
         }
         // if user is logged in, return and send already logged in msg
         synchronized(loggedIn) {
-            Iterator i = loggedIn.iterator();
+            Iterator<Map.Entry<Integer, CharacterConnection>> i = loggedIn.entrySet().iterator();
             while (i.hasNext()) {
-                CharacterConnection connectChar = (CharacterConnection) i.next();
+                Map.Entry<Integer, CharacterConnection> entry = i.next();
+                CharacterConnection connectChar = entry.getValue();
                 Entity loggedChar = connectChar.character;
                 Component.Character c = loggedChar.get(Component.Character.class);
-                if(c.id == conn.charData.id) {
+                if(c.tag.id == conn.charData.id) {
                     conn.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.USER_ALREADY_LOGGED_IN));
                     conn.close();
                     return;
@@ -428,19 +438,21 @@ public class GameServer implements CmdReceiver {
             Iterator i = registeredTokens.iterator();
             while (i.hasNext()) {
                 character = (Component.Character) i.next();
-                if(character.id == conn.charData.id) { // has token, send token without generating one
+                if(character.tag.id == conn.charData.id) { // has token, send token without generating one
                     sendTokenAsync(conn, character.token);
-                    Log.debug("login-server", character.name+" is registered and has a token: "+character.token);
+                    Log.debug("login-server", character.tag.name+" is registered and has a token: "+character.token);
                     return;
                 }
             }
             // if char does not have a token, generate a new one
             // TODO: LOAD CHARACTER FROM PERSISTED STORAGE
             character = new Component.Character();
-            character.token = Encoder.generateNewToken(); character.id = conn.charData.id;
-            character.name = conn.charData.character; character.role_level = conn.charData.roleLevel;
-            character.x = 0; character.y = 0; character.speed = 250f;
-            Log.debug("login-server", character.name+" is NOT registered, new token generated! "+character.token);
+            character.token = Encoder.generateNewToken();
+            character.role_level = conn.charData.roleLevel;
+            character.tag = new Component.Tag(conn.charData.id, conn.charData.character);
+            character.position = new Component.Position(0, 0);
+            character.attr = new Component.Attributes(32f, 48f, 250f,50f, 10f);
+            Log.debug("login-server", character.tag.name+" is NOT registered, new token generated! "+character.token);
             registeredTokens.add(character); // adds character to registered list with new token
             sendTokenAsync(conn, character.token);
         }

@@ -1,7 +1,6 @@
 package com.mygdx.server.network;
 
 import com.badlogic.gdx.utils.Timer;
-import com.esotericsoftware.kryonet.Client;
 
 import com.mygdx.server.network.GameServer.CharacterConnection;
 

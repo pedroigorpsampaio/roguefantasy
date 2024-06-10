@@ -1,5 +1,6 @@
 package com.mygdx.game.network;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Timer;
@@ -264,8 +265,23 @@ public class GameClient extends DispatchServer {
             } else // if its already on list, get it to update it
                 creature = creatures.get(creatureUpdate.spawnId);
 
+            Entity.Character target = characters.get(creatureUpdate.targetId);
+
+            if(target != null && target.id == getInstance().clientCharId
+                    && (Entity.State.getStateFromName(creatureUpdate.state) == Entity.State.FOLLOWING
+                    || Entity.State.getStateFromName(creatureUpdate.state) == Entity.State.ATTACKING)) {
+//                creature.update(creatureUpdate.x, creatureUpdate.y, creatureUpdate.lastVelocityX,
+//                        creatureUpdate.lastVelocityY, creatureUpdate.speed, creatureUpdate.attackSpeed, creatureUpdate.state,
+//                        target);
+                System.out.println(creatureUpdate.state);
+                creature.target = target; creature.speed = creatureUpdate.speed; creature.attackSpeed = creatureUpdate.attackSpeed;
+                // leave the rest of info for the client prediction
+                return;
+            }
+
             creature.update(creatureUpdate.x, creatureUpdate.y, creatureUpdate.lastVelocityX,
-                                creatureUpdate.lastVelocityY, creatureUpdate.speed);
+                    creatureUpdate.lastVelocityY, creatureUpdate.speed, creatureUpdate.attackSpeed, creatureUpdate.state,
+                    target);
 
             //TODO: REMOVAL OF LIST WHEN NOT VISIBLE OR AFTER DEATH ANIMATION
         }
@@ -307,18 +323,22 @@ public class GameClient extends DispatchServer {
         }
 
         public void removeCharacter (int id) {
-            Entity.Character character = characters.remove(id); // remove from list of logged chars
-            if (character != null) {
-                character.dispose();
-                System.out.println(character.name + " removed");
-            }
+            Gdx.app.postRunnable(() -> { //  wait for libgdx UI thread in case its iterating it
+                Entity.Character character = characters.remove(id); // remove from list of logged chars
+                if (character != null) {
+                    character.dispose();
+                    System.out.println(character.name + " removed");
+                }
+            });
         }
 
         public void removeAllCreatures() {
-            for (Entity.Creature c : creatures.values()) {
-                c.dispose();
-            }
-            creatures.clear();
+            Gdx.app.postRunnable(() -> { //  wait for libgdx UI thread in case its iterating it
+                for (Entity.Creature c : creatures.values()) {
+                    c.dispose();
+                }
+                creatures.clear();
+            });
         }
 
         public void removeCreature(long id) {

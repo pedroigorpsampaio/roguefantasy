@@ -4,6 +4,7 @@ package com.mygdx.server.network;
 import com.badlogic.gdx.math.Vector2;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryonet.EndPoint;
+import com.mygdx.server.entity.Component;
 
 import java.util.ArrayList;
 
@@ -91,8 +92,10 @@ public class GameRegister {
     static public class UpdateCreature {
         public long spawnId;
         public int creatureId;
-        public float x, y, speed, lastVelocityX, lastVelocityY;
-        public String name;
+        public float x, y, speed, attackSpeed, lastVelocityX, lastVelocityY, range;
+        public int targetId; // in case is following a player
+        public long timestamp; // the last timestamp request processed that resulted in this x,y
+        public String name, state;
     }
 
     static public class UpdateState {

@@ -2,6 +2,7 @@ package com.mygdx.server.entity;
 
 import com.mygdx.server.network.GameRegister;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Iterator;
 
@@ -26,16 +27,15 @@ public class EntityController {
         dominion  = Dominion.create();
 
         // spawn one wolf for testing
-        dominion.createEntity(
+        Entity wolfPrefab = dominion.createEntity(
                 "Herr Wolfgang IV",
                 new Component.Tag(0, "Herr Wolfgang IV"),
                 new Component.Position(222, 222),
                 new Component.Velocity(0, 0),
-                new Component.Attributes(100f),
-                new Component.Spawn(0, new Component.Position(222, 222), 15),
-                new Component.StateMachine(),
-                new Component.AI()
-        ).setState(Component.StateMachine.State.IDLE);
+                new Component.Attributes(60f, 68f, 100f, 50f, 20f),
+                new Component.Spawn(0, new Component.Position(222, 222), 15)
+        ).setState(Component.AI.State.IDLE);
+        wolfPrefab.add(new Component.AI(wolfPrefab));
 
         // create systems
         scheduler = createSystems();
@@ -58,33 +58,9 @@ public class EntityController {
         // adds a system to update AI
         scheduler.schedule(() -> {
             // finds AI entities to update
-            dominion.findEntitiesWith(Component.Spawn.class, Component.AI.class, Component.Attributes.class,
-                    Component.Velocity.class, Component.Position.class).stream().forEach(r -> {
-                Component.Spawn spawn = r.comp1();
-                Component.AI AI = r.comp2();
-                Component.Attributes attributes = r.comp3();
-                Component.Velocity velocity = r.comp4();
-                Component.Position position = r.comp5();
-
-                if(AI.target == null) { // move aimlessly
-                    if(position.x <= spawn.position.x && position.y <= spawn.position.y) {
-                        velocity.x = 1 * attributes.speed * GameRegister.clientTickrate();
-                        velocity.y = 0;
-                    }
-                    if (position.x >= spawn.position.x + 100 && position.y <= spawn.position.y) {
-                        velocity.x = 0;
-                        velocity.y = 1 * attributes.speed * GameRegister.clientTickrate();
-                    }
-                    if(position.x >= spawn.position.x + 100 && position.y >= spawn.position.y + 100) {
-                        velocity.x = -1 * attributes.speed * GameRegister.clientTickrate();
-                        velocity.y = 0;
-                    }
-                    if(position.x <= spawn.position.x && position.y >= spawn.position.y + 100){
-                        velocity.x = 0;
-                        velocity.y = -1 * attributes.speed * GameRegister.clientTickrate();
-                    }
-
-                }
+            dominion.findEntitiesWith(Component.AI.class).stream().forEach(r -> {
+                Component.AI AI = r.comp();
+                AI.act();
             });
         });
 
@@ -101,8 +77,8 @@ public class EntityController {
                         position.y += velocity.y;
                         position.lastVelocityX = velocity.x;
                         position.lastVelocityY = velocity.y;
-                        System.out.printf("Entity %s moved with %s to %s\n",
-                                tag.name, velocity, position);
+//                        System.out.printf("Entity %s moved with %s to %s\n",
+//                                tag.name, velocity, position);
                     });
         });
 
@@ -112,15 +88,15 @@ public class EntityController {
     // prepares entities data to be sent to clients
     public ArrayList<GameRegister.UpdateCreature> getCreaturesData() {
         // finds all creature entities
-        Results<Results.With3<Component.Attributes, Component.Spawn, Component.StateMachine>> entities =
-                dominion.findEntitiesWith(Component.Attributes.class, Component.Spawn.class, Component.StateMachine.class);
+        Results<Results.With3<Component.Attributes, Component.Spawn, Component.AI>> entities =
+                dominion.findEntitiesWith(Component.Attributes.class, Component.Spawn.class, Component.AI.class);
         // selects only the visible entities
         // iterator = entities.withState(Visibility.VISIBLE).iterator();
         // iterates through entities found adding them to array
-        Iterator<Results.With3<Component.Attributes, Component.Spawn, Component.StateMachine>> iterator = entities.iterator();
+        Iterator<Results.With3<Component.Attributes, Component.Spawn, Component.AI>> iterator = entities.iterator();
         ArrayList<GameRegister.UpdateCreature> creatureData = new ArrayList<>();
         while (iterator.hasNext()) {
-            Results.With3<Component.Attributes, Component.Spawn, Component.StateMachine> entity = iterator.next();
+            Results.With3<Component.Attributes, Component.Spawn, Component.AI> entity = iterator.next();
             GameRegister.UpdateCreature creatureUpdate = new GameRegister.UpdateCreature();
             creatureUpdate.creatureId = entity.entity().get(Component.Tag.class).id;
             creatureUpdate.name = entity.entity().get(Component.Tag.class).name;
@@ -128,8 +104,17 @@ public class EntityController {
             creatureUpdate.x = entity.entity().get(Component.Position.class).x;
             creatureUpdate.y = entity.entity().get(Component.Position.class).y;
             creatureUpdate.speed = entity.entity().get(Component.Attributes.class).speed;
+            creatureUpdate.attackSpeed = entity.entity().get(Component.Attributes.class).attackSpeed;
+            creatureUpdate.range = entity.entity().get(Component.Attributes.class).range;
             creatureUpdate.lastVelocityX = entity.entity().get(Component.Position.class).lastVelocityX;
             creatureUpdate.lastVelocityY = entity.entity().get(Component.Position.class).lastVelocityY;
+            creatureUpdate.state = entity.entity().get(Component.AI.class).state.getName();
+            creatureUpdate.timestamp = Instant.now().toEpochMilli();
+            Entity target = entity.entity().get(Component.AI.class).target;
+            if(target != null)
+                creatureUpdate.targetId = entity.entity().get(Component.AI.class).target.get(Component.Character.class).tag.id;
+            else
+                creatureUpdate.targetId = -1;
             creatureData.add(creatureUpdate);
         }
         return creatureData;
@@ -138,9 +123,17 @@ public class EntityController {
     // creates an empty character entity to be filled with char information later
     public Entity createCharacter () {
         return dominion.createEntity(
-                new Component.Character(),
-                new Component.StateMachine()
-        ).setState(Component.StateMachine.State.IDLE);
+                new Component.Character()
+        );
+    }
+
+    // dispatch event to all AI event reactors
+    public void dispatchEventToAll (Component.Event event) {
+        // finds AI entities to dispatch event
+        dominion.findEntitiesWith(Component.AI.class).stream().forEach(r -> {
+            Component.AI AI = r.comp();
+            AI.react(event);
+        });
     }
 
     public void removeEntity (Entity entity) {

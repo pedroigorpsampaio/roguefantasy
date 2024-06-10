@@ -4,19 +4,15 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
-import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
-import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
 
 import java.util.Map;
@@ -57,10 +53,42 @@ public class Entity {
         }
     }
 
+    public enum State {
+        WALKING("WALKING"),
+        RUNNING("RUNNING"),
+        IDLE("IDLE"),
+        IDLE_WALKING("IDLE_WALKING"),
+        FOLLOWING("FOLLOWING"),
+        ATTACKING("ATTACKING"),
+        FLEEING("FLEEING"),
+        DYING("DYING");
+
+        public String name;
+
+        State(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public static State getStateFromName(String name){
+            for (State st : State.values()) {
+                if (st.name.equalsIgnoreCase(name)) {
+                    return st;
+                }
+            }
+            //throw new Exception("No enum constant with text " + text + " found");
+            return null;
+        }
+
+    }
+
     public static class Character {
         // Constant rows and columns of the sprite sheet
         private static final int FRAME_COLS = 6, FRAME_ROWS = 24;
-        private static final float ANIM_BASE_INTERVAL = 0.00035f; // the base interval between anim frames
+        private static final float ANIM_BASE_INTERVAL = 0.25175f; // the base interval between anim frames
         private final Skin skin;
         private final Font font;
         public AtomicLong lastRequestId;
@@ -124,6 +152,9 @@ public class Entity {
                         spriteSheet.getWidth() / FRAME_COLS,
                         spriteSheet.getHeight() / FRAME_ROWS);
 
+                float atkFactor = 20f / (speed*0.33f);
+                float walkFactor = 20f / (speed*0.33f);
+
                 // Place the regions into a 1D array in the correct order, starting from the top
                 // left, going across first. The Animation constructor requires a 1D array.
                 for(int i = 0; i < FRAME_ROWS; i++) {
@@ -134,76 +165,76 @@ public class Entity {
                     }
                     switch(i) { // switch rows to add each animation correctly
                         case 0:
-                            idle.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            idle.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
                             break;
                         case 1:
-                            walk.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            walk.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 2:
-                            attack.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            attack.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
                             break;
                         case 3:
-                            idle.put(Direction.SOUTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            idle.put(Direction.SOUTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
                             break;
                         case 4:
-                            walk.put(Direction.SOUTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            walk.put(Direction.SOUTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 5:
-                            attack.put(Direction.SOUTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            attack.put(Direction.SOUTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
                             break;
                         case 6:
-                            idle.put(Direction.WEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            idle.put(Direction.WEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
                             break;
                         case 7:
-                            walk.put(Direction.WEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            walk.put(Direction.WEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 8:
-                            attack.put(Direction.WEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            attack.put(Direction.WEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
                             break;
                         case 9:
-                            idle.put(Direction.NORTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            idle.put(Direction.NORTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
                             break;
                         case 10:
-                            walk.put(Direction.NORTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            walk.put(Direction.NORTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 11:
-                            attack.put(Direction.NORTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            attack.put(Direction.NORTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
                             break;
                         case 12:
-                            idle.put(Direction.NORTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            idle.put(Direction.NORTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
                             break;
                         case 13:
-                            walk.put(Direction.NORTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            walk.put(Direction.NORTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 14:
-                            attack.put(Direction.NORTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            attack.put(Direction.NORTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
                             break;
                         case 15:
-                            idle.put(Direction.SOUTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            idle.put(Direction.SOUTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
                             break;
                         case 16:
-                            walk.put(Direction.SOUTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            walk.put(Direction.SOUTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 17:
-                            attack.put(Direction.SOUTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            attack.put(Direction.SOUTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
                             break;
                         case 18:
-                            idle.put(Direction.EAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            idle.put(Direction.EAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
                             break;
                         case 19:
-                            walk.put(Direction.EAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            walk.put(Direction.EAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 20:
-                            attack.put(Direction.EAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            attack.put(Direction.EAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
                             break;
                         case 21:
-                            idle.put(Direction.NORTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            idle.put(Direction.NORTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
                             break;
                         case 22:
-                            walk.put(Direction.NORTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            walk.put(Direction.NORTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 23:
-                            attack.put(Direction.NORTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * speed, frames));
+                            attack.put(Direction.NORTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
                             break;
                         default:
                             break;
@@ -384,7 +415,8 @@ public class Entity {
     public static class Creature {
         // Constant rows and columns of the sprite sheet
         private static final int FRAME_COLS = 15, FRAME_ROWS = 16;
-        private static final float ANIM_BASE_INTERVAL = 0.00075f; // the base interval between anim frames
+        private static final float ANIM_BASE_INTERVAL = 0.25175f; // the base interval between anim frames
+        public Character target;
         public boolean assetsLoaded = false;
         private Skin skin;
         private Font font;
@@ -396,19 +428,26 @@ public class Entity {
         public int creatureId;
         public long spawnId;
         public Vector2 position, interPos, lastVelocity, startPos;
-        public float x, y, speed, spriteW, spriteH;
+        public float x, y, speed, attackSpeed, range, spriteW, spriteH;
+        public State state;
         public TypingLabel nameLabel, outlineLabel;
+        public int targetId;
 
-        public Creature(String name, int creatureId, long spawnId, float x, float y, float speed,
-                        float lastVelocityX, float lastVelocityY) {
+        public Creature(String name, int creatureId, long spawnId, float x, float y, float speed, float attackSpeed,
+                        float range, float lastVelocityX, float lastVelocityY, String stateName, int targetId) {
             this.name = name;
             this.creatureId = creatureId; this.spawnId = spawnId;
             this.position = new Vector2(x, y);
             this.interPos = new Vector2(x, y);
             this.lastVelocity = new Vector2(lastVelocityX, lastVelocityY);
             this.startPos = new Vector2(interPos.x, interPos.y);
+            this.state = State.getStateFromName(stateName);
+            this.target = GameClient.getInstance().getOnlineCharacters().get(targetId);
             this.x = x;
             this.y = y;
+            this.speed = speed;
+            this.attackSpeed = attackSpeed;
+            this.range = range;
             direction = Direction.SOUTHWEST;
             skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             font = skin.get("emojiFont", Font.class); // gets typist font with icons
@@ -438,33 +477,89 @@ public class Entity {
                 for (int j = 0; j < 8; j++) {
                     frames[index++] = tmp[12][j];
                 }
-                walk.put(Direction.SOUTHWEST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
-                walk.put(Direction.SOUTH, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
-                walk.put(Direction.WEST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                walk.put(Direction.SOUTHWEST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
+                walk.put(Direction.SOUTH, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
+                walk.put(Direction.WEST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
                 index = 0;
                 frames = new TextureRegion[8];
                 for (int j = 0; j < 8; j++) {
                     frames[index++] = tmp[13][j];
                 }
-                walk.put(Direction.SOUTHEAST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
-                walk.put(Direction.EAST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                walk.put(Direction.SOUTHEAST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
+                walk.put(Direction.EAST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
                 index = 0;
                 frames = new TextureRegion[8];
                 for (int j = 0; j < 8; j++) {
                     frames[index++] = tmp[14][j];
                 }
-                walk.put(Direction.NORTHWEST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
-                walk.put(Direction.NORTH, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                walk.put(Direction.NORTHWEST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
+                walk.put(Direction.NORTH, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
                 index = 0;
                 frames = new TextureRegion[8];
                 for (int j = 0; j < 8; j++) {
                     frames[index++] = tmp[15][j];
                 }
-                walk.put(Direction.NORTHEAST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                walk.put(Direction.NORTHEAST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
                 spriteW = frames[0].getRegionWidth();
                 spriteH = frames[0].getRegionHeight();
-
-
+                // idle
+                frames = new TextureRegion[4];
+                index = 0;
+                for (int j = 11; j < 15; j++) {
+                    frames[index++] = tmp[12][j];
+                }
+                idle.put(Direction.SOUTHWEST, new Animation<>(ANIM_BASE_INTERVAL, frames));
+                idle.put(Direction.SOUTH, new Animation<>(ANIM_BASE_INTERVAL, frames));
+                idle.put(Direction.WEST, new Animation<>(ANIM_BASE_INTERVAL, frames));
+                index = 0;
+                frames = new TextureRegion[4];
+                for (int j = 11; j < 15; j++) {
+                    frames[index++] = tmp[13][j];
+                }
+                idle.put(Direction.SOUTHEAST, new Animation<>(ANIM_BASE_INTERVAL, frames));
+                idle.put(Direction.EAST, new Animation<>(ANIM_BASE_INTERVAL, frames));
+                index = 0;
+                frames = new TextureRegion[4];
+                for (int j = 11; j < 15; j++) {
+                    frames[index++] = tmp[14][j];
+                }
+                idle.put(Direction.NORTHWEST, new Animation<>(ANIM_BASE_INTERVAL, frames));
+                idle.put(Direction.NORTH, new Animation<>(ANIM_BASE_INTERVAL, frames));
+                index = 0;
+                frames = new TextureRegion[4];
+                for (int j = 11; j < 15; j++) {
+                    frames[index++] = tmp[15][j];
+                }
+                idle.put(Direction.NORTHEAST, new Animation<>(ANIM_BASE_INTERVAL, frames));
+                // attack
+                frames = new TextureRegion[15];
+                index = 0;
+                for (int j = 0; j < 15; j++) {
+                    frames[index++] = tmp[0][j];
+                }
+                attack.put(Direction.SOUTHWEST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                attack.put(Direction.SOUTH, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                attack.put(Direction.WEST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                index = 0;
+                frames = new TextureRegion[15];
+                for (int j = 0; j < 15; j++) {
+                    frames[index++] = tmp[1][j];
+                }
+                attack.put(Direction.SOUTHEAST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                attack.put(Direction.EAST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                index = 0;
+                frames = new TextureRegion[15];
+                for (int j = 0; j < 15; j++) {
+                    frames[index++] = tmp[2][j];
+                }
+                attack.put(Direction.NORTHWEST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                attack.put(Direction.NORTH, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                index = 0;
+                frames = new TextureRegion[15];
+                for (int j = 0; j < 15; j++) {
+                    frames[index++] = tmp[3][j];
+                }
+                attack.put(Direction.NORTHEAST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
                 // reset the elapsed animation time
                 animTime = 0f;
 
@@ -476,14 +571,17 @@ public class Entity {
             return new Vector2(this.interPos.x + spriteW/2f, this.interPos.y + spriteH/2f);
         }
 
-        public void update(float x, float y, float lastVelocityX, float lastVelocityY, float speed) {
+        public void update(float x, float y, float lastVelocityX, float lastVelocityY, float speed, float attackSpeed, String stateName, Character target) {
             this.x = x;
             this.y = y;
             this.position.x = x;
             this.position.y = y;
             this.lastVelocity.x = lastVelocityX;
             this.lastVelocity.y = lastVelocityY;
+            this.attackSpeed = attackSpeed;
             this.speed = speed;
+            this.state = State.getStateFromName(stateName);
+            this.target = target;
         }
 
         public void render(SpriteBatch batch) {
@@ -492,9 +590,31 @@ public class Entity {
 
             Map<Direction, Animation<TextureRegion>> currentAnimation = walk; // only walk anim for now
 
+            switch (state) {
+                case IDLE:
+                    currentAnimation = idle;
+                    break;
+                case FOLLOWING:
+                case IDLE_WALKING:
+                    currentAnimation = walk;
+                    break;
+                case ATTACKING:
+                    currentAnimation = attack;
+                    break;
+                default:
+                    break;
+            }
+
+            // try to predict position if its following this player
+            if(target != null && target.id == GameClient.getInstance().getClientCharacter().id) {
+                this.x = target.interPos.x - target.spriteW/2f;
+                this.y = target.interPos.y - target.spriteH/2f;
+                this.position.x = target.interPos.x - target.spriteW/2f;
+                this.position.y = target.interPos.y - target.spriteH/2f;
+            }
+
             if(interPos.dst(position) != 0f && Common.entityInterpolation) {
                 interpolate2();
-                currentAnimation = walk;
             }
 
             animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
@@ -548,18 +668,30 @@ public class Entity {
 
             float speedFactor = this.speed * Gdx.graphics.getDeltaTime();
 
-            if(interPos.dst(position) <= speedFactor) { // updates to players position if its close enough
+            // adjust for client prediction if this is the client player
+            float clientOffset = 0f;
+            if(target != null && target.id == GameClient.getInstance().getClientCharacter().id)
+                clientOffset = range;
+
+            if(interPos.dst(position) <= speedFactor + clientOffset) { // walks towards position until its close enough
                 //updateStage(position.x, position.y, true);
-                interPos.x = position.x; interPos.y = position.y;
+                //interPos.x = position.x; interPos.y = position.y;
                 lastVelocity.x = 0; lastVelocity.y = 0;
+                // predict state (only if it is the target)
+                if(target != null  && target.id == GameClient.getInstance().getClientCharacter().id)
+                    state = State.ATTACKING;
                 return;
             } // if not, interpolate
+
             Vector2 dir = new Vector2(position.x, position.y).sub(interPos);
             dir = dir.nor();
             direction = Direction.getDirection(Math.round(dir.x), Math.round(dir.y));
             Vector2 move = new Vector2(dir.x, dir.y).scl(speedFactor);
             Vector2 futurePos = new Vector2(interPos.x, interPos.y).add(move);
             this.interPos.x = futurePos.x; this.interPos.y = futurePos.y;
+            // predict state (only if it is the target)
+            if(target != null  && target.id == GameClient.getInstance().getClientCharacter().id)
+                state = State.FOLLOWING;
             //updateStage(futurePos.x, futurePos.y, true);
         }
 
@@ -570,8 +702,9 @@ public class Entity {
         // transform a creature update from server into a creature object from client
         public static Creature toCreature(GameRegister.UpdateCreature creatureUpdate) {
             return new Creature(creatureUpdate.name, creatureUpdate.creatureId, creatureUpdate.spawnId,
-                    creatureUpdate.x, creatureUpdate.y, creatureUpdate.speed,
-                    creatureUpdate.lastVelocityX, creatureUpdate.lastVelocityY);
+                    creatureUpdate.x, creatureUpdate.y, creatureUpdate.speed, creatureUpdate.attackSpeed,
+                    creatureUpdate.range, creatureUpdate.lastVelocityX, creatureUpdate.lastVelocityY,
+                    creatureUpdate.state, creatureUpdate.targetId);
         }
     }
 }
