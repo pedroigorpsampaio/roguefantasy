@@ -6,14 +6,22 @@ import java.util.ArrayList;
 import java.util.Iterator;
 
 import dev.dominion.ecs.api.Dominion;
+import dev.dominion.ecs.api.Entity;
 import dev.dominion.ecs.api.Results;
 import dev.dominion.ecs.api.Scheduler;
 
 public class EntityController {
     private Dominion dominion; // the domain/world containing all entities
     private Scheduler scheduler;
+    private static EntityController instance = null;
 
-    public EntityController() {
+    public static EntityController getInstance() {
+        if(instance == null)
+            instance = new EntityController();
+        return instance;
+    }
+
+    private EntityController() {
         // create ecs world
         dominion  = Dominion.create();
 
@@ -25,13 +33,13 @@ public class EntityController {
                 new Component.Velocity(0, 0),
                 new Component.Attributes(100f),
                 new Component.Spawn(0, new Component.Position(222, 222), 15),
+                new Component.StateMachine(),
                 new Component.AI()
-        ).setState(Component.AI.State.IDLE);
+        ).setState(Component.StateMachine.State.IDLE);
 
         // create systems
         scheduler = createSystems();
-        scheduler.tickAtFixedRate(GameRegister.clientTickrate); // updates at the same speed client does
-
+        scheduler.tickAtFixedRate(GameRegister.clientTickrate); // updates at the same speed client doe
 
     }
 
@@ -104,14 +112,15 @@ public class EntityController {
     // prepares entities data to be sent to clients
     public ArrayList<GameRegister.UpdateCreature> getCreaturesData() {
         // finds all creature entities
-        Results<Results.With1<Component.Attributes>> entities = dominion.findEntitiesWith(Component.Attributes.class);
+        Results<Results.With3<Component.Attributes, Component.Spawn, Component.StateMachine>> entities =
+                dominion.findEntitiesWith(Component.Attributes.class, Component.Spawn.class, Component.StateMachine.class);
         // selects only the visible entities
         // iterator = entities.withState(Visibility.VISIBLE).iterator();
         // iterates through entities found adding them to array
-        Iterator<Results.With1<Component.Attributes>> iterator = entities.iterator();
+        Iterator<Results.With3<Component.Attributes, Component.Spawn, Component.StateMachine>> iterator = entities.iterator();
         ArrayList<GameRegister.UpdateCreature> creatureData = new ArrayList<>();
         while (iterator.hasNext()) {
-            Results.With1<Component.Attributes> entity = iterator.next();
+            Results.With3<Component.Attributes, Component.Spawn, Component.StateMachine> entity = iterator.next();
             GameRegister.UpdateCreature creatureUpdate = new GameRegister.UpdateCreature();
             creatureUpdate.creatureId = entity.entity().get(Component.Tag.class).id;
             creatureUpdate.name = entity.entity().get(Component.Tag.class).name;
@@ -124,5 +133,17 @@ public class EntityController {
             creatureData.add(creatureUpdate);
         }
         return creatureData;
+    }
+
+    // creates an empty character entity to be filled with char information later
+    public Entity createCharacter () {
+        return dominion.createEntity(
+                new Component.Character(),
+                new Component.StateMachine()
+        ).setState(Component.StateMachine.State.IDLE);
+    }
+
+    public void removeEntity (Entity entity) {
+        dominion.deleteEntity(entity);
     }
 }

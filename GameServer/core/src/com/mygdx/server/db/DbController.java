@@ -341,7 +341,7 @@ public class DbController implements PropertyChangeListener {
                 break;
             case "loginRequest":
                 if(!loginUser(request))  // tries to login user if everything is ok
-                    request.getConnection().close();// do not close connection for login unless an error happened
+                    request.getConnection().close();
                 break;
             default:
                 Log.debug("postgres", "Unknown client request to PostgresDb controller"

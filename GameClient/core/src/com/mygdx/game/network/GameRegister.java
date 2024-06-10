@@ -1,5 +1,6 @@
 package com.mygdx.game.network;
 
+import com.badlogic.gdx.math.Vector2;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryonet.EndPoint;
 import com.esotericsoftware.kryonet.FrameworkMessage;
@@ -33,6 +34,7 @@ public class GameRegister {
     static public void register (EndPoint endPoint) {
         Kryo kryo = endPoint.getKryo();
         kryo.register(byte[].class);
+        kryo.register(Vector2.class);
         kryo.register(ArrayList.class);
         kryo.register(Ping.class);
         kryo.register(Response.class);
@@ -84,6 +86,7 @@ public class GameRegister {
         public int id;
         public float x, y;
         public long lastRequestId; // the last move request processed that resulted in this x,y
+        public Vector2 dir;
     }
 
     static public class UpdateCreature {

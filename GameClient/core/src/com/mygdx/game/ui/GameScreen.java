@@ -198,7 +198,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
             @Override
             public boolean scrolled(InputEvent event, float x, float y, float amountX, float amountY) {
-                aimZoom = camera.zoom + amountY * 2f;
+                aimZoom = camera.zoom + amountY * 3f;
                 //camera.zoom += amountY;
                 return super.scrolled(event, x, y, amountX, amountY);
             }
@@ -238,9 +238,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         // sends to server the raw movement to be calculated by the authoritative server
         gameClient.moveCharacter(msg);
+        Entity.Character player = gameClient.getClientCharacter();
         // if client prediction is enabled, try to predict the movement calculating it locally
         if(Common.clientPrediction)
-            gameClient.getClientCharacter().predictMovement(msg);
+            player.predictMovement(msg);
+        // calculates player direction
+        Vector2 dir = new Vector2(0,0);
+        if(msg.hasEndPoint) {
+            dir = new Vector2(msg.xEnd, msg.yEnd).sub(player.position).nor();
+        } else {
+            dir = new Vector2(msg.x, msg.y).nor();
+        }
+        player.direction = Entity.Direction.getDirection(MathUtils.round(dir.x), MathUtils.round(dir.y));
     }
 
     /**
@@ -259,7 +268,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         if(Gdx.input.isTouched(0)){
             vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
             vec3 = camera.unproject(vec3); // unproject screen touch
-            touchPos = new Vector2(vec3.x, vec3.y);
+            touchPos = new Vector2(vec3.x - gameClient.getClientCharacter().spriteW/2f,  // compensate to use center of char sprite as anchor
+                                    vec3.y - gameClient.getClientCharacter().spriteH/2f);
             movement.xEnd = touchPos.x; movement.yEnd = touchPos.y;
             movement.hasEndPoint = true;
         } else { // if no click/touch is made, there is no end point goal of movement
@@ -278,9 +288,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private void updateCamera() {
         // updates zoom
         if(camera.zoom != aimZoom) {
-            Vector2 tst = new Vector2(camera.zoom, 0);
-            tst.lerp(new Vector2(aimZoom, 0), 0.1f);
-            camera.zoom = tst.x;
+            Vector2 tmp = new Vector2(camera.zoom, 0);
+            float alpha = 5f * Gdx.graphics.getDeltaTime();
+            tmp.lerp(new Vector2(aimZoom, 0), alpha);
+            camera.zoom = tmp.x;
+            if(Math.abs(aimZoom - camera.zoom) < alpha)
+                camera.zoom = aimZoom;
         }
         // clamp zoom values
         camera.zoom = MathUtils.clamp(camera.zoom, 0.1f, WORLD_HEIGHT/camera.viewportWidth);

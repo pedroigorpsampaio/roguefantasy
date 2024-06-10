@@ -282,7 +282,7 @@ public class Entity {
                 deltaVec.nor().scl(this.speed * GameRegister.clientTickrate());
                 Vector2 futurePos = new Vector2(charPos).add(deltaVec);
 
-                if (touchPos.dst(futurePos) <= 10f) // close enough, do not move anymore
+                if (touchPos.dst(futurePos) <= deltaVec.len()) // close enough, do not move anymore
                     return;
 
                 this.move(deltaVec);
@@ -333,9 +333,11 @@ public class Entity {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
             if(interPos.dst(position) == 0f) return; // nothing to interpolate
+            if(isClient && GameClient.getInstance().isPredictingRecon.get()) return;
 
             float speedFactor = speed*Gdx.graphics.getDeltaTime();
-            if(!isClient) speedFactor *= 0.94f;
+            //if(!isClient)
+            speedFactor *= 0.94f;
 
             if(interPos.dst(position) <= speedFactor) { // updates to players position if its close enough
                 updateStage(position.x, position.y, true);
@@ -343,10 +345,8 @@ public class Entity {
             } // if not, interpolate
             Vector2 dir = new Vector2(position.x, position.y).sub(interPos);
             dir = dir.nor();
-//            int dirX = dir.x > 0 ? 1 : dir.x == 0 ? 0 : -1; // to update current direction
-//            int dirY = dir.y > 0 ? 1 : dir.y == 0 ? 0 : -1;
-            if(!isClient || GameScreen.isInputHappening()) // update direction
-                direction = Direction.getDirection(MathUtils.round(dir.x), MathUtils.round(dir.y));
+//            if(!isClient) // update direction here if its not client
+//                direction = Direction.getDirection(MathUtils.round(dir.x), MathUtils.round(dir.y));
 
             Vector2 move = new Vector2(dir.x, dir.y).scl(speedFactor);
             Vector2 futurePos = new Vector2(interPos.x, interPos.y).add(move);
@@ -388,8 +388,9 @@ public class Entity {
         public boolean assetsLoaded = false;
         private Skin skin;
         private Font font;
-        Texture walkSheet;
-        Animation<TextureRegion> walkAnimation; // Must declare frame type (TextureRegion)
+        Texture spriteSheet;
+        Map<Direction, Animation<TextureRegion>> walk, idle, attack; // animations
+        public Direction direction; // direction of this creature
         float animTime; // A variable for tracking elapsed time for the animation
         public String name;
         public int creatureId;
@@ -408,34 +409,61 @@ public class Entity {
             this.startPos = new Vector2(interPos.x, interPos.y);
             this.x = x;
             this.y = y;
+            direction = Direction.SOUTHWEST;
             skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             font = skin.get("emojiFont", Font.class); // gets typist font with icons
             nameLabel = new TypingLabel("{SIZE=69%}{COLOR=brick}"+this.name+"[%]", font);
             nameLabel.skipToTheEnd();
             outlineLabel = new TypingLabel("{SIZE=69%}{COLOR=black}"+this.name+"[%]", font);
             outlineLabel.skipToTheEnd();
+            // initialize animators
+            walk = new ConcurrentHashMap<>();
+            attack = new ConcurrentHashMap<>();
+            idle = new ConcurrentHashMap<>();
 
             Gdx.app.postRunnable(() -> { // must wait for libgdx UI thread
                 // Load the sprite sheet as a Texture
-                walkSheet = new Texture(Gdx.files.internal("spritesheet/creature/"+this.creatureId+".png"));
-                walkSheet.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+                spriteSheet = new Texture(Gdx.files.internal("spritesheet/creature/"+this.creatureId+".png"));
+                spriteSheet.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
                 // Use the split utility method to create a 2D array of TextureRegions. This is
                 // possible because this sprite sheet contains frames of equal size and they are
                 // all aligned.
-                TextureRegion[][] tmp = TextureRegion.split(walkSheet,
-                        walkSheet.getWidth() / FRAME_COLS,
-                        walkSheet.getHeight() / FRAME_ROWS);
+                TextureRegion[][] tmp = TextureRegion.split(spriteSheet,
+                        spriteSheet.getWidth() / FRAME_COLS,
+                        spriteSheet.getHeight() / FRAME_ROWS);
                 // Place the regions into a 1D array in the correct order, starting from the top
                 // left, going across first. The Animation constructor requires a 1D array.
-                TextureRegion[] walkFrames = new TextureRegion[8];
+                TextureRegion[] frames = new TextureRegion[8];
                 int index = 0;
                 for (int j = 0; j < 8; j++) {
-                    walkFrames[index++] = tmp[12][j];
+                    frames[index++] = tmp[12][j];
                 }
-                spriteW = walkFrames[0].getRegionWidth();
-                spriteH = walkFrames[0].getRegionHeight();
-                // Initialize the Animation with the frame interval and array of frames
-                walkAnimation = new Animation<>(ANIM_BASE_INTERVAL * speed, walkFrames);
+                walk.put(Direction.SOUTHWEST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                walk.put(Direction.SOUTH, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                walk.put(Direction.WEST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                index = 0;
+                frames = new TextureRegion[8];
+                for (int j = 0; j < 8; j++) {
+                    frames[index++] = tmp[13][j];
+                }
+                walk.put(Direction.SOUTHEAST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                walk.put(Direction.EAST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                index = 0;
+                frames = new TextureRegion[8];
+                for (int j = 0; j < 8; j++) {
+                    frames[index++] = tmp[14][j];
+                }
+                walk.put(Direction.NORTHWEST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                walk.put(Direction.NORTH, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                index = 0;
+                frames = new TextureRegion[8];
+                for (int j = 0; j < 8; j++) {
+                    frames[index++] = tmp[15][j];
+                }
+                walk.put(Direction.NORTHEAST, new Animation<>(ANIM_BASE_INTERVAL * speed, frames));
+                spriteW = frames[0].getRegionWidth();
+                spriteH = frames[0].getRegionHeight();
+
 
                 // reset the elapsed animation time
                 animTime = 0f;
@@ -462,8 +490,12 @@ public class Entity {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
 
-            if(interPos.dst(position) != 0f && Common.entityInterpolation)
+            Map<Direction, Animation<TextureRegion>> currentAnimation = walk; // only walk anim for now
+
+            if(interPos.dst(position) != 0f && Common.entityInterpolation) {
                 interpolate2();
+                currentAnimation = walk;
+            }
 
             animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
             // updates label positions
@@ -476,7 +508,7 @@ public class Entity {
                     nameLabel.getWidth(), nameLabel.getHeight());
 
             // Get current frame of animation for the current stateTime
-            TextureRegion currentFrame = walkAnimation.getKeyFrame(animTime, true);
+            TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
            // batch.begin();
             batch.draw(currentFrame, this.interPos.x, this.interPos.y);//, 60, 60,
             //                120, 120, 1f, 1f, 0);
@@ -487,7 +519,8 @@ public class Entity {
 
         // interpolates inbetween position vector
         private void interpolate() {
-            if(walkAnimation == null) return; // sprite not loaded
+            // if assets are not loaded, return
+            if(assetsLoaded == false) return;
             if(interPos.dst(position) == 0f) return; // nothing to interpolate
 
             //float speedFactor = speed*Gdx.graphics.getDeltaTime();
@@ -509,7 +542,8 @@ public class Entity {
         }
 
         private void interpolate2() {
-            if(walkAnimation == null) return; // sprite not loaded
+            // if assets are not loaded, return
+            if(assetsLoaded == false) return;
             if(interPos.dst(position) == 0f) return; // nothing to interpolate
 
             float speedFactor = this.speed * Gdx.graphics.getDeltaTime();
@@ -522,6 +556,7 @@ public class Entity {
             } // if not, interpolate
             Vector2 dir = new Vector2(position.x, position.y).sub(interPos);
             dir = dir.nor();
+            direction = Direction.getDirection(Math.round(dir.x), Math.round(dir.y));
             Vector2 move = new Vector2(dir.x, dir.y).scl(speedFactor);
             Vector2 futurePos = new Vector2(interPos.x, interPos.y).add(move);
             this.interPos.x = futurePos.x; this.interPos.y = futurePos.y;
@@ -529,7 +564,7 @@ public class Entity {
         }
 
         public void dispose() { // SpriteBatches and Textures must always be disposed
-            walkSheet.dispose();
+            spriteSheet.dispose();
         }
 
         // transform a creature update from server into a creature object from client

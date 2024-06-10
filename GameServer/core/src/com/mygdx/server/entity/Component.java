@@ -1,7 +1,10 @@
 package com.mygdx.server.entity;
 
+import com.badlogic.gdx.math.Vector2;
 import com.mygdx.server.network.GameRegister;
 import com.mygdx.server.network.LoginServer;
+
+import dev.dominion.ecs.api.Entity;
 
 
 public class Component {
@@ -13,6 +16,7 @@ public class Component {
         public float speed;
         public long lastMoveId = 0;
         public long lastMoveTs = 0;
+        public Vector2 dir;
 
         /**
          * Prepares character data to be sent to clients with
@@ -73,7 +77,10 @@ public class Component {
     }
 
     public static class AI {
-        public Character target = null;
+        public Entity target = null;
+    }
+
+    public static class StateMachine {
         public State state = State.IDLE;
         public enum State {
             WALKING,

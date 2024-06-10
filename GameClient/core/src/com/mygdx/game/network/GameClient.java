@@ -1,5 +1,6 @@
 package com.mygdx.game.network;
 
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Timer;
 import com.esotericsoftware.kryonet.Client;
@@ -273,13 +274,16 @@ public class GameClient extends DispatchServer {
             Entity.Character character = characters.get(msg.id);
             if (character == null) return;
 
+            // updates direction if its other player
+            if(GameClient.getInstance().clientCharId != msg.id)
+                character.direction = Entity.Direction.getDirection(MathUtils.round(msg.dir.x), MathUtils.round(msg.dir.y));
+
             // if there is no change in pos, ignore
             if(character.x - msg.x == 0 && character.y - msg.y == 0) return;
 
             character.update(msg.x, msg.y);
 
             if(GameClient.getInstance().clientCharId == msg.id) {
-
                 if(Common.serverReconciliation) {
                     GameClient.getInstance().isPredictingRecon.set(true);
                     ConcurrentLinkedQueue<GameRegister.MoveCharacter> pending = GameClient.getInstance().getMoveMsgListCopy();
@@ -299,17 +303,7 @@ public class GameClient extends DispatchServer {
                 } else {
                     GameClient.getInstance().getMoveMsgListCopy().clear();
                 }
-            }// else { // other character
-//                if(Common.entityInterpolation) {
-//                    //character.update(msg.x, msg.y);
-//                    //character.bufferedPos.putIfAbsent(System.currentTimeMillis(), new Vector2(msg.x, msg.y));
-//                    Entity.Character.EntityInterPos eip = new Entity.Character.EntityInterPos();
-//                    eip.position = new Vector2(msg.x, msg.y); eip.timestamp = System.currentTimeMillis();
-//                    character.buffer.add(eip);
-//                } else {
-//                    character.update(msg.x, msg.y);
-//                }
-//            }
+            }
         }
 
         public void removeCharacter (int id) {
@@ -337,12 +331,12 @@ public class GameClient extends DispatchServer {
 
         // disposes list of characters online
         public void dispose() {
-            for (Entity.Character c : characters.values()) {
-                c.dispose();
-            }
-            for (Entity.Creature c : creatures.values()) {
-                c.dispose();
-            }
+//            for (Entity.Character c : characters.values()) {
+//                c.dispose();
+//            }
+//            for (Entity.Creature c : creatures.values()) {
+//                c.dispose();
+//            }
             characters.clear();
             creatures.clear();
         }
