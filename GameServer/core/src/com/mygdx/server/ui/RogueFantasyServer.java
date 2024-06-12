@@ -10,6 +10,7 @@ import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.scenes.scene2d.Actor;
@@ -31,6 +32,7 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.Timer;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.esotericsoftware.minlog.Log;
+import com.mygdx.server.entity.WorldMap;
 import com.mygdx.server.network.GameServer;
 import com.mygdx.server.network.LoginServer;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
@@ -61,7 +63,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	// ui vars
 	SpriteBatch batch;
 	private Skin skin;
-	private Stage stage;
+	private static Stage stage;
 	private Table uiTable;
 	private Label logLabel;
 	private ScrollPane logScrollPane;
@@ -81,6 +83,8 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	private long ramLoad;
 	private Music timeCommandoSong, corneriaSong, demonBlueSong; // songs for gimmick purposes
 	private HashMap<String, Music> musics; // map of available musics accessible via file name as key
+	public static WorldMap world;
+	private static boolean isWorldVisible = false;
 
 	@Override
 	public void create ()  {
@@ -182,6 +186,8 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		Timer.schedule(controller.updateTimer, 0f, GlobalConfig.METRICS_UPDATE_INTERVAL);
 		// cmd dispatcher
 		dispatcher = new CommandDispatcher(this, loginServer, gameServer);
+		// load map
+		world = new WorldMap("world/testmap.tmx", batch);
 		// starts all servers
 		startServer(ServerChannel.ALL);
 	}
@@ -259,6 +265,12 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		ScreenUtils.clear(0.4f, 0.4f, 0.5f, 1);
 		stage.act(Math.min(Gdx.graphics.getDeltaTime(), 1 / 30f));
 		stage.draw();
+
+		if(isWorldVisible) { // render map for debug
+			//batch.setColor(new Color(Color.RED));
+			world.render();
+
+		}
 
 	}
 
@@ -343,6 +355,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	@Override
 	public void resize (int width, int height) {
 		stage.getViewport().update(width, height, true);
+		world.resize(width, height);
 		uiTable.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
 		float uiZoomFactor = 720f / Gdx.graphics.getHeight();
 		((OrthographicCamera)stage.getCamera()).zoom = uiZoomFactor; // zoom in console
@@ -355,6 +368,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		batch.dispose();
 		stage.dispose();
 		skin.dispose();
+		world.dispose();
 	}
 
 	// closes all servers saving changes before ending process
@@ -381,6 +395,11 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				});
 			}
 		}).start();
+	}
+
+	public static void hideMap() {
+		Gdx.input.setInputProcessor(stage);
+		isWorldVisible = false;
 	}
 
 	// process commands received via dispatcher
@@ -522,6 +541,10 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 							nextIdx = (bgTabs.getCheckedIndex() + bgTabs.getButtons().size - 1) % bgTabs.getButtons().size;
 						TextButton next = bgTabs.getButtons().get(nextIdx);
 						next.setChecked(true);
+					} else if(keycode == Input.Keys.M && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+						isWorldVisible = isWorldVisible ? false : true;
+						if(isWorldVisible) Gdx.input.setInputProcessor(world);
+						else Gdx.input.setInputProcessor(stage);
 					}
 					return false;
 				}

@@ -10,8 +10,10 @@ import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
 import com.mygdx.server.entity.Component;
 import com.mygdx.server.entity.EntityController;
+import com.mygdx.server.entity.WorldMap;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
+import com.mygdx.server.ui.RogueFantasyServer;
 import com.mygdx.server.util.Encoder;
 
 import java.beans.Visibility;
@@ -42,9 +44,10 @@ import dev.dominion.ecs.api.Scheduler;
  */
 public class GameServer implements CmdReceiver {
     private static GameServer instance;
+    private WorldMap world;
     Server server;
     //Set<CharacterConnection> loggedIn = ConcurrentHashMap.newKeySet();
-    Map<Integer, CharacterConnection> loggedIn = new ConcurrentHashMap<>();
+    public Map<Integer, CharacterConnection> loggedIn = new ConcurrentHashMap<>();
     Set<Component.Character> registeredTokens = ConcurrentHashMap.newKeySet();
     private boolean isOnline = false; // is this server online?
     private LagNetwork lagNetwork; // for lag simulation
@@ -451,7 +454,7 @@ public class GameServer implements CmdReceiver {
             character.role_level = conn.charData.roleLevel;
             character.tag = new Component.Tag(conn.charData.id, conn.charData.character);
             character.position = new Component.Position(0, 0);
-            character.attr = new Component.Attributes(32f, 48f, 250f,50f, 10f);
+            character.attr = new Component.Attributes(32f, 48f, 10f,50f, 10f);
             Log.debug("login-server", character.tag.name+" is NOT registered, new token generated! "+character.token);
             registeredTokens.add(character); // adds character to registered list with new token
             sendTokenAsync(conn, character.token);

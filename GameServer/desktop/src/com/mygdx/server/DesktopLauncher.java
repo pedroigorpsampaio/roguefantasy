@@ -12,5 +12,7 @@ public class DesktopLauncher {
 		config.setForegroundFPS(60);
 		config.setTitle("Rogue Fantasy Server");
 		new Lwjgl3Application(new RogueFantasyServer(), config);
+
+
 	}
 }
