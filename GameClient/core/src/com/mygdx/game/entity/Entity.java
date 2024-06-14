@@ -43,6 +43,7 @@ public class Entity {
         }
 
         public static Direction getDirection(int x, int y){
+            System.out.println(x + " / \\ " + y);
             for (Direction dir : Direction.values()) {
                 if (dir.dirX == x && dir.dirY == y) {
                     return dir;
@@ -587,6 +588,7 @@ public class Entity {
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
+            if(GameClient.getInstance().getClientCharacter() == null) return;
 
             Map<Direction, Animation<TextureRegion>> currentAnimation = walk; // only walk anim for now
 

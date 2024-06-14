@@ -1,20 +1,32 @@
 package com.mygdx.server.entity;
 
 import com.mygdx.server.network.GameRegister;
+import com.mygdx.server.ui.RogueFantasyServer;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import dev.dominion.ecs.api.Dominion;
 import dev.dominion.ecs.api.Entity;
 import dev.dominion.ecs.api.Results;
 import dev.dominion.ecs.api.Scheduler;
 
+class Tile {
+    Map<Integer, Entity> entities; // map of entities of this tile
+
+    public Tile() {entities = new ConcurrentHashMap<>();}
+}
+
 public class EntityController {
     private Dominion dominion; // the domain/world containing all entities
     private Scheduler scheduler;
     private static EntityController instance = null;
+    public Tile[][] entityWorldState;
 
     public static EntityController getInstance() {
         if(instance == null)
@@ -25,27 +37,41 @@ public class EntityController {
     private EntityController() {
         // create ecs world
         dominion  = Dominion.create();
+        // initializes entities state array
+        entityWorldState = new Tile[RogueFantasyServer.world.TILES_HEIGHT][RogueFantasyServer.world.TILES_WIDTH];
+        for (int i = 0; i < RogueFantasyServer.world.TILES_HEIGHT; i++) {
+            for (int j = 0; j < RogueFantasyServer.world.TILES_WIDTH; j++) {
+                entityWorldState[i][j] = new Tile();
+            }
+        }
 
         // spawn one wolf for testing
         Entity wolfPrefab = dominion.createEntity(
                 "Herr Wolfgang IV",
                 new Component.Tag(0, "Herr Wolfgang IV"),
-                new Component.Position(222, 222),
+                new Component.Position(0, 0),
                 new Component.Velocity(0, 0),
-                new Component.Attributes(60f, 68f, 100f, 50f, 20f),
-                new Component.Spawn(0, new Component.Position(222, 222), 15)
+                new Component.Attributes(24f*RogueFantasyServer.world.getUnitScale(), 16f*RogueFantasyServer.world.getUnitScale(),
+                        100f*RogueFantasyServer.world.getUnitScale(), 50f,
+                        20f*RogueFantasyServer.world.getUnitScale()),
+                new Component.Spawn(0, new Component.Position(0, 0), 15)
         ).setState(Component.AI.State.IDLE);
         wolfPrefab.add(new Component.AI(wolfPrefab));
 
         // create systems
         scheduler = createSystems();
         scheduler.tickAtFixedRate(GameRegister.clientTickrate); // updates at the same speed client doe
-
     }
 
     public void dispose() {
         scheduler.shutDown();
         dominion.close();
+    }
+
+    public Map<Integer, Entity> getEntitiesAtTilePos(int i, int j) {
+        synchronized (entityWorldState) {
+            return entityWorldState[i][j].entities;
+        }
     }
 
     // creates all game systems
@@ -64,7 +90,7 @@ public class EntityController {
             });
         });
 
-        // applies velocities to all entities with position and velocity components
+        // applies velocities to all entities with position and velocity components (not players)
         scheduler.schedule(() -> {
             //find entities
             dominion.findEntitiesWith(Component.Position.class, Component.Velocity.class, Component.Tag.class)
@@ -77,6 +103,7 @@ public class EntityController {
                         position.y += velocity.y;
                         position.lastVelocityX = velocity.x;
                         position.lastVelocityY = velocity.y;
+                        position.updatePositionIn2dArray(result.entity()); // updates position in 2d entities state array
 //                        System.out.printf("Entity %s moved with %s to %s\n",
 //                                tag.name, velocity, position);
                     });

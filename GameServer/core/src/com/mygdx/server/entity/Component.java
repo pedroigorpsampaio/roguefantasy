@@ -2,7 +2,10 @@ package com.mygdx.server.entity;
 
 import com.badlogic.gdx.math.Vector2;
 import com.mygdx.server.network.GameRegister;
-import com.mygdx.server.ui.CommandDispatcher;
+import com.mygdx.server.ui.RogueFantasyServer;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import dev.dominion.ecs.api.Entity;
 
@@ -17,6 +20,7 @@ public class Component {
         public Component.Tag tag;
         public Component.Attributes attr;
         public Component.Position position;
+        public Vector2 lastTilePos = null;
 
         /**
          * Prepares character data to be sent to clients with
@@ -29,13 +33,76 @@ public class Component {
             charData.x = this.position.x; charData.y = this.position.y; charData.name = this.tag.name; this.lastMoveId = 0;
             return charData;
         }
+
+        /**
+         * Moves character position and updates itself on 2d array grid if needed (changed tile)
+         * @param movement  the movement to increase into character position
+         */
+        public void move(Vector2 movement, Entity entity) {
+            this.position.x += movement.x;
+            this.position.y += movement.y;
+            updatePositionIn2dArray(entity); // calls method that manages entity position in 2d array
+        }
+
+        /**
+         * Checks and updates position in 2d Array of entities if different from last one
+         */
+        public void updatePositionIn2dArray(Entity entity) {
+            position.updatePositionIn2dArray(entity);
+        }
     }
 
     public static class Position {
         public float x, y;
         public float lastVelocityX = 0, lastVelocityY = 0; // the last velocities that changed the position values
+        public Vector2 lastTilePos = null; // the last position in tile state 2d array (i,j)
 
         public Position(float x, float y) {this.x = x; this.y = y;}
+
+        /**
+         * Checks and updates position in 2d Array of entities if different from last one
+         */
+        public void updatePositionIn2dArray(Entity entity) {
+            // calculate current tilePos
+            Vector2 tPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(x, y));
+
+//            System.out.printf("Entity moved to %s\n",
+//                    new Vector2(x, y));
+
+           // System.out.println(tPos);
+
+            // makes sure its within world state bounds
+            if(tPos.x < 0) tPos.x = 0;
+            if(tPos.y < 0) tPos.y = 0;
+            if(tPos.x > WorldMap.TILES_WIDTH) tPos.x = WorldMap.TILES_WIDTH-1;
+            if(tPos.y > WorldMap.TILES_HEIGHT) tPos.y = WorldMap.TILES_HEIGHT-1;
+
+            int id = -1;
+            if(!entity.has(Component.Character.class)) {// non-player entity
+                id = entity.get(Tag.class).id;
+            }
+            else // player entity
+                id = entity.get(Component.Character.class).tag.id;
+
+            // if it has no last tile (null tilepos) just add to the 2d array
+            if(lastTilePos == null) {
+                EntityController.getInstance().entityWorldState[(int) tPos.x][(int) tPos.y].entities.putIfAbsent(id, entity);
+                lastTilePos = new Vector2(tPos.x, tPos.y); // create last tile position vector2
+            }
+            else {
+                if(lastTilePos.equals(tPos)) // if its the same, there is no need to update in 2d state array
+                    return;
+                // if its different:
+                // remove from old position in state array
+                EntityController.getInstance().entityWorldState[(int)lastTilePos.x][(int)lastTilePos.y].entities.remove(id);
+                // add in new position
+                EntityController.getInstance().entityWorldState[(int)tPos.x][(int)tPos.y].entities.putIfAbsent(id, entity);
+//                System.out.printf("Entity moved from %s to %s\n",
+//                        lastTilePos, tPos);
+                // update last position
+                lastTilePos.x = tPos.x; lastTilePos.y = tPos.y;
+            }
+        }
 
         @Override
         public String toString() {
@@ -226,7 +293,10 @@ public class Component {
                 targetAttr = target.get(Component.Character.class).attr;
             }
 
-            Vector2 goalPos = new Vector2(targetPos.x - targetAttr.width/2f, targetPos.y - targetAttr.height/2f);
+//            System.out.printf("Target %s\n",
+//                    targetAttr.width/2f);
+
+            Vector2 goalPos = new Vector2(targetPos.x - targetAttr.width/4f, targetPos.y + targetAttr.height/4f);
             Vector2 aiPos = new Vector2(position.x, position.y);
             Vector2 deltaVec = new Vector2(goalPos).sub(aiPos);
             deltaVec.nor().scl(attributes.speed*GameRegister.clientTickrate());

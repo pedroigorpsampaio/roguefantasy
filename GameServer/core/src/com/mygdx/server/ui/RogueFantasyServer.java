@@ -85,6 +85,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	private HashMap<String, Music> musics; // map of available musics accessible via file name as key
 	public static WorldMap world;
 	private static boolean isWorldVisible = false;
+	public static String worldStateMessageSize = "0";
 
 	@Override
 	public void create ()  {
@@ -633,6 +634,10 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				b.append("RAM Usage: ");
 				b.append(ramLoad);
 				b.append(" MB");
+				b.append("\n\n");
+				b.append("World state message size: ");
+				b.append(worldStateMessageSize);
+				b.append(" (Bytes)");
 				b.append("\n\n");
 				b.append("Global log size: ");
 				b.append(globalLogs.size());

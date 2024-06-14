@@ -49,8 +49,21 @@ import com.badlogic.gdx.scenes.scene2d.ui.Window;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.esotericsoftware.minlog.Log;
+import com.mygdx.server.network.GameRegister;
 import com.mygdx.server.network.GameServer;
 import com.mygdx.server.ui.RogueFantasyServer;
+import com.mygdx.server.util.Common;
+
+import org.openjdk.jol.info.GraphLayout;
+import org.openjdk.jol.vm.VM;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Random;
+
+import dev.dominion.ecs.api.Entity;
 
 
 /**
@@ -58,19 +71,23 @@ import com.mygdx.server.ui.RogueFantasyServer;
  * control the 2D array containing world map logic
  */
 public class WorldMap implements InputProcessor {
-    private static final int N_ROWS = 46;
-    private static final int N_COLS = 46;
+    private static final int N_ROWS = 30;
+    private static final int N_COLS = 30;
     private final OrthographicCamera cam;
+    private Random rand;
     private TiledMapTileLayer layerCut;
     private final Matrix4 isoTransform;
     private final Matrix4 invIsotransform;
     private final float unitScale;
     private IsometricTiledMapRenderer renderer;
-    public static float WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH = 1280, VIEWPORT_HEIGHT = 720;
+    public static float WORLD_WIDTH, WORLD_HEIGHT;
+    public static int TILES_WIDTH, TILES_HEIGHT, TEX_WIDTH, TEX_HEIGHT;
     private TiledMap map;
     private Vector3 screenPos = new Vector3();
     private SpriteBatch batch;
     private ShapeRenderer shapeRenderer; // for debug
+    private int specId = 0; // id of concurrent hash map for players to spectate (in order of login)
+    private Entity spectatee; // the spectatee to watch for debug from server view
 
     // constructor loads map from file and prepares the vars for controlling world state
     public WorldMap(String fileName, SpriteBatch batch) {
@@ -82,11 +99,16 @@ public class WorldMap implements InputProcessor {
         shapeRenderer = new ShapeRenderer();
         float w = Gdx.graphics.getWidth();
         float h = Gdx.graphics.getHeight();
+        rand = new Random();
 
        // cam.setToOrtho(false, 30, 20);
         TiledMapTileLayer tileLayer =  (TiledMapTileLayer) map.getLayers().get(0);
         WORLD_WIDTH = tileLayer.getWidth() * 32f;
         WORLD_HEIGHT = tileLayer.getHeight() * 16f;
+        TILES_WIDTH = tileLayer.getWidth();
+        TILES_HEIGHT = tileLayer.getHeight();
+        TEX_WIDTH = tileLayer.getTileWidth();
+        TEX_HEIGHT = tileLayer.getTileHeight();
 
         cam =  new OrthographicCamera(32f, 32f * (h / w));
         cam.zoom = 2f;
@@ -142,10 +164,14 @@ public class WorldMap implements InputProcessor {
 //        cam.position.y = MathUtils.clamp(cam.position.y, effectiveViewportHeight / 2f, 100 - effectiveViewportHeight / 2f);
 
         if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
-            cam.position.x = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
-                    get().getValue().character.get(Component.Character.class).position.x;
-            cam.position.y = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
-                    get().getValue().character.get(Component.Character.class).position.y;
+            if(spectatee == null) {
+                spectatee = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
+                        get().getValue().character;
+                Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
+            } else {
+                cam.position.x = spectatee.get(Component.Character.class).position.x;
+                cam.position.y = spectatee.get(Component.Character.class).position.y;
+            }
         }
 
 //        float effectiveViewportWidth = cam.viewportWidth * cam.zoom;
@@ -178,6 +204,40 @@ public class WorldMap implements InputProcessor {
     private Vector2 topLeft = new Vector2();
     private Vector2 bottomRight = new Vector2();
 
+    /**
+     * Given position in world space, return the respective indexes in world 2d iso tile array
+     * @param position the x,y position in world space as a Vec2
+     * @return a Vec2 containing the indexes of given position in the 2d iso tile array
+     */
+    public Vector2 toIsoTileCoordinates(Vector2 position) {
+        float tileWidth = TEX_WIDTH * unitScale;
+
+        float pX = MathUtils.floor(translateScreenToIso(position).x / tileWidth);
+        float pY = MathUtils.floor(translateScreenToIso(position).y / tileWidth);
+
+        return new Vector2(pX, pY);
+    }
+
+    /**
+     * Checks if world space coordinates is within world bound
+     * @return true if it is, false otherwise
+     */
+    public boolean isWithinWorldBounds(Vector2 position) {
+//        TiledMapTileLayer layerBase = (TiledMapTileLayer) map.getLayers().get(0); // all layers are the same size
+//        float tileWidth = layerBase.getTileWidth() * unitScale;
+//
+//        float pX = MathUtils.floor(translateScreenToIso(position).x / tileWidth);
+//        float pY = MathUtils.floor(translateScreenToIso(position).y / tileWidth);
+        Vector2 tPos = toIsoTileCoordinates(position);
+
+        if(tPos.x < 0) { return false; }
+        if(tPos.y < 0) { return false; }
+        if(tPos.x > TILES_WIDTH) { return false; }
+        if(tPos.y > TILES_HEIGHT) {return false; }
+
+        return true;
+    }
+
     public void render() {
         updateCamera();
 
@@ -185,158 +245,323 @@ public class WorldMap implements InputProcessor {
         Batch batch = renderer.getBatch();
         //batch.setColor(new Color(Color.RED));
 
-        TiledMapTileLayer layerBase = (TiledMapTileLayer) map.getLayers().get(0);
-
-        // cuts olny what its interesting to the player
-        TiledMapTileLayer layer = layerBase;
+        // Array of layers with only what is interesting to the player
+        ArrayList<TiledMapTileLayer> cutLayers = new ArrayList<>();
+        // Array containing layers with whats interesting to the player but in world size for correct rendering
+        ArrayList<TiledMapTileLayer> renderLayers = new ArrayList<>();
 
         if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
-            //for (MapLayer layer : map.getLayers()) {
-            float playerX = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
-                    get().getValue().character.get(Component.Character.class).position.x;
-            float playerY = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
-                    get().getValue().character.get(Component.Character.class).position.y;
-            Vector2 playerPos = new Vector2(playerX, playerY);
+            if (spectatee == null) { // cant spectate if its null
+                spectatee = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
+                        get().getValue().character;
+                Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
+                return;
+            }
+            for (MapLayer mapLayer : map.getLayers()) { // cut layers so it only contains whats interesting to spectatee
+                if (mapLayer.getClass().equals(TiledMapTileLayer.class)) { // only cuts tile map layers
+                    TiledMapTileLayer layerBase = (TiledMapTileLayer) mapLayer;
 
-            float tileWidth = layer.getTileWidth() * unitScale;
+                    float playerX = spectatee.get(Component.Character.class).position.x;
+                    float playerY = spectatee.get(Component.Character.class).position.y;
+                    Vector2 playerPos = new Vector2(playerX, playerY);
 
-            int row1 = (int)(translateScreenToIso(playerPos).y / tileWidth) - 14;
-            int row2 = (int)(translateScreenToIso(playerPos).y / tileWidth) + 15;
+                    Vector2 tPos = toIsoTileCoordinates(playerPos);
+                    float pX = tPos.x;
+                    float pY = tPos.y;
 
-            int col1 = (int)(translateScreenToIso(playerPos).x / tileWidth) - 14;
-            int col2 = (int)(translateScreenToIso(playerPos).x / tileWidth) + 15;
+                    int minI = MathUtils.ceil(pY - N_ROWS / 2);
+                    int maxI = MathUtils.ceil(pY + N_ROWS / 2);
 
-            float pX = (int)translateScreenToIso(playerPos).x;
-            float pY = (int)translateScreenToIso(playerPos).y;
+                    int minJ = MathUtils.ceil(pX - N_COLS / 2);
+                    int maxJ = MathUtils.ceil(pX + N_COLS / 2);
 
-            int minI =  MathUtils.ceil(pY - N_ROWS/2);
-            int maxI =  MathUtils.ceil(pY + N_ROWS/2);
+                    // clamp to limits but always send same amount of info
+                    if (minI < 0) {
+                        maxI -= minI;
+                        minI = 0;
+                    }
+                    if (minJ < 0) {
+                        maxJ -= minJ;
+                        minJ = 0;
+                    }
+                    if (maxI > TILES_HEIGHT) {
+                        minI += TILES_HEIGHT - maxI;
+                        maxI = TILES_HEIGHT;
+                    }
+                    if (maxJ > TILES_WIDTH) {
+                        minJ += TILES_WIDTH - maxJ;
+                        maxJ = TILES_WIDTH;
+                    }
 
-            int minJ = MathUtils.ceil(pX - N_COLS/2);
-            int maxJ =  MathUtils.ceil(pX + N_COLS/2);
+                    // the layer containing only visible tiles for player
+                    layerCut = new TiledMapTileLayer(N_COLS, N_ROWS, 32, 16);
+                    layerCut.setName(layerBase.getName());
+                    layerCut.setOpacity(layerBase.getOpacity());
+                    layerCut.setOffsetX(layerBase.getOffsetX());
 
-            // clamp to limits but always send same amount of info
-            if(minI < 0) { maxI -= minI; minI = 0; }
-            if(minJ < 0) { maxJ -= minJ; minJ = 0; }
-            if(maxI > layerBase.getHeight()) {minI += layerBase.getHeight() - maxI ; maxI = layerBase.getHeight(); }
-            if(maxJ > layerBase.getWidth()) {minJ += layerBase.getHeight() - maxJ ; maxJ = layerBase.getWidth(); }
+                    // stores visible tiles in the cull layer
+                    for (int row = minI; row <= maxI; row++) {
+                        for (int col = minJ; col <= maxJ; col++) {
+                            final TiledMapTileLayer.Cell cell = layerBase.getCell(col, row);
+                            layerCut.setCell(col - minJ, row - minI, cell);
+                        }
+                    }
 
-            // the layer containing only visible tiles for player
-            layerCut = new TiledMapTileLayer(N_COLS, N_ROWS, 32, 16);
+                    cutLayers.add(layerCut);
+                    // AFTER SENDING TO CLIENT, CLIENT CAN RECREATE IN THE CORRECT POSITION WITH THE FOLLOWING STEPS:
 
-            // stores visible tiles in the cull layer
-            for (int row = minI; row <= maxI; row++) {
-                for (int col = minJ; col <= maxJ; col++) {
-                    final TiledMapTileLayer.Cell cell = layerBase.getCell(col, row);
-                    layerCut.setCell(col-minJ, row-minI, cell);
+                    // create big layer that contains the size of the world
+                    TiledMapTileLayer bigLayer = new TiledMapTileLayer(TILES_WIDTH, TILES_HEIGHT, 32, 16);
+                    bigLayer.setName(layerBase.getName());
+                    bigLayer.setOpacity(layerBase.getOpacity());
+                    bigLayer.setOffsetX(layerBase.getOffsetX());
+
+                    // places the layer culled by the server in the correct position in world 2d array for correct rendering
+                    for (int row = minI; row <= maxI; row++) {
+                        for (int col = minJ; col <= maxJ; col++) {
+                            final TiledMapTileLayer.Cell cell = layerCut.getCell(col - minJ, row - minI);
+                            bigLayer.setCell(col, row, cell);
+                        }
+                    }
+
+                    renderLayers.add(bigLayer);
                 }
             }
-
-            // AFTER SENDING TO CLIENT, CLIENT CAN RECREATE IN THE CORRECT POSITION WITH THE FOLLOWING STEPS:
-
-
-            // create big layer that contains the size of the world
-            TiledMapTileLayer bigLayer = new TiledMapTileLayer(layerBase.getWidth(), layerBase.getHeight(), 32, 16);
-
-            // places the layer culled by the server in the correct position in world 2d array for correct rendering
-            for (int row = minI; row <= maxI; row++) {
-                for (int col = minJ; col <= maxJ; col++) {
-                    final TiledMapTileLayer.Cell cell = layerCut.getCell(col-minJ, row-minI);
-                    bigLayer.setCell(col, row, cell);
-                }
-            }
-
-            layer = bigLayer;
         }
+
+        System.out.println("CUT: " + GraphLayout.parseInstance(cutLayers).toFootprint());
+        System.out.println("RENDER: " + GraphLayout.parseInstance(renderLayers).toFootprint());
 
         /** THE FOLLOWING METHOD IS ALREADY OPTIMIZED FOR DRAWING VISIBLE TILES!!! **/
 
-        float tileWidth = layer.getTileWidth() * unitScale;
-        float tileHeight = layer.getTileHeight() * unitScale;
+        // render each layer from lowest to highest (higher layers will be on top)
+        for(TiledMapTileLayer layer : renderLayers) {
+            float tileWidth = layer.getTileWidth() * unitScale;
+            float tileHeight = layer.getTileHeight() * unitScale;
 
-        final float layerOffsetX = layer.getRenderOffsetX() * unitScale - renderer.getViewBounds().x * (layer.getParallaxX() - 1);
-        // offset in tiled is y down, so we flip it
-        final float layerOffsetY = -layer.getRenderOffsetY() * unitScale - renderer.getViewBounds().y * (layer.getParallaxY() - 1);
+            final float layerOffsetX = layer.getRenderOffsetX() * unitScale - renderer.getViewBounds().x * (layer.getParallaxX() - 1);
+            // offset in tiled is y down, so we flip it
+            final float layerOffsetY = -layer.getRenderOffsetY() * unitScale - renderer.getViewBounds().y * (layer.getParallaxY() - 1);
 
-        float halfTileWidth = tileWidth * 0.5f;
-        float halfTileHeight = tileHeight * 0.5f;
+            float halfTileWidth = tileWidth * 0.5f;
+            float halfTileHeight = tileHeight * 0.5f;
 
-        int it = 0;
+            int it = 0;
 
-        // setting up the screen points
-        // COL1
-        topRight.set(renderer.getViewBounds().x + renderer.getViewBounds().width - layerOffsetX, renderer.getViewBounds().y - layerOffsetY);
-        // COL2
-        bottomLeft.set(renderer.getViewBounds().x - layerOffsetX, renderer.getViewBounds().y + renderer.getViewBounds().height - layerOffsetY);
-        // ROW1
-        topLeft.set(renderer.getViewBounds().x - layerOffsetX, renderer.getViewBounds().y - layerOffsetY);
-        // ROW2
-        bottomRight.set(renderer.getViewBounds().x + renderer.getViewBounds().width - layerOffsetX, renderer.getViewBounds().y + renderer.getViewBounds().height - layerOffsetY);
+            // setting up the screen points
+            // COL1
+            topRight.set(renderer.getViewBounds().x + renderer.getViewBounds().width - layerOffsetX, renderer.getViewBounds().y - layerOffsetY);
+            // COL2
+            bottomLeft.set(renderer.getViewBounds().x - layerOffsetX, renderer.getViewBounds().y + renderer.getViewBounds().height - layerOffsetY);
+            // ROW1
+            topLeft.set(renderer.getViewBounds().x - layerOffsetX, renderer.getViewBounds().y - layerOffsetY);
+            // ROW2
+            bottomRight.set(renderer.getViewBounds().x + renderer.getViewBounds().width - layerOffsetX, renderer.getViewBounds().y + renderer.getViewBounds().height - layerOffsetY);
 
-        //if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
-        // transforming screen coordinates to iso coordinates
-        int row1 = (int) (translateScreenToIso(topLeft).y / tileWidth) - 2;
-        int row2 = (int) (translateScreenToIso(bottomRight).y / tileWidth) + 2;
+            //if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
+            // transforming screen coordinates to iso coordinates
+            int row1 = (int) (translateScreenToIso(topLeft).y / tileWidth) - 2;
+            int row2 = (int) (translateScreenToIso(bottomRight).y / tileWidth) + 2;
 
-        int col1 = (int) (translateScreenToIso(bottomLeft).x / tileWidth) - 2;
-        int col2 = (int) (translateScreenToIso(topRight).x / tileWidth) + 2;
+            int col1 = (int) (translateScreenToIso(bottomLeft).x / tileWidth) - 2;
+            int col2 = (int) (translateScreenToIso(topRight).x / tileWidth) + 2;
 
-        it = 0;
-        for (int row = row2; row >= row1; row--) {
-            for (int col = col1; col <= col2; col++) {
-                float x = (col * halfTileWidth) + (row * halfTileWidth);
-                float y = (row * halfTileHeight) - (col * halfTileHeight);
-                final TiledMapTileLayer.Cell cell = layer.getCell(col, row);
-                if (cell == null) continue;
-                renderCell(cell, x, y, layerOffsetX, layerOffsetY, layer.getOpacity());
-                it++;
+            // clamp to limits but always send same amount of info
+            if (row1 < 0) {
+                row2 -= row1;
+                row1 = 0;
+            }
+            if (col1 < 0) {
+                col2 -= col1;
+                col1 = 0;
+            }
+            if (row2 > TILES_HEIGHT) {
+                row1 += TILES_HEIGHT - row2;
+                row2 = TILES_HEIGHT;
+            }
+            if (col2 > TILES_WIDTH) {
+                col1 += TILES_WIDTH - col2;
+                col2 = TILES_WIDTH;
+            }
+
+            float playerX = spectatee.get(Component.Character.class).position.x;
+            float playerY = spectatee.get(Component.Character.class).position.y;
+            Vector2 playerPos = new Vector2(playerX, playerY);
+
+            float pX = (int) translateScreenToIso(playerPos).x;
+            float pY = (int) translateScreenToIso(playerPos).y;
+
+            int minI = MathUtils.ceil(pY - N_ROWS / 2);
+            int maxI = MathUtils.ceil(pY + N_ROWS / 2);
+
+            int minJ = MathUtils.ceil(pX - N_COLS / 2);
+            int maxJ = MathUtils.ceil(pX + N_COLS / 2);
+
+            // clamp to player view limits also
+            if (row1 < minI) {
+                row1 = minI;
+            }
+            if (col1 < minJ) {
+                col1 = minJ;
+            }
+            if (row2 > maxI) {
+                row2 = maxI;
+            }
+            if (col2 > maxJ) {
+                col2 = maxJ;
+            }
+
+            it = 0;
+            for (int row = row2; row >= row1; row--) {
+                for (int col = col1; col <= col2; col++) {
+                    float x = (col * halfTileWidth) + (row * halfTileWidth);
+                    float y = (row * halfTileHeight) - (col * halfTileHeight);
+                    final TiledMapTileLayer.Cell cell = layer.getCell(col, row);
+
+                    it++;
+                    if (cell != null)
+                        renderCell(cell, x, y, layerOffsetX, layerOffsetY, layer.getOpacity());
+
+                    // if its on the wall layer render entities alongside for correct drawing
+                    if (layer.getName().contains("Wall")) {
+                        Map<Integer, Entity> tileEntities = EntityController.getInstance().getEntitiesAtTilePos(col, row);
+                        if (tileEntities.size() > 0) { // render entities of tile if any exists
+                            for (Map.Entry<Integer, Entity> entry : tileEntities.entrySet()) {
+                                Integer eId = entry.getKey();
+                                Entity entity = entry.getValue();
+                                Vector2 pos;
+                                Component.Attributes attr;
+                                if (!entity.has(Component.Character.class)) {// non-player entity
+                                    pos = new Vector2(entity.get(Component.Position.class).x, entity.get(Component.Position.class).y);
+                                    attr = entity.get(Component.Attributes.class);
+                                } else {
+                                    pos = new Vector2(entity.get(Component.Character.class).position.x,
+                                            entity.get(Component.Character.class).position.y);
+                                    attr = entity.get(Component.Character.class).attr;
+                                }
+                                rand = new Random(eId);
+                                float r = rand.nextFloat();
+                                float g = rand.nextFloat();
+                                float b = rand.nextFloat();
+
+                                shapeRenderer.setProjectionMatrix(cam.combined);
+                                shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+                                shapeRenderer.setColor(new Color(r, g, b, 1f));
+                                shapeRenderer.rect(pos.x, pos.y + attr.height / 2f, attr.width, attr.height);
+                                shapeRenderer.end();
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
-            float playerX = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
-                    get().getValue().character.get(Component.Character.class).position.x;
-            float playerY = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
-                    get().getValue().character.get(Component.Character.class).position.y;
-//            Vector2 playerPos = new Vector2(playerX, playerY);
-//
-//            float pX = (int)translateScreenToIso(playerPos).x;
-//            float pY = (int)translateScreenToIso(playerPos).y;
-//
-//            int minI =  MathUtils.ceil(pY - N_ROWS/2);
-//            int maxI =  MathUtils.ceil(pY + N_ROWS/2);
-//
-//            int minJ = MathUtils.ceil(pX - N_COLS/2);
-//            int maxJ =  MathUtils.ceil(pX + N_COLS/2);
-//
-//            // clamp to limits but always send same amount of info
-//            if(minI < 0) { maxI -= minI; minI = 0; }
-//            if(minJ < 0) { maxJ -= minJ; minJ = 0; }
-//            if(maxI > layerBase.getHeight()) {minI += layerBase.getHeight() - maxI ; maxI = layerBase.getHeight(); }
-//            if(maxJ > layerBase.getWidth()) {minJ += layerBase.getHeight() - maxJ ; maxJ = layerBase.getWidth(); }
-//
-//
-//            // draw only visible tiles for player (in correct order for isometric rendering)
-//            it = 0;
-//            for (int row = maxI; row >= minI; row--) {
-//                for (int col = minJ; col <= maxJ; col++) {
-//                    float x = (col * halfTileWidth) + (row * halfTileWidth);
-//                    float y = (row * halfTileHeight) - (col * halfTileHeight);
-//                    final TiledMapTileLayer.Cell cell = layer.getCell(col, row);
-//                    if (cell == null) continue;
-//                    renderCell(cell, x, y, layerOffsetX, layerOffsetY, layer.getOpacity());
-//                    it++;
-//                }
+        String fprint = GraphLayout.parseInstance(cutLayers).toFootprint();
+        String[] lines = fprint.split("\n"); String lastLine = lines[lines.length - 2];
+        RogueFantasyServer.worldStateMessageSize = lastLine;
+
+//        if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
+//            if(spectatee == null) {
+//                spectatee = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
+//                        get().getValue().character;
+//                Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
+//                return;
 //            }
 
-            shapeRenderer.setProjectionMatrix(cam.combined);
-            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-            shapeRenderer.setColor(Color.RED);
-            shapeRenderer.rect(playerX, playerY, 0.3f, 0.6f);
-            shapeRenderer.end();
-        }
+//            for(TiledMapTileLayer layer : renderLayers) {
+//                float playerX = spectatee.get(Component.Character.class).position.x;
+//                float playerY = spectatee.get(Component.Character.class).position.y;
+//                Vector2 playerPos = new Vector2(playerX, playerY);
+//
+//                float pX = (int) translateScreenToIso(playerPos).x;
+//                float pY = (int) translateScreenToIso(playerPos).y;
+//
+//                int minI = MathUtils.ceil(pY - N_ROWS / 2);
+//                int maxI = MathUtils.ceil(pY + N_ROWS / 2);
+//
+//                int minJ = MathUtils.ceil(pX - N_COLS / 2);
+//                int maxJ = MathUtils.ceil(pX + N_COLS / 2);
+//
+//                // clamp to limits but always send same amount of info
+//                if (minI < 0) {
+//                    maxI -= minI;
+//                    minI = 0;
+//                }
+//                if (minJ < 0) {
+//                    maxJ -= minJ;
+//                    minJ = 0;
+//                }
+//                if (maxI > TILES_HEIGHT) {
+//                    minI += TILES_HEIGHT - maxI;
+//                    maxI = TILES_HEIGHT;
+//                }
+//                if (maxJ > TILES_WIDTH) {
+//                    minJ += TILES_WIDTH - maxJ;
+//                    maxJ = TILES_WIDTH;
+//                }
+//
+//                float tileWidth = layer.getTileWidth() * unitScale;
+//                float tileHeight = layer.getTileHeight() * unitScale;
+//
+//                final float layerOffsetX = layer.getRenderOffsetX() * unitScale - renderer.getViewBounds().x * (layer.getParallaxX() - 1);
+//                // offset in tiled is y down, so we flip it
+//                final float layerOffsetY = -layer.getRenderOffsetY() * unitScale - renderer.getViewBounds().y * (layer.getParallaxY() - 1);
+//
+//                float halfTileWidth = tileWidth * 0.5f;
+//                float halfTileHeight = tileHeight * 0.5f;
+//
+//                // draw only visible tiles for player (in correct order for isometric rendering)
+//                int it = 0;
+//                for (int row = maxI; row >= minI; row--) {
+//                    for (int col = minJ; col <= maxJ; col++) {
+//                        float x = (col * halfTileWidth) + (row * halfTileWidth);
+//                        float y = (row * halfTileHeight) - (col * halfTileHeight);
+//                        final TiledMapTileLayer.Cell cell = layer.getCell(col, row);
+//                        it++;
+//                        if (cell != null)
+//                            renderCell(cell, x, y, layerOffsetX, layerOffsetY, layer.getOpacity());
+//
+//                        if (layer.getName().contains("Wall")) {
+//                            Map<Integer, Entity> tileEntities = EntityController.getInstance().getEntitiesAtTilePos(col, row);
+//                            if (tileEntities.size() > 0) { // render entities of tile if any exists
+//                                for (Map.Entry<Integer, Entity> entry : tileEntities.entrySet()) {
+//                                    Integer eId = entry.getKey();
+//                                    Entity entity = entry.getValue();
+//                                    Vector2 pos;
+//                                    Component.Attributes attr;
+//                                    if (!entity.has(Component.Character.class)) {// non-player entity
+//                                        pos = new Vector2(entity.get(Component.Position.class).x, entity.get(Component.Position.class).y);
+//                                        attr = entity.get(Component.Attributes.class);
+//                                    } else {
+//                                        pos = new Vector2(entity.get(Component.Character.class).position.x,
+//                                                entity.get(Component.Character.class).position.y);
+//                                        attr = entity.get(Component.Character.class).attr;
+//                                    }
+//                                    rand = new Random(eId);
+//                                    float r = rand.nextFloat();
+//                                    float g = rand.nextFloat();
+//                                    float b = rand.nextFloat();
+//
+//                                    shapeRenderer.setProjectionMatrix(cam.combined);
+//                                    shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+//                                    shapeRenderer.setColor(new Color(r, g, b, 1f));
+//                                    shapeRenderer.rect(pos.x, pos.y + attr.height / 2f, attr.width, attr.height);
+//                                    shapeRenderer.end();
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//                System.out.println(it);
+//            }
 
-        System.out.println("Current fps: "+Gdx.graphics.getFramesPerSecond());
+//            shapeRenderer.setProjectionMatrix(cam.combined);
+//            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+//            shapeRenderer.setColor(Color.RED);
+//            shapeRenderer.rect(playerX, playerY+0.3f, 0.3f, 0.6f);
+//            shapeRenderer.end();
+ //       }
+
     }
 
     private Vector3 translateScreenToIso (Vector2 vec) {
@@ -472,6 +697,32 @@ public class WorldMap implements InputProcessor {
     public boolean keyDown(int keycode) {
         if(keycode == Input.Keys.M && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
             RogueFantasyServer.hideMap();
+        } else if(keycode == Input.Keys.RIGHT && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+            Iterator<Map.Entry<Integer, GameServer.CharacterConnection >> it = GameServer.getInstance().loggedIn.entrySet().iterator();
+            specId = (specId + 1) % GameServer.getInstance().loggedIn.size();
+            int i = 0;
+            while (it.hasNext()) {
+                Map.Entry<Integer, GameServer.CharacterConnection> entry = it.next();
+                if(i == specId) {
+                    spectatee = entry.getValue().character;
+                    Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
+                    break;
+                }
+                i++;
+            }
+        } else if(keycode == Input.Keys.LEFT && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+            Iterator<Map.Entry<Integer, GameServer.CharacterConnection>> it = GameServer.getInstance().loggedIn.entrySet().iterator();
+            specId = (specId + GameServer.getInstance().loggedIn.size() - 1) % GameServer.getInstance().loggedIn.size();
+            int i = 0;
+            while (it.hasNext()) {
+                Map.Entry<Integer, GameServer.CharacterConnection> entry = it.next();
+                if (i == specId) {
+                    spectatee = entry.getValue().character;
+                    Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
+                    break;
+                }
+                i++;
+            }
         }
         return false;
     }
@@ -519,5 +770,9 @@ public class WorldMap implements InputProcessor {
     public boolean scrolled(float amountX, float amountY) {
         cam.zoom += amountY * Gdx.graphics.getDeltaTime() * 3f;
         return false;
+    }
+
+    public float getUnitScale() {
+        return unitScale;
     }
 }

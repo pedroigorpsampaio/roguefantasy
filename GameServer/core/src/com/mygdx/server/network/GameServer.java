@@ -148,13 +148,51 @@ public class GameServer implements CmdReceiver {
 
                         if(touchPos.dst(futurePos) <= deltaVec.len()) // close enough, do not move anymore
                             return;
+                        while(!RogueFantasyServer.world.isWithinWorldBounds(futurePos)) {
+//                            if(RogueFantasyServer.world.isWithinWorldBounds(new Vector2(futurePos.x, charPos.y)))
+//                                character.position.x += deltaVec.x;
+//                            else if(RogueFantasyServer.world.isWithinWorldBounds(new Vector2(charPos.x, futurePos.y)))
+//                                character.position.y += deltaVec.y;
+//                            else if(RogueFantasyServer.world.isWithinWorldBounds(new Vector2(futurePos.x, character.position.y - deltaVec.y))) {
+//                                character.position.x += deltaVec.x;
+//                                character.position.y -= deltaVec.y;
+//                            } else if(RogueFantasyServer.world.isWithinWorldBounds(new Vector2(character.position.x - deltaVec.x, futurePos.y))) {
+//                                character.position.x -= deltaVec.x;
+//                                character.position.y += deltaVec.y;
+//                            }
+                            deltaVec.scl(0.1f); // just try to move as much as possible
+                            futurePos = new Vector2(charPos).add(deltaVec);
+                            //return;
+                        }
 
-                        character.position.x += deltaVec.x; character.position.y += deltaVec.y;
+                        character.move(deltaVec, charEntity);
                     } else { // wasd movement already has direction in it, just normalize and scale
                         Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(character.attr.speed*GameRegister.clientTickrate());
                         character.dir = new Vector2(msg.x, msg.y).nor();
-                        character.position.x += moveVec.x;
-                        character.position.y += moveVec.y;
+
+                        Vector2 futurePos = new Vector2(character.position.x, character.position.y).add(moveVec);
+
+                        while(!RogueFantasyServer.world.isWithinWorldBounds(futurePos)) {
+//                            if(moveVec.x != 0 && moveVec.y != 0) { // diagonal inputs
+//                                if (RogueFantasyServer.world.isWithinWorldBounds(new Vector2(futurePos.x, character.position.y)))
+//                                    character.position.x += moveVec.x;
+//                                else if (RogueFantasyServer.world.isWithinWorldBounds(new Vector2(character.position.x, futurePos.y)))
+//                                    character.position.y += moveVec.y;
+//                                else if (RogueFantasyServer.world.isWithinWorldBounds(new Vector2(futurePos.x, character.position.y - moveVec.y))) {
+//                                    character.position.x += moveVec.x;
+//                                    character.position.y -= moveVec.y;
+//                                } else if(RogueFantasyServer.world.isWithinWorldBounds(new Vector2(character.position.x - moveVec.x, futurePos.y)) &&
+//                                            moveVec.y == 0) {
+//                                    character.position.x -= moveVec.x;
+//                                    character.position.y += moveVec.y;
+//                                }
+//                            } //TODO: IMPROVE MOVEMENTS IN CLIENT THEN COPY HERE
+                            //return;
+                            moveVec.scl(0.1f); // just try to move as much as possible
+                            futurePos = new Vector2(character.position.x, character.position.y).add(moveVec);
+                        }
+
+                        character.move(moveVec, charEntity); // calls method that updates char position both in object as well as in 2d array of entities
                     }
 
                     character.lastMoveId = msg.requestId;
@@ -242,11 +280,13 @@ public class GameServer implements CmdReceiver {
         Component.Character charComp = c.character.get(Component.Character.class);
         character.dir = new Vector2(0, -1); // start looking south
         character.tag = new Component.Tag(character.tag.id, character.tag.name);
-        character.attr = new Component.Attributes(32f, 48f, character.attr.speed, character.attr.attackSpeed, 10f);
+        character.attr = new Component.Attributes(character.attr.width, character.attr.height, character.attr.speed,
+                                                    character.attr.attackSpeed, character.attr.range);
         character.position = new Component.Position(character.position.x, character.position.y);
         c.character.remove(charComp);
         //charComp.lastMoveTs = character.lastMoveTs;
         c.character.add(character);
+        c.character.get(Component.Character.class).updatePositionIn2dArray(c.character); // updates position in 2d entities array if needed
 
         // Add existing characters to new logged in connection.
         Iterator<Map.Entry<Integer, CharacterConnection>> i = loggedIn.entrySet().iterator();
@@ -303,6 +343,9 @@ public class GameServer implements CmdReceiver {
             output.writeFloat(character.position.x);
             output.writeFloat(character.position.y);
             output.writeFloat(character.attr.speed);
+            output.writeFloat(character.attr.width);
+            output.writeFloat(character.attr.height);
+            output.writeFloat(character.attr.attackSpeed);
             return true;
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -362,6 +405,9 @@ public class GameServer implements CmdReceiver {
             character.position.x = input.readFloat();
             character.position.y = input.readFloat();
             character.attr.speed = input.readFloat();
+            character.attr.width = input.readFloat();
+            character.attr.height = input.readFloat();
+            character.attr.attackSpeed = input.readFloat();
             input.close();
             return character;
         } catch (IOException ex) {
@@ -448,13 +494,16 @@ public class GameServer implements CmdReceiver {
                 }
             }
             // if char does not have a token, generate a new one
-            // TODO: LOAD CHARACTER FROM PERSISTED STORAGE
+            /** CHARACTER WILL BE LOADED LATER (IF THERE IS NO SAVED CHAR - THIS IS THE FIRST LOGIN
+             SO THESE ARE THE INITIAL ATTRIBUTES OF A NEWLY MADE CHARACTER!! **/
             character = new Component.Character();
             character.token = Encoder.generateNewToken();
             character.role_level = conn.charData.roleLevel;
             character.tag = new Component.Tag(conn.charData.id, conn.charData.character);
             character.position = new Component.Position(0, 0);
-            character.attr = new Component.Attributes(32f, 48f, 10f,50f, 10f);
+            character.attr = new Component.Attributes(16f*RogueFantasyServer.world.getUnitScale(), 24f*RogueFantasyServer.world.getUnitScale(),
+                                250f*RogueFantasyServer.world.getUnitScale(),50f,
+                                10f*RogueFantasyServer.world.getUnitScale());
             Log.debug("login-server", character.tag.name+" is NOT registered, new token generated! "+character.token);
             registeredTokens.add(character); // adds character to registered list with new token
             sendTokenAsync(conn, character.token);

@@ -231,7 +231,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private void moveCharacter() {
         GameRegister.MoveCharacter msg = new GameRegister.MoveCharacter();
         msg.x = movement.x;
-        msg.y = movement.y;
+        msg.y = movement.y/2f; // isometric world
         msg.hasEndPoint = movement.hasEndPoint;
         msg.xEnd = movement.xEnd; msg.yEnd = movement.yEnd;
         msg.requestId = gameClient.getRequestId(GameRegister.MoveCharacter.class);
@@ -247,7 +247,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         if(msg.hasEndPoint) {
             dir = new Vector2(msg.xEnd, msg.yEnd).sub(player.position).nor();
         } else {
-            dir = new Vector2(msg.x, msg.y).nor();
+            dir = new Vector2(msg.x, msg.y*2f).nor(); //multiplies again to calculate direction correctly
         }
         player.direction = Entity.Direction.getDirection(MathUtils.round(dir.x), MathUtils.round(dir.y));
     }
@@ -256,6 +256,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
      * Should update game using fixed step defined by GameRegister.clientTickrate()
      */
     public void update() {
+        if(gameClient.getClientCharacter() == null) return; // character not loaded yet!
+
         // correct velocity
         if(!Gdx.input.isKeyPressed(Input.Keys.W) && !Gdx.input.isKeyPressed(Input.Keys.UP) &&
                 !Gdx.input.isKeyPressed(Input.Keys.S) && !Gdx.input.isKeyPressed(Input.Keys.DOWN) && !Gdx.input.isTouched(0))
