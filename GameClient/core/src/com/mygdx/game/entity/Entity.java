@@ -43,7 +43,7 @@ public class Entity {
         }
 
         public static Direction getDirection(int x, int y){
-            System.out.println(x + " / \\ " + y);
+            //System.out.println(x + " / \\ " + y);
             for (Direction dir : Direction.values()) {
                 if (dir.dirX == x && dir.dirY == y) {
                     return dir;
@@ -147,8 +147,8 @@ public class Entity {
                 // Use the split utility method to create a 2D array of TextureRegions. This is
                 // possible because this sprite sheet contains frames of equal size and they are
                 // all aligned.
-                spriteW = spriteSheet.getWidth() / FRAME_COLS;
-                spriteH = spriteSheet.getHeight() / FRAME_ROWS;
+                spriteW = (spriteSheet.getWidth() / FRAME_COLS) * WorldMap.unitScale;
+                spriteH = (spriteSheet.getHeight() / FRAME_ROWS) * WorldMap.unitScale;
                 TextureRegion[][] tmp = TextureRegion.split(spriteSheet,
                         spriteSheet.getWidth() / FRAME_COLS,
                         spriteSheet.getHeight() / FRAME_ROWS);
@@ -346,18 +346,21 @@ public class Entity {
             nameLabel.setBounds(this.centerPos.x - nameLabel.getWidth()/2f,
                     this.centerPos.y + spriteH/2f,
                     nameLabel.getWidth(), nameLabel.getHeight());
+            nameLabel.scaleBy(WorldMap.unitScale);
             outlineLabel.setBounds(this.centerPos.x - nameLabel.getWidth()/2f - 1,
                     this.centerPos.y + spriteH/2f -1,
                     nameLabel.getWidth() +1, nameLabel.getHeight()+1);
+            outlineLabel.scaleBy(WorldMap.unitScale);
 
             // animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
 
 
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
-            batch.draw(currentFrame, this.interPos.x, this.interPos.y);
-            outlineLabel.draw(batch, 1.0f);
-            nameLabel.draw(batch, 1.0f);
+            batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()*WorldMap.unitScale,
+                    currentFrame.getRegionHeight()*WorldMap.unitScale);
+            //outlineLabel.draw(batch, 1.0f);
+            //nameLabel.draw(batch, 1.0f);
         }
 
         // interpolates stage assets to player current position
@@ -632,7 +635,8 @@ public class Entity {
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
            // batch.begin();
-            batch.draw(currentFrame, this.interPos.x, this.interPos.y);//, 60, 60,
+            batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()*WorldMap.unitScale,
+                    currentFrame.getRegionHeight()*WorldMap.unitScale);//, 60, 60,
             //                120, 120, 1f, 1f, 0);
             outlineLabel.draw(batch, 1.0f);
             nameLabel.draw(batch, 1.0f);

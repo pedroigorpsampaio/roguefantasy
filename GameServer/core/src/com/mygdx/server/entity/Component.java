@@ -1,9 +1,19 @@
 package com.mygdx.server.entity;
 
+import static com.mygdx.server.entity.WorldMap.TILES_HEIGHT;
+import static com.mygdx.server.entity.WorldMap.TILES_WIDTH;
+import static com.mygdx.server.network.GameRegister.N_COLS;
+import static com.mygdx.server.network.GameRegister.N_ROWS;
+
+import com.badlogic.gdx.maps.MapLayer;
+import com.badlogic.gdx.maps.tiled.TiledMap;
+import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.mygdx.server.network.GameRegister;
 import com.mygdx.server.ui.RogueFantasyServer;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -24,7 +34,7 @@ public class Component {
 
         /**
          * Prepares character data to be sent to clients with
-         * only data that is safe to send and it is of clients interest
+         * only data that is safe to send and it is of clients interest for login
          * @return  the Register character class containing the data safe to send
          */
         public GameRegister.Character toSendToClient() {
@@ -32,6 +42,21 @@ public class Component {
             charData.role_level = this.role_level; charData.id = this.tag.id; charData.speed = this.attr.speed;
             charData.x = this.position.x; charData.y = this.position.y; charData.name = this.tag.name; this.lastMoveId = 0;
             return charData;
+        }
+
+        /**
+         * Prepares character data to be sent to clients with
+         * data necessary to update this character in clients
+         * @return  the update character message containing the data to update this character in clients
+         */
+        public GameRegister.UpdateCharacter getCharacterData() {
+            GameRegister.UpdateCharacter update = new GameRegister.UpdateCharacter();
+            update.id = tag.id;
+            update.x = position.x;
+            update.y = position.y;
+            update.dir = dir;
+            update.lastRequestId = lastMoveId;
+            return update;
         }
 
         /**
@@ -49,6 +74,86 @@ public class Component {
          */
         public void updatePositionIn2dArray(Entity entity) {
             position.updatePositionIn2dArray(entity);
+        }
+
+        /**
+         * Method responsible for building the message containing the state of AoI of player
+         * which includes visible tilemap and entities such as other players, creatures, npcs etc...
+         * @return  the state message to be sent to this client containing all of its AoI data
+         */
+        public GameRegister.UpdateState buildStateAoI() {
+            GameRegister.UpdateState state = new GameRegister.UpdateState(); // the state message
+            // get this players position in isometric tile map
+            Vector2 tPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(this.position.x, this.position.y));
+            float pX = tPos.x;
+            float pY = tPos.y;
+            // clamp AoI limits of player
+            int minI = MathUtils.ceil(pY - N_ROWS / 2);
+            int maxI = MathUtils.ceil(pY + N_ROWS / 2)-1;
+
+            int minJ = MathUtils.ceil(pX - N_COLS / 2);
+            int maxJ = MathUtils.ceil(pX + N_COLS / 2)-1;
+            // clamp map limits but always send same amount of info
+            if (minI < 0) {
+                maxI -= minI;
+                minI = 0;
+            }
+            if (minJ < 0) {
+                maxJ -= minJ;
+                minJ = 0;
+            }
+            if (maxI > TILES_HEIGHT) {
+                minI += TILES_HEIGHT - maxI;
+                maxI = TILES_HEIGHT;
+            }
+            if (maxJ > TILES_WIDTH) {
+                minJ += TILES_WIDTH - maxJ;
+                maxJ = TILES_WIDTH;
+            }
+
+            TiledMap map = RogueFantasyServer.world.getMap();
+            for (MapLayer mapLayer : map.getLayers()) { // iterate through world map layers
+                if (mapLayer.getClass().equals(TiledMapTileLayer.class)) { // only iterates tile map layers TODO: object layer can be at client side also? or should it be sent?
+                    TiledMapTileLayer layerBase = (TiledMapTileLayer) mapLayer;
+                    // add aoi tiles as a layer of the state message
+                    GameRegister.Layer aoiLayer = new GameRegister.Layer();
+                    aoiLayer.isEntityLayer = layerBase.getProperties().get("entity_layer", Boolean.class);
+                    // stores visible tiles in the aoi 2d Array of tiles
+                    for (int row = minI; row <= maxI; row++) {
+                        for (int col = minJ; col <= maxJ; col++) {
+                            final TiledMapTileLayer.Cell cell = layerBase.getCell(col, row);
+                            if (cell != null)
+                                aoiLayer.tiles[col - minJ][row - minI] = cell.getTile().getId();
+                            else
+                                aoiLayer.tiles[col - minJ][row - minI] = -1; // represents null tile/cell
+
+                            // if its entity layer, prepare creature and character updates of the ones that are in range
+                            if (layerBase.getProperties().get("entity_layer", Boolean.class)) {
+                                Map<Integer, Entity> tileEntities = EntityController.getInstance().getEntitiesAtTilePos(col, row);
+                                if (tileEntities.size() > 0) { // for each visible tile that has entities
+                                    synchronized (tileEntities) {
+                                        for (Map.Entry<Integer, Entity> entry : tileEntities.entrySet()) {
+                                            Entity entity = entry.getValue();
+                                            if (!entity.has(Component.Character.class)) {// non-player entity // TODO: SEPARATE TYPES OF ENTITIES!!
+                                                if (entity.get(Component.Position.class) == null)
+                                                    continue;
+                                                state.creatureUpdates.add(EntityController.getInstance().getCreatureData(entity));
+                                            } else { // player entity
+                                                if (entity.get(Component.Character.class) == null)
+                                                    continue;
+                                                state.characterUpdates.add(entity.get(Component.Character.class).getCharacterData());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    state.tileLayers.add(aoiLayer);
+                }
+            }
+            //state.tileLayers = aoiLayers;
+            return state;
         }
     }
 
@@ -74,8 +179,8 @@ public class Component {
             // makes sure its within world state bounds
             if(tPos.x < 0) tPos.x = 0;
             if(tPos.y < 0) tPos.y = 0;
-            if(tPos.x > WorldMap.TILES_WIDTH) tPos.x = WorldMap.TILES_WIDTH-1;
-            if(tPos.y > WorldMap.TILES_HEIGHT) tPos.y = WorldMap.TILES_HEIGHT-1;
+            if(tPos.x > TILES_WIDTH) tPos.x = TILES_WIDTH-1;
+            if(tPos.y > TILES_HEIGHT) tPos.y = TILES_HEIGHT-1;
 
             int id = -1;
             if(!entity.has(Component.Character.class)) {// non-player entity

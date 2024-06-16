@@ -19,6 +19,8 @@ public class GameRegister {
     public static final int clientTickrate = 20; // the amount of communication updates per second in client
     static public boolean lagSimulation = true; // simulate lag
     static public int lag = 340; // simulated lag value in ms
+    static public final int N_ROWS = 30; // number of rows to be sent to player in state (AoI)
+    static public final int N_COLS = 30; // number of cols to be sent to player in state (AoI)
 
 
     /** gets Tick rates interval in seconds **/
@@ -50,6 +52,14 @@ public class GameRegister {
         kryo.register(Character.class);
         kryo.register(ClientId.class);
         kryo.register(MoveCharacter.class);
+        kryo.register(int[][].class);
+        kryo.register(int[].class);
+        kryo.register(Layer.class);
+    }
+
+    static public class Layer {
+        public int[][] tiles =  new int[N_ROWS][N_COLS];
+        public boolean isEntityLayer = false;
     }
 
     static public class Ping {
@@ -101,6 +111,7 @@ public class GameRegister {
     static public class UpdateState {
         ArrayList<UpdateCharacter> characterUpdates = new ArrayList<>();
         ArrayList<UpdateCreature> creatureUpdates = new ArrayList<>();
+        ArrayList<Layer> tileLayers = new ArrayList<>();
     }
 
     static public class AddCharacter {

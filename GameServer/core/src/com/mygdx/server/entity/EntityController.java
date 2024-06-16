@@ -112,7 +112,35 @@ public class EntityController {
         return scheduler;
     }
 
-    // prepares entities data to be sent to clients
+    /**
+     * Get specific creature data and prepare it to be sent to the client
+     * @param entity    the creature entity (this method is only for creatures)
+     * @return the update message containing all the info necessary for the client regarding this creature
+     **/
+    public GameRegister.UpdateCreature getCreatureData(Entity entity) {
+        GameRegister.UpdateCreature creatureUpdate = new GameRegister.UpdateCreature();
+        creatureUpdate.creatureId = entity.get(Component.Tag.class).id;
+        creatureUpdate.name = entity.get(Component.Tag.class).name;
+        creatureUpdate.spawnId = entity.get(Component.Spawn.class).id;
+        creatureUpdate.x = entity.get(Component.Position.class).x;
+        creatureUpdate.y = entity.get(Component.Position.class).y;
+        creatureUpdate.speed = entity.get(Component.Attributes.class).speed;
+        creatureUpdate.attackSpeed = entity.get(Component.Attributes.class).attackSpeed;
+        creatureUpdate.range = entity.get(Component.Attributes.class).range;
+        creatureUpdate.lastVelocityX = entity.get(Component.Position.class).lastVelocityX;
+        creatureUpdate.lastVelocityY = entity.get(Component.Position.class).lastVelocityY;
+        creatureUpdate.state = entity.get(Component.AI.class).state.getName();
+        creatureUpdate.timestamp = Instant.now().toEpochMilli();
+        Entity target = entity.get(Component.AI.class).target;
+        if (target != null)
+            creatureUpdate.targetId = entity.get(Component.AI.class).target.get(Component.Character.class).tag.id;
+        else
+            creatureUpdate.targetId = -1;
+
+        return creatureUpdate;
+    }
+
+    // prepares all creatures data to be sent to clients (should be avoided)
     public ArrayList<GameRegister.UpdateCreature> getCreaturesData() {
         // finds all creature entities
         Results<Results.With3<Component.Attributes, Component.Spawn, Component.AI>> entities =

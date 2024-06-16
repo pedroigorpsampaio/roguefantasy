@@ -270,7 +270,6 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		if(isWorldVisible) { // render map for debug
 			//batch.setColor(new Color(Color.RED));
 			world.render();
-
 		}
 
 	}

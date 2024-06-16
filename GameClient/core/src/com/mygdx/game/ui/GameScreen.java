@@ -12,6 +12,7 @@ import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
@@ -29,6 +30,7 @@ import com.badlogic.gdx.utils.viewport.StretchViewport;
 import com.github.tommyettinger.textra.Font;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.entity.Entity;
+import com.mygdx.game.entity.WorldMap;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.util.Common;
@@ -44,6 +46,7 @@ import java.util.Map;
 public class GameScreen implements Screen, PropertyChangeListener {
     private static GameScreen instance;
     private static GameClient gameClient;
+    private final WorldMap world;
     private Font font;
     private Timer updateTimer;
     private Sprite mapSprite;
@@ -96,12 +99,16 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         // Constructs a new OrthographicCamera, using the given viewport width and height
         // Height is multiplied by aspect ratio.
-        camera = new OrthographicCamera(30, 30 * (h / w));
+        camera = new OrthographicCamera(32, 32 * (h / w));
         camera.position.set(camera.viewportWidth / 2f, camera.viewportHeight / 2f, 0);
-        camera.zoom = 25f;
+        camera.zoom = 1.4f;
         aimZoom = camera.zoom;
 
         camera.update();
+
+        // loads world map (TODO: load it in load screen)
+        TiledMap map = manager.get("world/testmap.tmx");
+        world = new WorldMap(map, batch, camera);
 
         mapTexture = new Texture(Gdx.files.internal("sc_map.png"));
         mapTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
@@ -198,7 +205,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
             @Override
             public boolean scrolled(InputEvent event, float x, float y, float amountX, float amountY) {
-                aimZoom = camera.zoom + amountY * 3f;
+                aimZoom = camera.zoom + amountY * 0.1f;
+                world.zoom(amountY);
                 //camera.zoom += amountY;
                 return super.scrolled(event, x, y, amountX, amountY);
             }
@@ -294,7 +302,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
             float alpha = 5f * Gdx.graphics.getDeltaTime();
             tmp.lerp(new Vector2(aimZoom, 0), alpha);
             camera.zoom = tmp.x;
-            if(Math.abs(aimZoom - camera.zoom) < alpha)
+            if(Math.abs(aimZoom - camera.zoom) < 0.001f)
                 camera.zoom = aimZoom;
         }
         // clamp zoom values
@@ -350,9 +358,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
         }
         startDelay = false;
 
-        batch.begin();
-        mapSprite.draw(batch);
+        while(GameClient.getInstance().isPredictingRecon.get()); // don't render world while reconciliating pos of client
 
+        world.render(); // render world
+
+        batch.begin();
+        //mapSprite.draw(batch);
 
         // draw creatures
         Map<Long, Entity.Creature> creatures = gameClient.getCreatures();
@@ -389,9 +400,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
     @Override
     public void resize(int width, int height) {
         stage.getViewport().update(width, height, true);
-        camera.viewportWidth = 30f;
-        camera.viewportHeight = 30f * height/width;
+        camera.viewportWidth = 32f;
+        camera.viewportHeight = 32f * height/width;
         camera.update();
+        world.resize(width, height);
     }
 
     @Override
@@ -413,6 +425,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public void dispose() {
         mapSprite.getTexture().dispose();
         stage.dispose();
+        world.dispose();
     }
 
 //    public void stopUpdateTimer() {

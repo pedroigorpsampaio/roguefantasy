@@ -1,9 +1,12 @@
 package com.mygdx.server.network;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Timer;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
@@ -23,6 +26,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -367,28 +371,52 @@ public class GameServer implements CmdReceiver {
                 CharacterConnection charConn = entry.getValue();
                 Entity loggedChar = charConn.character;
                 Component.Character charComp = loggedChar.get(Component.Character.class);
-                GameRegister.UpdateCharacter update = new GameRegister.UpdateCharacter();
-                update.id = charComp.tag.id;
-                update.x = charComp.position.x;
-                update.y = charComp.position.y;
-                update.dir = charComp.dir;
-                update.lastRequestId = charComp.lastMoveId;
-                state.characterUpdates.add(update);
+                state = charComp.buildStateAoI();
+
+//                GameRegister.UpdateCharacter update = charComp.getCharacterData();
+//                update.id = charComp.tag.id;
+//                update.x = charComp.position.x;
+//                update.y = charComp.position.y;
+//                update.dir = charComp.dir;
+//                update.lastRequestId = charComp.lastMoveId;
+
+                //state.characterUpdates.add(update);
+
+                if(lagNetwork != null && GameRegister.lagSimulation)
+                    lagNetwork.send(state, charConn);
+                else
+                    charConn.sendUDP(state);
+
+                // state message size debug
+                Output output = new Output(1024, -1);
+                Kryo kryo = new Kryo();
+                kryo.register(GameRegister.UpdateCreature.class);
+                kryo.register(GameRegister.UpdateCharacter.class);
+                kryo.register(GameRegister.UpdateState.class);
+                kryo.register(ArrayList.class);
+                kryo.register(int[][].class);
+                kryo.register(int[].class);
+                kryo.register(Vector2.class);
+                kryo.register(GameRegister.Layer.class);
+                kryo.writeObject(output, state);
+                RogueFantasyServer.worldStateMessageSize = String.valueOf(output.total());
+
             }
             // prepare creature updates
-            state.creatureUpdates = entityController.getCreaturesData();
+            //state.creatureUpdates = entityController.getCreaturesData();
         }
 
         //System.out.println("pos server: " + character.position.x + " / " + character.position.y);
 
-        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
-            Collection<Connection> connections = server.getConnections();
-            Iterator<Connection> it = connections.iterator();
-            for (int i = 0, n = connections.size(); i < n; i++) {
-                lagNetwork.send(state, (CharacterConnection)it.next());
-            }
-        } else
-            server.sendToAllUDP(state);
+
+//        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+//            Collection<Connection> connections = server.getConnections();
+//            Iterator<Connection> it = connections.iterator();
+//            for (int i = 0, n = connections.size(); i < n; i++) {
+//                lagNetwork.send(state, (CharacterConnection)it.next());
+//            }
+//        } else
+//            server.sendToAllUDP(state);
     }
 
     Component.Character loadCharacter (Component.Character character) {

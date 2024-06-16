@@ -15,6 +15,8 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGeneratorLoader;
 import com.badlogic.gdx.graphics.g2d.freetype.FreetypeFontLoader;
+import com.badlogic.gdx.maps.tiled.TiledMap;
+import com.badlogic.gdx.maps.tiled.TmxMapLoader;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
@@ -189,6 +191,9 @@ public class LoadScreen implements Screen {
         // load game specific assets
         skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
         manager.load("bgm/time_commando.mp3", Music.class);
+        // only needed once
+        manager.setLoader(TiledMap.class, new TmxMapLoader(new InternalFileHandleResolver()));
+        manager.load("world/testmap.tmx", TiledMap.class);
 
         pgBar = new ProgressBar(0, 1, 0.1f, false, skin);
         stage.addActor(pgBar);

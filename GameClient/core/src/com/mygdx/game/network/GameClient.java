@@ -9,6 +9,7 @@ import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Listener.ThreadedListener;
 import com.mygdx.game.entity.Entity;
+import com.mygdx.game.entity.WorldMap;
 import com.mygdx.game.network.GameRegister.AddCharacter;
 import com.mygdx.game.network.GameRegister.ClientId;
 import com.mygdx.game.network.GameRegister.MoveCharacter;
@@ -242,6 +243,10 @@ public class GameClient extends DispatchServer {
         }
 
         public void updateState(GameRegister.UpdateState state) {
+            if(state.tileLayers != null) {
+                WorldMap.layers = state.tileLayers;
+                //WorldMap.debugMap();
+            }
             if(state.characterUpdates != null) // there are character updates
                 for(UpdateCharacter charUpdate : state.characterUpdates)
                     updateCharacter(charUpdate);
@@ -273,7 +278,7 @@ public class GameClient extends DispatchServer {
 //                creature.update(creatureUpdate.x, creatureUpdate.y, creatureUpdate.lastVelocityX,
 //                        creatureUpdate.lastVelocityY, creatureUpdate.speed, creatureUpdate.attackSpeed, creatureUpdate.state,
 //                        target);
-                System.out.println(creatureUpdate.state);
+                //System.out.println(creatureUpdate.state);
                 creature.target = target; creature.speed = creatureUpdate.speed; creature.attackSpeed = creatureUpdate.attackSpeed;
                 // leave the rest of info for the client prediction
                 return;

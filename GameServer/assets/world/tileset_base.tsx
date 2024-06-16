@@ -245,66 +245,105 @@
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="9">
+   <object id="9" x="8.25" y="18" width="21.5" height="5.5"/>
+  </objectgroup>
  </tile>
  <tile id="49">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="6.75" y="16" width="20.5" height="9.25"/>
+  </objectgroup>
  </tile>
  <tile id="50">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="5.25" y="20" width="21.25" height="6.75"/>
+  </objectgroup>
  </tile>
  <tile id="51">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="5.5" y="18.5" width="21.25" height="7"/>
+  </objectgroup>
  </tile>
  <tile id="52">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="3">
+   <object id="2" x="11.5" y="12.25" width="10" height="16.75"/>
+  </objectgroup>
  </tile>
  <tile id="53">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="7.25" y="16.5" width="18.25" height="14"/>
+  </objectgroup>
  </tile>
  <tile id="54">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="3.25" y="16.5" width="22.75" height="12"/>
+  </objectgroup>
  </tile>
  <tile id="55">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="3.75" y="14.75" width="22.25" height="15"/>
+  </objectgroup>
  </tile>
  <tile id="56">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="2.5" y="15.5" width="26.75" height="15.25"/>
+  </objectgroup>
  </tile>
  <tile id="57">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="3">
+   <object id="2" x="1.75" y="16.5" width="26.5" height="14"/>
+  </objectgroup>
  </tile>
  <tile id="58">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="6.5" y="18.25" width="20" height="11.25"/>
+  </objectgroup>
  </tile>
  <tile id="59">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="2.5" y="16.5" width="23.5" height="14.25"/>
+  </objectgroup>
  </tile>
  <tile id="60">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="0.25" y="13.75" width="25.25" height="16.25"/>
+  </objectgroup>
  </tile>
  <tile id="61">
   <properties>
@@ -325,21 +364,33 @@
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="4">
+   <object id="3" x="4.5" y="14" width="23" height="16.75"/>
+  </objectgroup>
  </tile>
  <tile id="65">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="3.75" y="16" width="24.25" height="14.75"/>
+  </objectgroup>
  </tile>
  <tile id="66">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="5.5" y="16.75" width="22.25" height="14.5"/>
+  </objectgroup>
  </tile>
  <tile id="67">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="4" y="18" width="23.75" height="12.25"/>
+  </objectgroup>
  </tile>
  <tile id="68">
   <properties>
@@ -365,16 +416,25 @@
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="0.75" y="12" width="30.5" height="20.25"/>
+  </objectgroup>
  </tile>
  <tile id="73">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="-1" y="15.25" width="32.25" height="15.75"/>
+  </objectgroup>
  </tile>
  <tile id="74">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="-0.5" y="14.5" width="33" height="17.25"/>
+  </objectgroup>
  </tile>
  <tile id="75">
   <properties>
@@ -395,11 +455,17 @@
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="-0.25" y="16" width="32.75" height="16"/>
+  </objectgroup>
  </tile>
  <tile id="79">
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="0.25" y="16.5" width="31.75" height="15.75"/>
+  </objectgroup>
  </tile>
  <tile id="80">
   <properties>
@@ -410,6 +476,9 @@
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <objectgroup draworder="index" id="2">
+   <object id="1" x="1.75" y="17" width="27.75" height="13.5"/>
+  </objectgroup>
  </tile>
  <tile id="82">
   <properties>
@@ -445,6 +514,10 @@
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <animation>
+   <frame tileid="88" duration="1000"/>
+   <frame tileid="89" duration="1000"/>
+  </animation>
  </tile>
  <tile id="89">
   <properties>

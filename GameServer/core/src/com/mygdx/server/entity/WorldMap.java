@@ -20,6 +20,8 @@ import static com.badlogic.gdx.graphics.g2d.Batch.Y1;
 import static com.badlogic.gdx.graphics.g2d.Batch.Y2;
 import static com.badlogic.gdx.graphics.g2d.Batch.Y3;
 import static com.badlogic.gdx.graphics.g2d.Batch.Y4;
+import static com.mygdx.server.network.GameRegister.N_COLS;
+import static com.mygdx.server.network.GameRegister.N_ROWS;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
@@ -33,12 +35,18 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.MapLayer;
 import com.badlogic.gdx.maps.MapObject;
+import com.badlogic.gdx.maps.MapObjects;
+import com.badlogic.gdx.maps.MapProperties;
+import com.badlogic.gdx.maps.objects.RectangleMapObject;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
+import com.badlogic.gdx.maps.tiled.TiledMapTileSets;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
 import com.badlogic.gdx.maps.tiled.renderers.IsometricTiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
+import com.badlogic.gdx.maps.tiled.tiles.AnimatedTiledMapTile;
+import com.badlogic.gdx.maps.tiled.tiles.StaticTiledMapTile;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Rectangle;
@@ -47,7 +55,11 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Window;
 import com.badlogic.gdx.utils.Align;
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.minlog.Log;
 import com.mygdx.server.network.GameRegister;
 import com.mygdx.server.network.GameServer;
@@ -57,6 +69,11 @@ import com.mygdx.server.util.Common;
 import org.openjdk.jol.info.GraphLayout;
 import org.openjdk.jol.vm.VM;
 
+import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -71,9 +88,9 @@ import dev.dominion.ecs.api.Entity;
  * control the 2D array containing world map logic
  */
 public class WorldMap implements InputProcessor {
-    private static final int N_ROWS = 30;
-    private static final int N_COLS = 30;
     private final OrthographicCamera cam;
+    private final Kryo kryo;
+    private final ByteArrayOutputStream bos;
     private Random rand;
     private TiledMapTileLayer layerCut;
     private final Matrix4 isoTransform;
@@ -83,11 +100,13 @@ public class WorldMap implements InputProcessor {
     public static float WORLD_WIDTH, WORLD_HEIGHT;
     public static int TILES_WIDTH, TILES_HEIGHT, TEX_WIDTH, TEX_HEIGHT;
     private TiledMap map;
+    public TiledMap getMap() {return map;}
     private Vector3 screenPos = new Vector3();
     private SpriteBatch batch;
     private ShapeRenderer shapeRenderer; // for debug
     private int specId = 0; // id of concurrent hash map for players to spectate (in order of login)
     private Entity spectatee; // the spectatee to watch for debug from server view
+    private ArrayList<TiledMapTileLayer> cutLayers; // the spliced map layers containing only in view tiles to player
 
     // constructor loads map from file and prepares the vars for controlling world state
     public WorldMap(String fileName, SpriteBatch batch) {
@@ -100,6 +119,15 @@ public class WorldMap implements InputProcessor {
         float w = Gdx.graphics.getWidth();
         float h = Gdx.graphics.getHeight();
         rand = new Random();
+
+        // for serialization debug
+        kryo = new Kryo();
+        // Register all classes to be serialized.
+        kryo.register(int[].class);
+        kryo.register(int[][].class);
+        kryo.register(ArrayList.class);
+        kryo.register(GameRegister.Layer.class);
+        bos = new ByteArrayOutputStream();
 
        // cam.setToOrtho(false, 30, 20);
         TiledMapTileLayer tileLayer =  (TiledMapTileLayer) map.getLayers().get(0);
@@ -164,13 +192,13 @@ public class WorldMap implements InputProcessor {
 //        cam.position.y = MathUtils.clamp(cam.position.y, effectiveViewportHeight / 2f, 100 - effectiveViewportHeight / 2f);
 
         if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
-            if(spectatee == null) {
+            if(spectatee == null || spectatee.get(Component.Character.class) == null) {
                 spectatee = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
                         get().getValue().character;
                 Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
             } else {
-                cam.position.x = spectatee.get(Component.Character.class).position.x;
-                cam.position.y = spectatee.get(Component.Character.class).position.y;
+                cam.position.x = spectatee.get(Component.Character.class).position.x + spectatee.get(Component.Character.class).attr.width / 2f;
+                cam.position.y = spectatee.get(Component.Character.class).position.y + spectatee.get(Component.Character.class).attr.height / 2f;
             }
         }
 
@@ -246,19 +274,22 @@ public class WorldMap implements InputProcessor {
         //batch.setColor(new Color(Color.RED));
 
         // Array of layers with only what is interesting to the player
-        ArrayList<TiledMapTileLayer> cutLayers = new ArrayList<>();
+        cutLayers = new ArrayList<>();
         // Array containing layers with whats interesting to the player but in world size for correct rendering
         ArrayList<TiledMapTileLayer> renderLayers = new ArrayList<>();
+        // List of 2D arrays containing only tile IDs that are interesting to the player
+        ArrayList<GameRegister.Layer> aoiLayers = new ArrayList<>();
 
         if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
-            if (spectatee == null) { // cant spectate if its null
+            if (spectatee == null || spectatee.get(Component.Character.class) == null) { // cant spectate if its null
                 spectatee = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
                         get().getValue().character;
                 Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
                 return;
             }
+            int l = 0;
             for (MapLayer mapLayer : map.getLayers()) { // cut layers so it only contains whats interesting to spectatee
-                if (mapLayer.getClass().equals(TiledMapTileLayer.class)) { // only cuts tile map layers
+                if (mapLayer.getClass().equals(TiledMapTileLayer.class)) { // only cuts tile map layers TODO: object layer can be at client side also? or should it be sent?
                     TiledMapTileLayer layerBase = (TiledMapTileLayer) mapLayer;
 
                     float playerX = spectatee.get(Component.Character.class).position.x;
@@ -270,10 +301,10 @@ public class WorldMap implements InputProcessor {
                     float pY = tPos.y;
 
                     int minI = MathUtils.ceil(pY - N_ROWS / 2);
-                    int maxI = MathUtils.ceil(pY + N_ROWS / 2);
+                    int maxI = MathUtils.ceil(pY + N_ROWS / 2)-1;
 
                     int minJ = MathUtils.ceil(pX - N_COLS / 2);
-                    int maxJ = MathUtils.ceil(pX + N_COLS / 2);
+                    int maxJ = MathUtils.ceil(pX + N_COLS / 2)-1;
 
                     // clamp to limits but always send same amount of info
                     if (minI < 0) {
@@ -298,39 +329,96 @@ public class WorldMap implements InputProcessor {
                     layerCut.setName(layerBase.getName());
                     layerCut.setOpacity(layerBase.getOpacity());
                     layerCut.setOffsetX(layerBase.getOffsetX());
+                    layerCut.setOffsetY(layerBase.getOffsetY());
+                    layerCut.setParallaxX(layerBase.getParallaxX());
+                    layerCut.setParallaxY(layerBase.getParallaxY());
+                    layerCut.setVisible(layerBase.isVisible());
+                    layerCut.getProperties().putAll(layerBase.getProperties());
 
+                    int[][] aoiTiles = new int[N_ROWS][N_COLS];
                     // stores visible tiles in the cull layer
                     for (int row = minI; row <= maxI; row++) {
                         for (int col = minJ; col <= maxJ; col++) {
                             final TiledMapTileLayer.Cell cell = layerBase.getCell(col, row);
                             layerCut.setCell(col - minJ, row - minI, cell);
+                            if(cell != null)
+                                aoiTiles[col-minJ][row-minI] = cell.getTile().getId();
+                            else
+                                aoiTiles[col-minJ][row-minI] = -1; // represents null tile/cell
                         }
                     }
-
                     cutLayers.add(layerCut);
+                    GameRegister.Layer aoiLayer = new GameRegister.Layer();
+                    aoiLayer.tiles = aoiTiles;
+                    aoiLayer.isEntityLayer = layerBase.getProperties().get("entity_layer", Boolean.class);
+                    aoiLayers.add(aoiLayer);
                     // AFTER SENDING TO CLIENT, CLIENT CAN RECREATE IN THE CORRECT POSITION WITH THE FOLLOWING STEPS:
 
                     // create big layer that contains the size of the world
                     TiledMapTileLayer bigLayer = new TiledMapTileLayer(TILES_WIDTH, TILES_HEIGHT, 32, 16);
-                    bigLayer.setName(layerBase.getName());
-                    bigLayer.setOpacity(layerBase.getOpacity());
-                    bigLayer.setOffsetX(layerBase.getOffsetX());
+//                    bigLayer.setName(layerBase.getName());
+//                    bigLayer.setOpacity(layerBase.getOpacity());
+//                    bigLayer.setOffsetX(layerBase.getOffsetX());
+//                    bigLayer.setOffsetY(layerBase.getOffsetY());
+//                    bigLayer.setParallaxX(layerBase.getParallaxX());
+//                    bigLayer.setParallaxY(layerBase.getParallaxY());
+//                    bigLayer.setVisible(layerBase.isVisible());
+//                    bigLayer.getProperties().putAll(layerBase.getProperties());
+                    bigLayer.getProperties().put("entity_layer", aoiLayer.isEntityLayer);
+
+                    TiledMapTileSets tilesets = map.getTileSets();
+                    int MASK_CLEAR = 0xE0000000;
+                    int FLAG_FLIP_HORIZONTALLY = 0x80000000;
+                    int FLAG_FLIP_VERTICALLY = 0x40000000;
+                    int FLAG_FLIP_DIAGONALLY = 0x20000000;
 
                     // places the layer culled by the server in the correct position in world 2d array for correct rendering
                     for (int row = minI; row <= maxI; row++) {
                         for (int col = minJ; col <= maxJ; col++) {
-                            final TiledMapTileLayer.Cell cell = layerCut.getCell(col - minJ, row - minI);
+                            int id = aoiTiles[col-minJ][row-minI];
+                            boolean flipHorizontally = ((id & FLAG_FLIP_HORIZONTALLY) != 0);
+                            boolean flipVertically = ((id & FLAG_FLIP_VERTICALLY) != 0);
+                            boolean flipDiagonally = ((id & FLAG_FLIP_DIAGONALLY) != 0);
+                            TiledMapTile tile = tilesets.getTile(id & ~MASK_CLEAR);
+                            TiledMapTileLayer.Cell cell = createTileLayerCell(flipHorizontally, flipVertically, flipDiagonally);
+                            cell.setTile(tile);
+                            //final TiledMapTileLayer.Cell cell = layerCut.getCell(col - minJ, row - minI);
                             bigLayer.setCell(col, row, cell);
                         }
                     }
 
                     renderLayers.add(bigLayer);
+                    l++; // next layer
                 }
             }
         }
 
-        System.out.println("CUT: " + GraphLayout.parseInstance(cutLayers).toFootprint());
-        System.out.println("RENDER: " + GraphLayout.parseInstance(renderLayers).toFootprint());
+
+//        System.out.println("### aoiTiles DEBUG ### \n\n");
+//
+//        for(int l = 0; l < aoiLayers.size(); l++) {
+//            System.out.println("\n\nLAYER "+l+": isEntityLayer? : " + aoiLayers.get(l).isEntityLayer + "\n");
+//            int[][] aoiTiles = aoiLayers.get(l).tiles;
+//            for (int i = 0; i < aoiTiles.length; i++) {
+//                System.out.println(" ");
+//                for (int j = 0; j < aoiTiles[i].length; j++) {
+//                    System.out.printf(aoiTiles[i][j] + " ,");
+//                }
+//            }
+//        }
+
+//        System.out.println("\n\n### END DEBUG ### ");
+
+//        String fprint = GraphLayout.parseInstance(aoiLayers).toFootprint();
+//        String[] lines = fprint.split("\n"); String lastLine = lines[lines.length - 2];
+
+        // WRITE SIZE OF MAP STATE MESSAGE IN METRICS FOR DEBUG
+//        Output output = new Output(1024, -1);
+//        kryo.writeObject(output, aoiLayers);
+//        RogueFantasyServer.worldStateMessageSize = String.valueOf(output.total());
+
+//        System.out.println("CUT: " + GraphLayout.parseInstance(cutLayers).toFootprint());
+//        System.out.println("RENDER: " + GraphLayout.parseInstance(renderLayers).toFootprint());
 
         /** THE FOLLOWING METHOD IS ALREADY OPTIMIZED FOR DRAWING VISIBLE TILES!!! **/
 
@@ -423,7 +511,7 @@ public class WorldMap implements InputProcessor {
                         renderCell(cell, x, y, layerOffsetX, layerOffsetY, layer.getOpacity());
 
                     // if its on the wall layer render entities alongside for correct drawing
-                    if (layer.getName().contains("Wall")) {
+                    if (layer.getProperties().get("entity_layer", Boolean.class)) {
                         Map<Integer, Entity> tileEntities = EntityController.getInstance().getEntitiesAtTilePos(col, row);
                         if (tileEntities.size() > 0) { // render entities of tile if any exists
                             for (Map.Entry<Integer, Entity> entry : tileEntities.entrySet()) {
@@ -432,9 +520,11 @@ public class WorldMap implements InputProcessor {
                                 Vector2 pos;
                                 Component.Attributes attr;
                                 if (!entity.has(Component.Character.class)) {// non-player entity
+                                    if(entity.get(Component.Position.class) == null) continue;
                                     pos = new Vector2(entity.get(Component.Position.class).x, entity.get(Component.Position.class).y);
                                     attr = entity.get(Component.Attributes.class);
                                 } else {
+                                    if(entity.get(Component.Character.class) == null) continue;
                                     pos = new Vector2(entity.get(Component.Character.class).position.x,
                                             entity.get(Component.Character.class).position.y);
                                     attr = entity.get(Component.Character.class).attr;
@@ -456,12 +546,8 @@ public class WorldMap implements InputProcessor {
             }
         }
 
-        String fprint = GraphLayout.parseInstance(cutLayers).toFootprint();
-        String[] lines = fprint.split("\n"); String lastLine = lines[lines.length - 2];
-        RogueFantasyServer.worldStateMessageSize = lastLine;
-
 //        if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
-//            if(spectatee == null) {
+//            if(spectatee == null  || spectatee.get(Component.Character.class) == null) {
 //                spectatee = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
 //                        get().getValue().character;
 //                Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
@@ -564,6 +650,27 @@ public class WorldMap implements InputProcessor {
 
     }
 
+    protected TiledMapTileLayer.Cell createTileLayerCell (boolean flipHorizontally, boolean flipVertically, boolean flipDiagonally) {
+        TiledMapTileLayer.Cell cell = new TiledMapTileLayer.Cell();
+        if (flipDiagonally) {
+            if (flipHorizontally && flipVertically) {
+                cell.setFlipHorizontally(true);
+                cell.setRotation(TiledMapTileLayer.Cell.ROTATE_270);
+            } else if (flipHorizontally) {
+                cell.setRotation(TiledMapTileLayer.Cell.ROTATE_270);
+            } else if (flipVertically) {
+                cell.setRotation(TiledMapTileLayer.Cell.ROTATE_90);
+            } else {
+                cell.setFlipVertically(true);
+                cell.setRotation(TiledMapTileLayer.Cell.ROTATE_270);
+            }
+        } else {
+            cell.setFlipHorizontally(flipHorizontally);
+            cell.setFlipVertically(flipVertically);
+        }
+        return cell;
+    }
+
     private Vector3 translateScreenToIso (Vector2 vec) {
         screenPos.set(vec.x, vec.y, 0);
         screenPos.mul(invIsotransform);
@@ -579,6 +686,7 @@ public class WorldMap implements InputProcessor {
             final boolean flipX = cell.getFlipHorizontally();
             final boolean flipY = cell.getFlipVertically();
             final int rotations = cell.getRotation();
+            AnimatedTiledMapTile.updateAnimationBaseTime(); // update tile animation before drawing in case its an animated tile
 
             TextureRegion region = tile.getTextureRegion();
 
