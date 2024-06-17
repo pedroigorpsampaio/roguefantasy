@@ -354,7 +354,6 @@ public class Entity {
 
             // animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
 
-
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
             batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()*WorldMap.unitScale,
@@ -634,13 +633,12 @@ public class Entity {
 
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
-           // batch.begin();
+
             batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()*WorldMap.unitScale,
                     currentFrame.getRegionHeight()*WorldMap.unitScale);//, 60, 60,
             //                120, 120, 1f, 1f, 0);
             outlineLabel.draw(batch, 1.0f);
             nameLabel.draw(batch, 1.0f);
-            //batch.end();
         }
 
         // interpolates inbetween position vector

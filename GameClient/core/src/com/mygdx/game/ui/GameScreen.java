@@ -206,7 +206,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
             @Override
             public boolean scrolled(InputEvent event, float x, float y, float amountX, float amountY) {
                 aimZoom = camera.zoom + amountY * 0.1f;
-                world.zoom(amountY);
+                //world.zoom(amountY);
                 //camera.zoom += amountY;
                 return super.scrolled(event, x, y, amountX, amountY);
             }
@@ -312,13 +312,16 @@ public class GameScreen implements Screen, PropertyChangeListener {
         Entity.Character player = gameClient.getClientCharacter();
         if(player != null && player.assetsLoaded) {
             if(playerIsTarget) {
-                float lerp = 6.66f * Gdx.graphics.getDeltaTime();
-                camera.position.x += (player.getCenter().x - camera.position.x) * lerp;
-                camera.position.y += (player.getCenter().y - camera.position.y) * lerp;
-                if (new Vector2(camera.position.x, camera.position.y).dst(player.getCenter()) < lerp) {
-                    camera.position.x = player.getCenter().x;
-                    camera.position.y = player.getCenter().y;
-                }
+                float playerX = player.interPos.x + player.spriteW/2f;
+                float playerY = player.interPos.y + player.spriteH/2f;
+
+                Vector3 target = new Vector3(playerX,playerY,0);
+                final float speed=Gdx.graphics.getDeltaTime()*player.speed,ispeed=1.0f-speed;
+                Vector3 cameraPosition = camera.position;
+                cameraPosition.scl(ispeed);
+                target.scl(speed);
+                cameraPosition.add(target);
+                camera.position.set(cameraPosition);
             } else {
                 camera.position.x = player.getCenter().x;
                 camera.position.y = player.getCenter().y;
@@ -326,11 +329,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
             }
         }
 
-        // clamp values for camera
-        float effectiveViewportWidth = camera.viewportWidth * camera.zoom;
-        float effectiveViewportHeight = camera.viewportHeight * camera.zoom;
-        camera.position.x = MathUtils.clamp(camera.position.x, effectiveViewportWidth / 2f, WORLD_WIDTH - effectiveViewportWidth / 2f);
-        camera.position.y = MathUtils.clamp(camera.position.y, effectiveViewportHeight / 2f, WORLD_HEIGHT - effectiveViewportHeight / 2f);
+        // clamp values for camera //TODO: CORRECTLY CLAMP ISO WORLD!
+//        float effectiveViewportWidth = camera.viewportWidth * camera.zoom;
+//        float effectiveViewportHeight = camera.viewportHeight * camera.zoom;
+//        camera.position.x = MathUtils.clamp(camera.position.x, effectiveViewportWidth / 2f, WORLD_WIDTH - effectiveViewportWidth / 2f);
+//        camera.position.y = MathUtils.clamp(camera.position.y, effectiveViewportHeight / 2f, WORLD_HEIGHT - effectiveViewportHeight / 2f);
         // updates camera
         camera.update();
     }
@@ -360,9 +363,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         while(GameClient.getInstance().isPredictingRecon.get()); // don't render world while reconciliating pos of client
 
-        world.render(); // render world
+        batch.totalRenderCalls = 0;
 
         batch.begin();
+
+        world.render(); // render world
+
         //mapSprite.draw(batch);
 
         // draw creatures
@@ -388,6 +394,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         batch.end();
 
+        int calls = batch.totalRenderCalls;
+
+        //Log or render to screen
+        //System.out.println(calls);
+
         fpsLabel.setText("fps: " + Gdx.graphics.getFramesPerSecond());
         pingLabel.setText("ping: " + gameClient.getAvgLatency());
         ramLabel.setText("RAM: " + Common.getRamUsage() + " MB");
@@ -403,7 +414,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         camera.viewportWidth = 32f;
         camera.viewportHeight = 32f * height/width;
         camera.update();
-        world.resize(width, height);
+        //world.resize(width, height);
     }
 
     @Override
