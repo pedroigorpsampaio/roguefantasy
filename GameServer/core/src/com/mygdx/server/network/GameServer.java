@@ -394,6 +394,8 @@ public class GameServer implements CmdReceiver {
                 kryo.register(GameRegister.UpdateCharacter.class);
                 kryo.register(GameRegister.UpdateState.class);
                 kryo.register(ArrayList.class);
+                kryo.register(short[][].class);
+                kryo.register(short[].class);
                 kryo.register(int[][].class);
                 kryo.register(int[].class);
                 kryo.register(Vector2.class);

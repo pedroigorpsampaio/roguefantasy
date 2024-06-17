@@ -52,10 +52,11 @@ import java.util.ArrayList;
 
 public class WorldMap {
     public static ArrayList<GameRegister.Layer> layers = new ArrayList<>();
+    public static int tileOffsetX=0,tileOffsetY=0;
     private final TiledMap map;
     private final SpriteBatch batch;
     public static float WORLD_WIDTH, WORLD_HEIGHT;
-    public static int TILES_WIDTH = 2500, TILES_HEIGHT = 2500, TEX_WIDTH = 32, TEX_HEIGHT = 16; // in agreement with server map
+    public static int TILES_WIDTH = 1000, TILES_HEIGHT = 1000, TEX_WIDTH = 32, TEX_HEIGHT = 16; // in agreement with server map
     public static final float unitScale = 1 / 32f;
     private OrthographicCamera camera;
     private Vector2 topRight = new Vector2();
@@ -93,8 +94,6 @@ public class WorldMap {
             tmxLayers.add(tmxLayer);
         }
 
-        System.out.println(tmxLayers.size() + " // " + tmxLayers.get(1).getWidth());
-
         // create the isometric transform
         isoTransform = new Matrix4();
         isoTransform.idt();
@@ -106,10 +105,6 @@ public class WorldMap {
         // ... and the inverse matrix
         invIsotransform = new Matrix4(isoTransform);
         invIsotransform.inv();
-    }
-
-    public void updateCamera() {
-        setView(); // updates view with new camera values
     }
 
     /**
@@ -153,8 +148,11 @@ public class WorldMap {
         return true;
     }
 
+    /**
+     * Updates world map view bounds based on cameras current data
+     */
     public void setView () {
-        batch.setProjectionMatrix(camera.combined);
+        //batch.setProjectionMatrix(camera.combined);
         float width = camera.viewportWidth * camera.zoom;
         float height = camera.viewportHeight * camera.zoom;
         float w = width * Math.abs(camera.up.y) + height * Math.abs(camera.up.x);
@@ -168,9 +166,7 @@ public class WorldMap {
     public void render() {
         if(layers == null || layers.size() == 0) return ; // server hasn't sent tile data yet
 
-        updateCamera();
-//        if(GameClient.getInstance().isPredictingRecon.get()) return;
-//        renderer.setView(cam);
+        setView(); // update world map view bounds based on game camera
 
         Entity.Character spectatee = GameClient.getInstance().getClientCharacter();
         float playerX = spectatee.interPos.x;
@@ -212,7 +208,8 @@ public class WorldMap {
         int FLAG_FLIP_DIAGONALLY = 0x20000000;
 
         int l = 0;
-        for (TiledMapTileLayer layer : tmxLayers) { // loop through tile layers to be rendered TODO: object layer can be at client side also? or should it be sent?
+        // loop through tile layers to be rendered TODO: object layer can be at client side also? or should it be sent?
+        for (TiledMapTileLayer layer : tmxLayers) {
             float tileWidth = layer.getTileWidth() * unitScale;
             float tileHeight = layer.getTileHeight() * unitScale;
 
@@ -223,10 +220,33 @@ public class WorldMap {
             float halfTileWidth = tileWidth * 0.5f;
             float halfTileHeight = tileHeight * 0.5f;
 
-            // places the layer culled by the server in the correct position in world 2d array for correct rendering
-            for (int row = maxI; row >= minI; row--) {
-                for (int col = minJ; col <= maxJ; col++) {
-                    int id = layers.get(l).tiles[col-minJ][row-minI];
+//            for(int i = 0; i < layers.get(l).tiles.length; i++) {
+//                for(int j = 0 ; j < layers.get(l).tiles[i].length; j++) {
+//                    int id = layers.get(l).tiles[j][i];
+//                    boolean flipHorizontally = ((id & FLAG_FLIP_HORIZONTALLY) != 0);
+//                    boolean flipVertically = ((id & FLAG_FLIP_VERTICALLY) != 0);
+//                    boolean flipDiagonally = ((id & FLAG_FLIP_DIAGONALLY) != 0);
+//                    TiledMapTile tile = tilesets.getTile(id & ~MASK_CLEAR);
+//                    if(tile != null) {
+//                        tile.getTextureRegion().getTexture().setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+//                        tile.setBlendMode(TiledMapTile.BlendMode.NONE);
+//                    }
+//                    TiledMapTileLayer.Cell cell = createTileLayerCell(flipHorizontally, flipVertically, flipDiagonally);
+//                    cell.setTile(tile);
+//
+//                    int originalX = j + tileOffsetX; int originalY = i + tileOffsetY;
+//                    //if(layer.getCell(originalX, originalY) == null) {
+//
+//                        //System.out.println("diffX: " + (originalX-col) + " / diffY: " + (originalY-row));
+//                        layer.setCell(originalX, originalY, cell);
+//                    //}
+//                }
+//            }
+
+            // loop only through AoI of player creating tiles and placing it in correct position of world
+            for (int row = maxI, i = 0; row >= minI; row--, i++) {
+                for (int col = minJ, j = 0; col <= maxJ; col++, j++) {
+                    int id = layers.get(l).tiles[j][i];
                     boolean flipHorizontally = ((id & FLAG_FLIP_HORIZONTALLY) != 0);
                     boolean flipVertically = ((id & FLAG_FLIP_VERTICALLY) != 0);
                     boolean flipDiagonally = ((id & FLAG_FLIP_DIAGONALLY) != 0);
@@ -238,9 +258,10 @@ public class WorldMap {
                     TiledMapTileLayer.Cell cell = createTileLayerCell(flipHorizontally, flipVertically, flipDiagonally);
                     cell.setTile(tile);
 
-                    if(layer.getCell(col, row) == null) {
-                        layer.setCell(col, row, cell);
-                    }
+                    //if(layer.getCell(col, row) == null) {
+                        int originalX = j + tileOffsetX; int originalY = i + tileOffsetY;
+                        layer.setCell(originalX, originalY, cell);
+                    //}
 
                     float x = (col * halfTileWidth) + (row * halfTileWidth);
                     float y = (row * halfTileHeight) - (col * halfTileHeight);
@@ -250,49 +271,27 @@ public class WorldMap {
             l++;
         }
 
-
-//        for (MapLayer mapLayer : map.getLayers()) { // loop through layers
-//            if (mapLayer.getClass().equals(TiledMapTileLayer.class)) { // only renders tilemap layers TODO: object layer can be at client side also? or should it be sent?
-//                TiledMapTileLayer layer = (TiledMapTileLayer) mapLayer;
+//        for (TiledMapTileLayer layer : tmxLayers) {
+//            float tileWidth = layer.getTileWidth() * unitScale;
+//            float tileHeight = layer.getTileHeight() * unitScale;
 //
-//                float tileWidth = layer.getTileWidth() * unitScale;
-//                float tileHeight = layer.getTileHeight() * unitScale;
+//            final float layerOffsetX = layer.getRenderOffsetX() * unitScale - viewBounds.x * (layer.getParallaxX() - 1);
+//            // offset in tiled is y down, so we flip it
+//            final float layerOffsetY = -layer.getRenderOffsetY() * unitScale - viewBounds.y * (layer.getParallaxY() - 1);
 //
-//                final float layerOffsetX = layer.getRenderOffsetX() * unitScale - renderer.getViewBounds().x * (layer.getParallaxX() - 1);
-//                // offset in tiled is y down, so we flip it
-//                final float layerOffsetY = -layer.getRenderOffsetY() * unitScale - renderer.getViewBounds().y * (layer.getParallaxY() - 1);
+//            float halfTileWidth = tileWidth * 0.5f;
+//            float halfTileHeight = tileHeight * 0.5f;
 //
-//                float halfTileWidth = tileWidth * 0.5f;
-//                float halfTileHeight = tileHeight * 0.5f;
-//
-//                // places the layer culled by the server in the correct position in world 2d array for correct rendering
-//                for (int row = maxI; row >= minI; row--) {
-//                    for (int col = minJ; col <= maxJ; col++) {
-//                        int id = layers.get(l).tiles[col-minJ][row-minI];
-//                        boolean flipHorizontally = ((id & FLAG_FLIP_HORIZONTALLY) != 0);
-//                        boolean flipVertically = ((id & FLAG_FLIP_VERTICALLY) != 0);
-//                        boolean flipDiagonally = ((id & FLAG_FLIP_DIAGONALLY) != 0);
-//                        TiledMapTile tile = tilesets.getTile(id & ~MASK_CLEAR);
-//                        if(tile != null) {
-//                            tile.getTextureRegion().getTexture().setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-//                            tile.setBlendMode(TiledMapTile.BlendMode.NONE);
-//                        }
-//                        TiledMapTileLayer.Cell cell = createTileLayerCell(flipHorizontally, flipVertically, flipDiagonally);
-//                        cell.setTile(tile);
-//
-//                        if(((TiledMapTileLayer) mapLayer).getCell(col, row) == null) {
-//                            ((TiledMapTileLayer) mapLayer).setCell(col, row, cell);
-//                        }
-//
-//                        float x = (col * halfTileWidth) + (row * halfTileWidth);
-//                        float y = (row * halfTileHeight) - (col * halfTileHeight);
-//                        renderCell(((TiledMapTileLayer) mapLayer).getCell(col, row), x, y, layerOffsetX, layerOffsetY, layer.getOpacity());
-//                    }
+//            // loop only through AoI of player creating tiles and placing it in correct position of world
+//            for (int row = maxI; row >= minI; row--) {
+//                for (int col = minJ; col <= maxJ; col++) {
+//                    float x = (col * halfTileWidth) + (row * halfTileWidth);
+//                    float y = (row * halfTileHeight) - (col * halfTileHeight);
+//                    renderCell(layer.getCell(col, row), x, y, layerOffsetX, layerOffsetY, layer.getOpacity());
 //                }
 //            }
 //            l++;
 //        }
-
     }
 
     /**

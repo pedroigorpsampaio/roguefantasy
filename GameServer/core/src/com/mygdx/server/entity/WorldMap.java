@@ -123,8 +123,10 @@ public class WorldMap implements InputProcessor {
         // for serialization debug
         kryo = new Kryo();
         // Register all classes to be serialized.
-        kryo.register(int[].class);
+        kryo.register(short[][].class);
+        kryo.register(short[].class);
         kryo.register(int[][].class);
+        kryo.register(int[].class);
         kryo.register(ArrayList.class);
         kryo.register(GameRegister.Layer.class);
         bos = new ByteArrayOutputStream();

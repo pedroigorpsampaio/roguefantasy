@@ -111,6 +111,9 @@ public class Component {
                 maxJ = TILES_WIDTH;
             }
 
+            state.tileOffsetX = minJ;
+            state.tileOffsetY = minI;
+
             TiledMap map = RogueFantasyServer.world.getMap();
             for (MapLayer mapLayer : map.getLayers()) { // iterate through world map layers
                 if (mapLayer.getClass().equals(TiledMapTileLayer.class)) { // only iterates tile map layers TODO: object layer can be at client side also? or should it be sent?
@@ -123,7 +126,7 @@ public class Component {
                         for (int col = minJ; col <= maxJ; col++) {
                             final TiledMapTileLayer.Cell cell = layerBase.getCell(col, row);
                             if (cell != null)
-                                aoiLayer.tiles[col - minJ][row - minI] = cell.getTile().getId();
+                                aoiLayer.tiles[col - minJ][row - minI] = (short) cell.getTile().getId();
                             else
                                 aoiLayer.tiles[col - minJ][row - minI] = -1; // represents null tile/cell
 

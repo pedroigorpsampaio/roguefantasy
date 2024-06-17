@@ -279,7 +279,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
             vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
             vec3 = camera.unproject(vec3); // unproject screen touch
             touchPos = new Vector2(vec3.x - gameClient.getClientCharacter().spriteW/2f,  // compensate to use center of char sprite as anchor
-                                    vec3.y - gameClient.getClientCharacter().spriteH/2f);
+                    vec3.y - gameClient.getClientCharacter().spriteH/2f);
             movement.xEnd = touchPos.x; movement.yEnd = touchPos.y;
             movement.hasEndPoint = true;
         } else { // if no click/touch is made, there is no end point goal of movement

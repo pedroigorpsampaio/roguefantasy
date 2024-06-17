@@ -245,6 +245,8 @@ public class GameClient extends DispatchServer {
         public void updateState(GameRegister.UpdateState state) {
             if(state.tileLayers != null) {
                 WorldMap.layers = state.tileLayers;
+                WorldMap.tileOffsetX = state.tileOffsetX;
+                WorldMap.tileOffsetY = state.tileOffsetY;
                 //WorldMap.debugMap();
             }
             if(state.characterUpdates != null) // there are character updates
