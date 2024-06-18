@@ -95,8 +95,7 @@ public class GameRegister {
     }
 
     static public class UpdateCharacter {
-        public int id;
-        public float x, y;
+        public Character character;
         public long lastRequestId; // the last move request processed that resulted in this x,y
         public Vector2 dir;
     }

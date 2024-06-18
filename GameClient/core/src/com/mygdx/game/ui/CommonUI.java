@@ -1,6 +1,8 @@
 package com.mygdx.game.ui;
 
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
@@ -55,6 +57,18 @@ public class CommonUI {
         dialog.pack();
         dialog.show(stage);
         return dialog;
+    }
+
+    public static Pixmap getPixmapCircle(int radius, Color color, boolean isFilled) {
+        Pixmap pixmap=new Pixmap(2*radius+1, 2*radius+1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(color);
+        if(isFilled)
+            pixmap.fillCircle(radius, radius, radius);
+        else
+            pixmap.drawCircle(radius, radius, radius);
+        pixmap.drawLine(radius, radius, 2*radius, radius);
+        pixmap.setFilter(Pixmap.Filter.NearestNeighbour);
+        return pixmap;
     }
 
     // creates a dialog from the parameters provided with a timer

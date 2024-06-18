@@ -193,7 +193,11 @@ public class LoadScreen implements Screen {
         manager.load("bgm/time_commando.mp3", Music.class);
         // only needed once
         manager.setLoader(TiledMap.class, new TmxMapLoader(new InternalFileHandleResolver()));
-        manager.load("world/testmap.tmx", TiledMap.class);
+        TmxMapLoader.Parameters par = new TmxMapLoader.Parameters();
+        par.textureMinFilter = Texture.TextureFilter.MipMapLinearNearest;
+        par.textureMagFilter = Texture.TextureFilter.Linear;
+        par.generateMipMaps = true;
+        manager.load("world/testmap.tmx", TiledMap.class, par);
 
         pgBar = new ProgressBar(0, 1, 0.1f, false, skin);
         stage.addActor(pgBar);

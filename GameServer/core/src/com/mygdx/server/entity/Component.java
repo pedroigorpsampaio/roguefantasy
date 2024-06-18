@@ -51,9 +51,13 @@ public class Component {
          */
         public GameRegister.UpdateCharacter getCharacterData() {
             GameRegister.UpdateCharacter update = new GameRegister.UpdateCharacter();
-            update.id = tag.id;
-            update.x = position.x;
-            update.y = position.y;
+            update.character = new GameRegister.Character();
+            update.character.id = tag.id;
+            update.character.x = position.x;
+            update.character.y = position.y;
+            update.character.name = tag.name;
+            update.character.speed = attr.speed;
+            update.character.role_level = role_level;
             update.dir = dir;
             update.lastRequestId = lastMoveId;
             return update;
@@ -429,15 +433,15 @@ public class Component {
                     velocity.x = 1 * attributes.speed * GameRegister.clientTickrate();
                     velocity.y = 0;
                 }
-                if (position.x >= spawn.position.x + 100 && position.y <= spawn.position.y) {
+                if (position.x >= spawn.position.x + 5 && position.y <= spawn.position.y) {
                     velocity.x = 0;
                     velocity.y = 1 * attributes.speed * GameRegister.clientTickrate();
                 }
-                if(position.x >= spawn.position.x + 100 && position.y >= spawn.position.y + 100) {
+                if(position.x >= spawn.position.x + 5 && position.y >= spawn.position.y + 5) {
                     velocity.x = -1 * attributes.speed * GameRegister.clientTickrate();
                     velocity.y = 0;
                 }
-                if(position.x <= spawn.position.x && position.y >= spawn.position.y + 100){
+                if(position.x <= spawn.position.x && position.y >= spawn.position.y + 5){
                     velocity.x = 0;
                     velocity.y = -1 * attributes.speed * GameRegister.clientTickrate();
                 }

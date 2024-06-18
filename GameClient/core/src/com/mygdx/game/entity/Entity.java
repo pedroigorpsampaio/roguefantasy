@@ -1,12 +1,19 @@
 package com.mygdx.game.entity;
 
+import static com.mygdx.game.ui.CommonUI.getPixmapCircle;
+
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.github.tommyettinger.textra.Font;
@@ -21,9 +28,14 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class Entity {
+public abstract class Entity implements Comparable<Entity> {
     public static AssetManager assetManager; // screen asset manager
     public static Stage stage; // screen stage
+    protected Pixmap debugCircle; // for debug
+    protected Texture debugTex; // for debug
+    public static float tagScale = WorldMap.unitScale * 0.66f;
+    public Vector2 drawPos = new Vector2(0,0); // position to draw this entity
+    public int uId;
     public enum Direction {
         NORTHWEST(-1, 1),
         NORTH(0, 1),
@@ -86,7 +98,20 @@ public class Entity {
 
     }
 
-    public static class Character {
+    /**
+     * Entities that belongs to the world can be drawn in the world using this method
+     * @param batch     the batch to draw entity
+     */
+    public abstract void render(SpriteBatch batch) ;
+
+    /**
+     * Entities that belongs to the world can draw UI on UI camera if needed by implementing this method
+     * @param batch     the batch to draw UI
+     * @param worldCamera   the world camera reference for necessary projections to screen position
+     */
+    public abstract void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) ;
+
+    public static class Character extends Entity {
         // Constant rows and columns of the sprite sheet
         private static final int FRAME_COLS = 6, FRAME_ROWS = 24;
         private static final float ANIM_BASE_INTERVAL = 0.25175f; // the base interval between anim frames
@@ -111,6 +136,26 @@ public class Entity {
         private Vector2 goalPos;
         private float tIntElapsed;
 
+        @Override
+        public int compareTo(Entity entity) {
+//            Vector3 e1Iso = WorldMap.translateScreenToIso(this.drawPos);
+//            Vector3 e2Iso = WorldMap.translateScreenToIso(entity.drawPos);
+//            float e1Depth = e1Iso.x + e1Iso.y;
+//            float e2Depth = e2Iso.x + e2Iso.y;
+//            if(e1Depth <= e2Depth)
+//                return -1;
+//            else
+//                return 1;
+            Vector2 e1Iso = this.drawPos;
+            Vector2 e2Iso = entity.drawPos;
+            float e1Depth = e1Iso.y;
+            float e2Depth = e2Iso.y;
+            if(e1Depth > e2Depth)
+                return -1;
+            else
+                return 1;
+        }
+
         public static class EntityInterPos {
             public long timestamp;
             public Vector2 position;
@@ -118,7 +163,9 @@ public class Entity {
 
         public Character(String name, int id, int role_level, float x, float y, float speed) {
             this.name = name; this.id = id; this.role_level = role_level; this.outfitId = 0;
+            this.uId = EntityController.getInstance().generateUid();
             this.position = new Vector2(x, y); this.interPos = new Vector2(x, y);
+            this.drawPos = new Vector2(x, y);
             this.x = x; this.y = y; this.speed = speed; lastRequestId = new AtomicLong(0);
             this.direction = Direction.SOUTH;
             this.bufferedPos = new ConcurrentSkipListMap<>();
@@ -141,6 +188,9 @@ public class Entity {
             //stage.addActor(this);
 
             Gdx.app.postRunnable(() -> {
+                debugCircle = getPixmapCircle(10, Color.RED,true);
+                debugTex=new Texture(debugCircle);
+                debugTex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
                 // Load the sprite sheet as a Texture
                 spriteSheet = new Texture(Gdx.files.internal("spritesheet/outfit/"+this.outfitId+".png"));
                 spriteSheet.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
@@ -153,8 +203,8 @@ public class Entity {
                         spriteSheet.getWidth() / FRAME_COLS,
                         spriteSheet.getHeight() / FRAME_ROWS);
 
-                float atkFactor = 20f / (speed*0.33f);
-                float walkFactor = 20f / (speed*0.33f);
+                float atkFactor = 20f / (speed*0.33f); // TODO: ATTK SPEEd
+                float walkFactor = (20f / (speed*0.33f)) * WorldMap.unitScale;
 
                 // Place the regions into a 1D array in the correct order, starting from the top
                 // left, going across first. The Animation constructor requires a 1D array.
@@ -290,6 +340,7 @@ public class Entity {
             if(interpolation) {
                 this.interPos.x = x;
                 this.interPos.y = y;
+                this.drawPos = new Vector2(x, y);
             } else {
                 this.x = x;
                 this.y = y;
@@ -325,6 +376,12 @@ public class Entity {
             }
         }
 
+        @Override
+        public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
+
+        }
+
+        @Override
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
@@ -342,24 +399,34 @@ public class Entity {
                 currentAnimation = idle;
             }
 
-            centerPos = new Vector2(this.interPos.x + spriteW/2f, this.interPos.y + spriteH/2f);
-            nameLabel.setBounds(this.centerPos.x - nameLabel.getWidth()/2f,
-                    this.centerPos.y + spriteH/2f,
-                    nameLabel.getWidth(), nameLabel.getHeight());
-            nameLabel.scaleBy(WorldMap.unitScale);
-            outlineLabel.setBounds(this.centerPos.x - nameLabel.getWidth()/2f - 1,
-                    this.centerPos.y + spriteH/2f -1,
-                    nameLabel.getWidth() +1, nameLabel.getHeight()+1);
-            outlineLabel.scaleBy(WorldMap.unitScale);
-
             // animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
 
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
             batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()*WorldMap.unitScale,
                     currentFrame.getRegionHeight()*WorldMap.unitScale);
-            //outlineLabel.draw(batch, 1.0f);
-            //nameLabel.draw(batch, 1.0f);
+
+            spriteH = currentFrame.getRegionHeight()*WorldMap.unitScale;
+            spriteW = currentFrame.getRegionWidth()*WorldMap.unitScale;
+            centerPos = new Vector2(this.interPos.x + spriteW/2f, this.interPos.y + spriteH/2f);
+            this.drawPos.x = this.interPos.x + spriteW/2f;
+            this.drawPos.y = this.interPos.y + spriteH/12f;
+
+            batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2*WorldMap.unitScale, 2*WorldMap.unitScale);
+
+            // draw player tag
+
+            nameLabel.getFont().scale(tagScale, tagScale);
+
+            nameLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/1.75f), this.centerPos.y + spriteH/2f + 8f,
+                    nameLabel.getWidth(), nameLabel.getHeight());
+            outlineLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/1.75f)-tagScale, this.centerPos.y + spriteH/2f + 8f-tagScale,
+                    nameLabel.getWidth() +tagScale, nameLabel.getHeight()+tagScale);
+
+            outlineLabel.draw(batch, 1.0f);
+            nameLabel.draw(batch, 1.0f);
+
+            nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
         }
 
         // interpolates stage assets to player current position
@@ -391,6 +458,8 @@ public class Entity {
             //remove(); // remove itself from stage
             Gdx.app.postRunnable(() -> {
                 spriteSheet.dispose();
+                debugTex.dispose();
+                debugCircle.dispose();
             });
         }
 
@@ -415,7 +484,7 @@ public class Entity {
 
     }
 
-    public static class Creature {
+    public static class Creature extends Entity {
         // Constant rows and columns of the sprite sheet
         private static final int FRAME_COLS = 15, FRAME_ROWS = 16;
         private static final float ANIM_BASE_INTERVAL = 0.25175f; // the base interval between anim frames
@@ -435,13 +504,16 @@ public class Entity {
         public State state;
         public TypingLabel nameLabel, outlineLabel;
         public int targetId;
+        private Vector2 centerPos;
 
         public Creature(String name, int creatureId, long spawnId, float x, float y, float speed, float attackSpeed,
                         float range, float lastVelocityX, float lastVelocityY, String stateName, int targetId) {
             this.name = name;
             this.creatureId = creatureId; this.spawnId = spawnId;
+            this.uId = EntityController.getInstance().generateUid();
             this.position = new Vector2(x, y);
             this.interPos = new Vector2(x, y);
+            this.drawPos =  new Vector2(x, y); // updates draw position for correct draw ordering
             this.lastVelocity = new Vector2(lastVelocityX, lastVelocityY);
             this.startPos = new Vector2(interPos.x, interPos.y);
             this.state = State.getStateFromName(stateName);
@@ -454,9 +526,9 @@ public class Entity {
             direction = Direction.SOUTHWEST;
             skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             font = skin.get("emojiFont", Font.class); // gets typist font with icons
-            nameLabel = new TypingLabel("{SIZE=69%}{COLOR=brick}"+this.name+"[%]", font);
+            nameLabel = new TypingLabel("{SIZE=55%}{COLOR=brick}"+this.name+"[%]", font);
             nameLabel.skipToTheEnd();
-            outlineLabel = new TypingLabel("{SIZE=69%}{COLOR=black}"+this.name+"[%]", font);
+            outlineLabel = new TypingLabel("{SIZE=55%}{COLOR=black}"+this.name+"[%]", font);
             outlineLabel.skipToTheEnd();
             // initialize animators
             walk = new ConcurrentHashMap<>();
@@ -464,6 +536,9 @@ public class Entity {
             idle = new ConcurrentHashMap<>();
 
             Gdx.app.postRunnable(() -> { // must wait for libgdx UI thread
+                debugCircle = getPixmapCircle(10, Color.RED,true);
+                debugTex=new Texture(debugCircle);
+                debugTex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
                 // Load the sprite sheet as a Texture
                 spriteSheet = new Texture(Gdx.files.internal("spritesheet/creature/"+this.creatureId+".png"));
                 spriteSheet.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
@@ -475,36 +550,39 @@ public class Entity {
                         spriteSheet.getHeight() / FRAME_ROWS);
                 // Place the regions into a 1D array in the correct order, starting from the top
                 // left, going across first. The Animation constructor requires a 1D array.
+
+                float walkFactor = (20f / (speed*0.85f)) * WorldMap.unitScale;
+
                 TextureRegion[] frames = new TextureRegion[8];
                 int index = 0;
                 for (int j = 0; j < 8; j++) {
                     frames[index++] = tmp[12][j];
                 }
-                walk.put(Direction.SOUTHWEST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
-                walk.put(Direction.SOUTH, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
-                walk.put(Direction.WEST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
+                walk.put(Direction.SOUTHWEST, new Animation<>(ANIM_BASE_INTERVAL * walkFactor, frames));
+                walk.put(Direction.SOUTH, new Animation<>(ANIM_BASE_INTERVAL  * walkFactor, frames));
+                walk.put(Direction.WEST, new Animation<>(ANIM_BASE_INTERVAL  * walkFactor, frames));
                 index = 0;
                 frames = new TextureRegion[8];
                 for (int j = 0; j < 8; j++) {
                     frames[index++] = tmp[13][j];
                 }
-                walk.put(Direction.SOUTHEAST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
-                walk.put(Direction.EAST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
+                walk.put(Direction.SOUTHEAST, new Animation<>(ANIM_BASE_INTERVAL  * walkFactor, frames));
+                walk.put(Direction.EAST, new Animation<>(ANIM_BASE_INTERVAL * walkFactor, frames));
                 index = 0;
                 frames = new TextureRegion[8];
                 for (int j = 0; j < 8; j++) {
                     frames[index++] = tmp[14][j];
                 }
-                walk.put(Direction.NORTHWEST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
-                walk.put(Direction.NORTH, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
+                walk.put(Direction.NORTHWEST, new Animation<>(ANIM_BASE_INTERVAL * walkFactor, frames));
+                walk.put(Direction.NORTH, new Animation<>(ANIM_BASE_INTERVAL * walkFactor, frames));
                 index = 0;
                 frames = new TextureRegion[8];
                 for (int j = 0; j < 8; j++) {
                     frames[index++] = tmp[15][j];
                 }
-                walk.put(Direction.NORTHEAST, new Animation<>(ANIM_BASE_INTERVAL / (speed * 0.025f), frames));
-                spriteW = frames[0].getRegionWidth();
-                spriteH = frames[0].getRegionHeight();
+                walk.put(Direction.NORTHEAST, new Animation<>(ANIM_BASE_INTERVAL * walkFactor, frames));
+                spriteW = frames[0].getRegionWidth() * WorldMap.unitScale;
+                spriteH = frames[0].getRegionHeight() * WorldMap.unitScale;
                 // idle
                 frames = new TextureRegion[4];
                 index = 0;
@@ -587,6 +665,7 @@ public class Entity {
             this.target = target;
         }
 
+        @Override
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
@@ -622,14 +701,17 @@ public class Entity {
             }
 
             animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
-            // updates label positions
-            Vector2 centerPos = getCenter();
-            outlineLabel.setBounds(getCenter().x - nameLabel.getWidth()/2f -1,
-                    centerPos.y + spriteH/2.5f - 1,
-                    nameLabel.getWidth() + 1, nameLabel.getHeight() +1);
-            nameLabel.setBounds(getCenter().x - nameLabel.getWidth()/2f,
-                    centerPos.y + spriteH/2.5f,
-                    nameLabel.getWidth(), nameLabel.getHeight());
+
+            centerPos = new Vector2(this.interPos.x + spriteW/2f, this.interPos.y + spriteH/2f);
+            this.drawPos.x = this.interPos.x + spriteW/2f;
+            this.drawPos.y = this.interPos.y + spriteH/3f;
+
+            // tries to predict direction if its targeting someone and target moved but not enough to interpolate
+            if(target != null) {
+                Vector2 dir = new Vector2(target.drawPos.x, target.drawPos.y).sub(this.drawPos);
+                dir = dir.nor();
+                direction = Direction.getDirection(Math.round(dir.x), Math.round(dir.y));
+            }
 
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
@@ -637,8 +719,25 @@ public class Entity {
             batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()*WorldMap.unitScale,
                     currentFrame.getRegionHeight()*WorldMap.unitScale);//, 60, 60,
             //                120, 120, 1f, 1f, 0);
+
+            spriteH = currentFrame.getRegionHeight()*WorldMap.unitScale;
+            spriteW = currentFrame.getRegionWidth()*WorldMap.unitScale;
+
+            batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2*WorldMap.unitScale, 2*WorldMap.unitScale);
+
+
+            // draw creature tag
+            nameLabel.getFont().scale(tagScale, tagScale);
+
+            nameLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/2f), this.centerPos.y + spriteH/2f + 8f,
+                    nameLabel.getWidth(), nameLabel.getHeight());
+            outlineLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/2f)-tagScale, this.centerPos.y + spriteH/2f + 8f-tagScale,
+                    nameLabel.getWidth() +tagScale, nameLabel.getHeight()+tagScale);
+
             outlineLabel.draw(batch, 1.0f);
             nameLabel.draw(batch, 1.0f);
+
+            nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
         }
 
         // interpolates inbetween position vector
@@ -701,6 +800,8 @@ public class Entity {
 
         public void dispose() { // SpriteBatches and Textures must always be disposed
             spriteSheet.dispose();
+            debugTex.dispose();
+            debugCircle.dispose();
         }
 
         // transform a creature update from server into a creature object from client
@@ -709,6 +810,27 @@ public class Entity {
                     creatureUpdate.x, creatureUpdate.y, creatureUpdate.speed, creatureUpdate.attackSpeed,
                     creatureUpdate.range, creatureUpdate.lastVelocityX, creatureUpdate.lastVelocityY,
                     creatureUpdate.state, creatureUpdate.targetId);
+        }
+
+        @Override
+        public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
+
+
+        }
+
+        @Override
+        public int compareTo(Entity entity) {
+            Vector2 e1Iso = this.drawPos;
+            Vector2 e2Iso = entity.drawPos;
+            float e1Depth = e1Iso.y;
+            float e2Depth = e2Iso.y;
+
+            //System.out.println("Wolf Depth: " + e1Depth + " / Player: " + e2Depth);
+
+            if(e1Depth > e2Depth)
+                return -1;
+            else
+                return 1;
         }
     }
 }

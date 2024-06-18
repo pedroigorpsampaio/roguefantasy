@@ -9,6 +9,7 @@ import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Listener.ThreadedListener;
 import com.mygdx.game.entity.Entity;
+import com.mygdx.game.entity.EntityController;
 import com.mygdx.game.entity.WorldMap;
 import com.mygdx.game.network.GameRegister.AddCharacter;
 import com.mygdx.game.network.GameRegister.ClientId;
@@ -36,6 +37,7 @@ public class GameClient extends DispatchServer {
     String name="";
     String host="";
     private int clientCharId; // this client's char id
+    private int clientUid; // this client's char uid
     private int latWindowSize = 10;
     private long avgLatency = 0;
     private ConcurrentLinkedQueue<MoveCharacter> pendingMoves; // will contain a copy of all MoveMessages sent (for server recon.)
@@ -226,9 +228,18 @@ public class GameClient extends DispatchServer {
     }
 
     public Entity.Character getClientCharacter() {return serverController.characters.get(clientCharId);}
+    public int getClientUid() {return clientUid;}
 
     public void setUpdateDelta(float delta) {
         this.updateDelta = delta;
+    }
+
+    /**
+     * Removes entities from their data map using their unique entity ID
+     * @param uId   the unique id given of the entity to be removed
+     */
+    public void removeEntity(int uId) {
+        serverController.removeEntity(uId);
     }
 
     static class ServerController {
@@ -238,7 +249,11 @@ public class GameClient extends DispatchServer {
 
         public void addCharacter (Entity.Character character) {
             characters.put(character.id, character);
+            EntityController.getInstance().entities.put(character.uId, character); // put on list of entities (which will manage if its visible or not)
             System.out.println(character.name + " added at " + character.x + ", " + character.y);
+            // if is client, save client uId
+            if(character.id == instance.clientCharId)
+                instance.clientUid = character.uId;
             character.update(character.x, character.y);
         }
 
@@ -269,8 +284,12 @@ public class GameClient extends DispatchServer {
             if(!creatures.containsKey(creatureUpdate.spawnId)) { // if creature spawn is not in client list, create and add it
                 creature = Entity.Creature.toCreature(creatureUpdate);
                 creatures.put(creatureUpdate.spawnId, creature);
-            } else // if its already on list, get it to update it
+                EntityController.getInstance().entities.put(creature.uId, creature); // put on list of entities (which will manage if its visible or not)
+            } else { // if its already on list, get it to update it
                 creature = creatures.get(creatureUpdate.spawnId);
+                //EntityController.getInstance().removeEntity(creature.uId); // remove to reorder list correctly
+                //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
+            }
 
             Entity.Character target = characters.get(creatureUpdate.targetId);
 
@@ -294,19 +313,28 @@ public class GameClient extends DispatchServer {
         }
 
         public void updateCharacter (UpdateCharacter msg) {
-            Entity.Character character = characters.get(msg.id);
-            if (character == null) return;
+            Entity.Character character = null;
+
+            if(!characters.containsKey(msg.character.id)) { // if creature spawn is not in client list, create and add it
+                character = Entity.Character.toCharacter(msg.character);
+                characters.put(msg.character.id, character);
+                EntityController.getInstance().entities.put(character.uId, character); // put on list of entities (which will manage if its visible or not)
+            } else { // if its already on list, get it to update it
+                character = characters.get(msg.character.id);
+                //EntityController.getInstance().removeEntity(creature.uId); // remove to reorder list correctly
+                //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
+            }
 
             // updates direction if its other player
-            if(GameClient.getInstance().clientCharId != msg.id)
+            if(GameClient.getInstance().clientCharId != msg.character.id)
                 character.direction = Entity.Direction.getDirection(MathUtils.round(msg.dir.x), MathUtils.round(msg.dir.y));
 
             // if there is no change in pos, ignore
-            if(character.x - msg.x == 0 && character.y - msg.y == 0) return;
+            if(character.x - msg.character.x == 0 && character.y - msg.character.y == 0) return;
 
-            character.update(msg.x, msg.y);
+            character.update(msg.character.x, msg.character.y);
 
-            if(GameClient.getInstance().clientCharId == msg.id) {
+            if(GameClient.getInstance().clientCharId == msg.character.id) {
                 if(Common.serverReconciliation) {
                     GameClient.getInstance().isPredictingRecon.set(true);
                     ConcurrentLinkedQueue<GameRegister.MoveCharacter> pending = GameClient.getInstance().getMoveMsgListCopy();
@@ -330,13 +358,14 @@ public class GameClient extends DispatchServer {
         }
 
         public void removeCharacter (int id) {
-            Gdx.app.postRunnable(() -> { //  wait for libgdx UI thread in case its iterating it
+            synchronized (characters) { //  wait for libgdx UI thread in case its iterating it
                 Entity.Character character = characters.remove(id); // remove from list of logged chars
                 if (character != null) {
+                    EntityController.getInstance().removeEntity(character.uId); // remove from list of drawn entities
                     character.dispose();
                     System.out.println(character.name + " removed");
                 }
-            });
+            }
         }
 
         public void removeAllCreatures() {
@@ -349,10 +378,13 @@ public class GameClient extends DispatchServer {
         }
 
         public void removeCreature(long id) {
-            Entity.Creature creature = creatures.remove(id); // remove from list of creatures
-            if (creature != null) {
-                creature.dispose();
-                System.out.println(creature.name + " removed");
+            synchronized (creatures) {
+                Entity.Creature creature = creatures.remove(id); // remove from list of creatures
+                if (creature != null) {
+                    EntityController.getInstance().removeEntity(creature.uId); // remove from list of drawn entities
+                    creature.dispose();
+                    System.out.println(creature.name + " removed");
+                }
             }
         }
 
@@ -368,5 +400,30 @@ public class GameClient extends DispatchServer {
             creatures.clear();
         }
 
+        // iterates through data maps containing the different types of entities to remove one by its unique id
+        public void removeEntity(int uId) {
+            // look uId in creatures map
+            synchronized (creatures) {
+                Iterator<Map.Entry<Long, Entity.Creature>> iterator = creatures.entrySet().iterator();
+                while (iterator.hasNext()) {
+                    Map.Entry<Long, Entity.Creature> entry = iterator.next();
+                    if(entry.getValue().uId == uId) {
+                        iterator.remove();
+                        return;
+                    }
+                }
+            }
+            // look uId in characters map
+            synchronized (characters) {
+                Iterator<Map.Entry<Integer, Entity.Character>> iterator = characters.entrySet().iterator();
+                while (iterator.hasNext()) {
+                    Map.Entry<Integer, Entity.Character> entry = iterator.next();
+                    if(entry.getValue().uId == uId) {
+                        iterator.remove();
+                        return;
+                    }
+                }
+            }
+        }
     }
 }

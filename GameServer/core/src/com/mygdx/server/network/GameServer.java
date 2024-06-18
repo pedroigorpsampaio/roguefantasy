@@ -226,7 +226,16 @@ public class GameServer implements CmdReceiver {
                     Entity loggedChar = connection.character;
                     Component.Character charComp = loggedChar.get(Component.Character.class);
                     removeCharacter.id = charComp.tag.id;
-                    server.sendToAllTCP(removeCharacter);
+
+                    if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+                        Collection<Connection> connections = server.getConnections();
+                        Iterator<Connection> it = connections.iterator();
+                        for (int i = 0, n = connections.size(); i < n; i++) {
+                            lagNetwork.send(removeCharacter, (CharacterConnection)it.next());
+                        }
+                    } else {
+                        server.sendToAllTCP(removeCharacter);
+                    }
 
                     // dispatch event for ai reactors
                     EntityController.getInstance().dispatchEventToAll
@@ -398,6 +407,7 @@ public class GameServer implements CmdReceiver {
                 kryo.register(short[].class);
                 kryo.register(int[][].class);
                 kryo.register(int[].class);
+                kryo.register(com.mygdx.server.network.GameRegister.Character.class);
                 kryo.register(Vector2.class);
                 kryo.register(GameRegister.Layer.class);
                 kryo.writeObject(output, state);

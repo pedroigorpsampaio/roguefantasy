@@ -9,9 +9,13 @@ import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.glutils.FrameBuffer;
+import com.badlogic.gdx.graphics.glutils.HdpiUtils;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
@@ -26,10 +30,12 @@ import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.Timer;
+import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.StretchViewport;
 import com.github.tommyettinger.textra.Font;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.entity.Entity;
+import com.mygdx.game.entity.EntityController;
 import com.mygdx.game.entity.WorldMap;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
@@ -47,16 +53,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private static GameScreen instance;
     private static GameClient gameClient;
     private final WorldMap world;
+    private final OrthographicCamera uiCam;
+    private final int resW, resH;
+    private final EntityController entityController;
+    private FitViewport uiViewport;
     private Font font;
     private Timer updateTimer;
-    private Sprite mapSprite;
     private Texture mapTexture;
     private Skin skin;
     private Stage stage;
     private Label fpsLabel;
     private Label pingLabel;
     private Label ramLabel;
-    private Stage bgStage;
     private static AssetManager manager;
     private Music bgm;
     private RogueFantasy game;
@@ -66,7 +74,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Texture bgTexture;
     private Image bg;
     private SpriteBatch batch;
-    private OrthographicCamera camera;
+    public static OrthographicCamera camera;
     static final int WORLD_WIDTH = 1000;
     static final int WORLD_HEIGHT = 1000;
     private float rotationSpeed;
@@ -92,29 +100,28 @@ public class GameScreen implements Screen, PropertyChangeListener {
         this.manager = manager;
         this.gameClient = gameClient;
         Entity.assetManager = manager;
+        entityController = EntityController.getInstance();
 
         batch = new SpriteBatch();
-        float w = Gdx.graphics.getWidth();
-        float h = Gdx.graphics.getHeight();
+        resW = Gdx.graphics.getWidth();
+        resH = Gdx.graphics.getHeight();
 
         // Constructs a new OrthographicCamera, using the given viewport width and height
         // Height is multiplied by aspect ratio.
-        camera = new OrthographicCamera(32, 32 * (h / w));
+        camera = new OrthographicCamera(32, 32 * (resH / resW));
         camera.position.set(camera.viewportWidth / 2f, camera.viewportHeight / 2f, 0);
-        camera.zoom = 1.4f;
+        camera.zoom = 0.4f;
         aimZoom = camera.zoom;
+        uiCam = new OrthographicCamera(resW, resH);
+        uiCam.position.set(resW / 2f, resH / 2f, 0);
+        //viewport = new FitViewport(800, 480, camera);
 
         camera.update();
+        uiCam.update();
 
         // loads world map (TODO: load it in load screen)
         TiledMap map = manager.get("world/testmap.tmx");
         world = new WorldMap(map, batch, camera);
-
-        mapTexture = new Texture(Gdx.files.internal("sc_map.png"));
-        mapTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        mapSprite = new Sprite(mapTexture);
-        mapSprite.setPosition(0, 0);
-        mapSprite.setSize(WORLD_WIDTH, WORLD_HEIGHT);
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
@@ -307,6 +314,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         }
         // clamp zoom values
         camera.zoom = MathUtils.clamp(camera.zoom, 0.1f, WORLD_HEIGHT/camera.viewportWidth);
+        uiCam.zoom = camera.zoom;
 
         // updates position based on client player
         Entity.Character player = gameClient.getClientCharacter();
@@ -340,6 +348,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
     float timeElapsed = 0f;
     boolean startDelay = true;
+
     @Override
     public void render(float delta) {
         if(gameClient.getClientCharacter() == null) return;
@@ -363,36 +372,46 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         while(GameClient.getInstance().isPredictingRecon.get()); // don't render world while reconciliating pos of client
 
+
         batch.totalRenderCalls = 0;
 
         batch.begin();
 
         world.render(); // render world
 
-        //mapSprite.draw(batch);
-
         // draw creatures
-        Map<Long, Entity.Creature> creatures = gameClient.getCreatures();
-        synchronized (creatures) {
-            Iterator<Map.Entry<Long, Entity.Creature>> iterator = creatures.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Map.Entry<Long, Entity.Creature> entry = iterator.next();
-                Entity.Creature creature = entry.getValue();
-                creature.render(batch);
-            }
-        }
+//        Map<Long, Entity.Creature> creatures = gameClient.getCreatures();
+//        synchronized (creatures) {
+//            Iterator<Map.Entry<Long, Entity.Creature>> iterator = creatures.entrySet().iterator();
+//            while (iterator.hasNext()) {
+//                Map.Entry<Long, Entity.Creature> entry = iterator.next();
+//                Entity.Creature creature = entry.getValue();
+//                creature.render(batch);
+//            }
+//        }
         // draw characters
-        Map<Integer, Entity.Character> characters = gameClient.getOnlineCharacters();
-        synchronized (characters) {
-            Iterator<Map.Entry<Integer, Entity.Character>> iterator = characters.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Map.Entry<Integer, Entity.Character> entry = iterator.next();
-                Entity.Character character = entry.getValue();
-                character.render(batch);
-            }
-        }
+//        Map<Integer, Entity.Character> characters = gameClient.getOnlineCharacters();
+//        synchronized (characters) {
+//            Iterator<Map.Entry<Integer, Entity.Character>> iterator = characters.entrySet().iterator();
+//            while (iterator.hasNext()) {
+//                Map.Entry<Integer, Entity.Character> entry = iterator.next();
+//                Entity.Character character = entry.getValue();
+//                character.render(batch);
+//            }
+//        }
+
+        // draw entities using ordered list (if there is any)
+        if(entityController.entities.size() > 0)
+            entityController.renderEntities(batch);
 
         batch.end();
+
+        // draws ui
+//        batch.setProjectionMatrix(uiCam.combined);
+//        batch.begin();
+//
+//
+//        batch.end();
 
         int calls = batch.totalRenderCalls;
 
@@ -414,6 +433,17 @@ public class GameScreen implements Screen, PropertyChangeListener {
         camera.viewportWidth = 32f;
         camera.viewportHeight = 32f * height/width;
         camera.update();
+
+//        uiCam.viewportWidth = resW;
+//        uiCam.viewportHeight = resW * height/width;
+//        uiCam.position.set(width / 2f, height/ 2f, 0);
+//        uiCam.update();
+
+        uiCam.viewportWidth = width;
+        uiCam.viewportHeight = height;
+        uiCam.position.set(width / 2, height / 2, 0);
+        uiCam.update();
+
         //world.resize(width, height);
     }
 
@@ -434,7 +464,6 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
     @Override
     public void dispose() {
-        mapSprite.getTexture().dispose();
         stage.dispose();
         world.dispose();
     }
