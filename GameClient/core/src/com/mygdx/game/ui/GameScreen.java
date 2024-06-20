@@ -205,6 +205,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 if (keycode == Input.Keys.D && !Gdx.input.isKeyPressed(Input.Keys.RIGHT)) movement.x -= 1;
                 else if (keycode == Input.Keys.RIGHT && !Gdx.input.isKeyPressed(Input.Keys.D)) movement.x -= 1;
 
+                if(keycode == Input.Keys.L && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT))
+                    gameClient.logoff();
+
                 if(movement.x > 1) movement.x = 1; if(movement.y > 1) movement.y = 1;
                 if(movement.x < -1) movement.x = -1; if(movement.y < -1) movement.y = -1;
                 return super.keyUp(event, keycode);

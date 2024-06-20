@@ -83,6 +83,7 @@ public class GameRegister {
     static public class Response {
         public enum Type{
             USER_ALREADY_LOGGED_IN,
+            LOGOFF,
             DISCARD, // useless response
         }
         public Type type;

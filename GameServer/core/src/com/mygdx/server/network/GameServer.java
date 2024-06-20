@@ -77,8 +77,7 @@ public class GameServer implements CmdReceiver {
             public void received (Connection c, Object object) {
                 // We know all connections for this server are actually CharacterConnections.
                 CharacterConnection connection = (CharacterConnection)c;
-                Entity charEntity = connection.character;
-                Component.Character character = charEntity.get(Component.Character.class);
+                Component.Character character = connection.character;
 
                 if (object instanceof GameRegister.Ping) { // if it is ping, just send it back asap
                     if(lagNetwork != null && GameRegister.lagSimulation) // send with simulated lag
@@ -101,8 +100,7 @@ public class GameServer implements CmdReceiver {
                         while (i.hasNext()) {
                             Map.Entry<Integer, CharacterConnection> entry = i.next();
                             CharacterConnection charConn = entry.getValue();
-                            Entity loggedChar = charConn.character;
-                            Component.Character charComp = loggedChar.get(Component.Character.class);
+                            Component.Character charComp = charConn.character;
                             if(charComp.token.equals(decryptedToken)) {
                                 connection.sendTCP(new GameRegister.Response(GameRegister.Response.Type.USER_ALREADY_LOGGED_IN));
                                 connection.close();
@@ -123,6 +121,18 @@ public class GameServer implements CmdReceiver {
                                 return;
                             }
                         }
+                    }
+                }
+
+                if (object instanceof GameRegister.Response) {
+                    GameRegister.Response msg = (GameRegister.Response)object;
+                    switch (msg.type) {
+                        case LOGOFF:
+                            disconnected(c);
+                            break;
+                        default:
+                            Log.debug("game-server", "Received unknown response type message");
+                            break;
                     }
                 }
 
@@ -169,7 +179,7 @@ public class GameServer implements CmdReceiver {
                             //return;
                         }
 
-                        character.move(deltaVec, charEntity);
+                        character.move(deltaVec);
                     } else { // wasd movement already has direction in it, just normalize and scale
                         Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(character.attr.speed*GameRegister.clientTickrate());
                         character.dir = new Vector2(msg.x, msg.y).nor();
@@ -196,7 +206,7 @@ public class GameServer implements CmdReceiver {
                             futurePos = new Vector2(character.position.x, character.position.y).add(moveVec);
                         }
 
-                        character.move(moveVec, charEntity); // calls method that updates char position both in object as well as in 2d array of entities
+                        character.move(moveVec); // calls method that updates char position both in object as well as in 2d array of entities
                     }
 
                     character.lastMoveId = msg.requestId;
@@ -219,12 +229,11 @@ public class GameServer implements CmdReceiver {
                 CharacterConnection connection = (CharacterConnection)c;
                 if (connection.character != null) {
                     synchronized (loggedIn) {
-                        loggedIn.remove(connection.character.get(Component.Character.class).tag.id); // remove from logged in list
+                        loggedIn.remove(connection.character.tag.id); // remove from logged in list
                     }
 
                     GameRegister.RemoveCharacter removeCharacter = new GameRegister.RemoveCharacter();
-                    Entity loggedChar = connection.character;
-                    Component.Character charComp = loggedChar.get(Component.Character.class);
+                    Component.Character charComp = connection.character;
                     removeCharacter.id = charComp.tag.id;
 
                     if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
@@ -241,7 +250,7 @@ public class GameServer implements CmdReceiver {
                     EntityController.getInstance().dispatchEventToAll
                             (new Component.Event(Component.Event.Type.PLAYER_LEFT_AOI,  connection.character));
 
-                    EntityController.getInstance().removeEntity(connection.character); // remove from entity dominion
+                    connection.character.reset(); // reset data that needs to be reset before reconnection of this character
                 }
             }
         });
@@ -290,28 +299,42 @@ public class GameServer implements CmdReceiver {
 
     void login (CharacterConnection c, Component.Character character) {
         // fill entity with character information
-        Component.Character charComp = c.character.get(Component.Character.class);
+        //Component.Character charComp = c.character.get(Component.Character.class);
         character.dir = new Vector2(0, -1); // start looking south
         character.tag = new Component.Tag(character.tag.id, character.tag.name);
         character.attr = new Component.Attributes(character.attr.width, character.attr.height, character.attr.speed,
                                                     character.attr.attackSpeed, character.attr.range);
         character.position = new Component.Position(character.position.x, character.position.y);
-        c.character.remove(charComp);
+        character.updatePositionIn2dArray();
+        c.character = character;
+        //c.character.remove(charComp);
         //charComp.lastMoveTs = character.lastMoveTs;
-        c.character.add(character);
-        c.character.get(Component.Character.class).updatePositionIn2dArray(c.character); // updates position in 2d entities array if needed
+        //c.character.add(character);
+//        charComp.lastTilePos = character.lastTilePos;
+//        charComp.attr = character.attr;
+//        charComp.dir = character.dir;
+//        charComp.position = character.position;
+//        charComp.role_level = character.role_level;
+//        charComp.lastMoveTs = character.lastMoveTs;
+//        charComp.lastMoveId = character.lastMoveId;
+//        charComp.tag = character.tag;
+//        charComp.token = character.token;
+//        charComp.updatePositionIn2dArray();
+
+        //character.lastTilePos = EntityController.getInstance().placeEntity(c.character, character.position);
+        //c.character.get(Component.Character.class).updatePositionIn2dArray(); // updates position in 2d entities array if needed
 
         // Add existing characters to new logged in connection.
-        Iterator<Map.Entry<Integer, CharacterConnection>> i = loggedIn.entrySet().iterator();
-        while (i.hasNext()) {
-            Map.Entry<Integer, CharacterConnection> entry = i.next();
-            CharacterConnection other = entry.getValue();
-            GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
-            // translate to safe to send character data
-            Component.Character comp = other.character.get(Component.Character.class);
-            addCharacter.character = comp.toSendToClient();
-            c.sendTCP(addCharacter);
-        }
+//        Iterator<Map.Entry<Integer, CharacterConnection>> i = loggedIn.entrySet().iterator();
+//        while (i.hasNext()) {
+//            Map.Entry<Integer, CharacterConnection> entry = i.next();
+//            CharacterConnection other = entry.getValue();
+//            GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
+//            // translate to safe to send character data
+//            Component.Character comp = other.character;
+//            addCharacter.character = comp.toSendToClient();
+//            c.sendTCP(addCharacter);
+//        }
 
 //        for (CharacterConnection other : loggedIn) {
 //            GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
@@ -333,9 +356,9 @@ public class GameServer implements CmdReceiver {
         c.sendTCP(clientId);
 
         // Add logged in character to all connections.
-        GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
-        addCharacter.character = character.toSendToClient();
-        server.sendToAllTCP(addCharacter);
+//        GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
+//        addCharacter.character = character.toSendToClient();
+//        server.sendToAllTCP(addCharacter);
     }
 
     boolean saveCharacter (Component.Character character) {
@@ -378,8 +401,7 @@ public class GameServer implements CmdReceiver {
             while (i.hasNext()) {
                 Map.Entry<Integer, CharacterConnection> entry = i.next();
                 CharacterConnection charConn = entry.getValue();
-                Entity loggedChar = charConn.character;
-                Component.Character charComp = loggedChar.get(Component.Character.class);
+                Component.Character charComp = charConn.character;
                 state = charComp.buildStateAoI();
 
 //                GameRegister.UpdateCharacter update = charComp.getCharacterData();
@@ -513,8 +535,7 @@ public class GameServer implements CmdReceiver {
             while (i.hasNext()) {
                 Map.Entry<Integer, CharacterConnection> entry = i.next();
                 CharacterConnection connectChar = entry.getValue();
-                Entity loggedChar = connectChar.character;
-                Component.Character c = loggedChar.get(Component.Character.class);
+                Component.Character c = connectChar.character;
                 if(c.tag.id == conn.charData.id) {
                     conn.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.USER_ALREADY_LOGGED_IN));
                     conn.close();
@@ -568,10 +589,10 @@ public class GameServer implements CmdReceiver {
 
     // This holds per connection state.
     public static class CharacterConnection extends Connection {
-        public Entity character;
+        public Component.Character character;
 
         public CharacterConnection() {
-            character = EntityController.getInstance().createCharacter();
+            character = new Component.Character();
         }
     }
 

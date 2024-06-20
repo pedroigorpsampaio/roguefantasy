@@ -15,6 +15,7 @@ import com.mygdx.server.ui.RogueFantasyServer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 import dev.dominion.ecs.api.Entity;
@@ -40,7 +41,7 @@ public class Component {
         public GameRegister.Character toSendToClient() {
             GameRegister.Character charData = new GameRegister.Character();
             charData.role_level = this.role_level; charData.id = this.tag.id; charData.speed = this.attr.speed;
-            charData.x = this.position.x; charData.y = this.position.y; charData.name = this.tag.name; this.lastMoveId = 0;
+            charData.x = this.position.x; charData.y = this.position.y; charData.name = this.tag.name;
             return charData;
         }
 
@@ -67,17 +68,32 @@ public class Component {
          * Moves character position and updates itself on 2d array grid if needed (changed tile)
          * @param movement  the movement to increase into character position
          */
-        public void move(Vector2 movement, Entity entity) {
+        public void move(Vector2 movement) {
             this.position.x += movement.x;
             this.position.y += movement.y;
-            updatePositionIn2dArray(entity); // calls method that manages entity position in 2d array
+            updatePositionIn2dArray(); // calls method that manages entity position in 2d array
         }
 
         /**
-         * Checks and updates position in 2d Array of entities if different from last one
+         * Checks and updates position in 2d Array of characters if different from last one
          */
-        public void updatePositionIn2dArray(Entity entity) {
-            position.updatePositionIn2dArray(entity);
+        public void updatePositionIn2dArray() {
+            position.updatePositionIn2dArray(this);
+        }
+
+        /**
+         * Removes itself from the 2d array of characters
+         */
+        public void removeFrom2dArray() {
+            Vector2 tPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(position.x, position.y));
+
+            // makes sure its within world state bounds
+            if(tPos.x < 0) tPos.x = 0;
+            if(tPos.y < 0) tPos.y = 0;
+            if(tPos.x > TILES_WIDTH) tPos.x = TILES_WIDTH-1;
+            if(tPos.y > TILES_HEIGHT) tPos.y = TILES_HEIGHT-1;
+
+            EntityController.getInstance().entityWorldState[(int)tPos.x][(int)tPos.y].characters.remove(tag.id);
         }
 
         /**
@@ -136,20 +152,28 @@ public class Component {
 
                             // if its entity layer, prepare creature and character updates of the ones that are in range
                             if (layerBase.getProperties().get("entity_layer", Boolean.class)) {
-                                Map<Integer, Entity> tileEntities = EntityController.getInstance().getEntitiesAtTilePos(col, row);
-                                if (tileEntities.size() > 0) { // for each visible tile that has entities
-                                    synchronized (tileEntities) {
-                                        for (Map.Entry<Integer, Entity> entry : tileEntities.entrySet()) {
-                                            Entity entity = entry.getValue();
-                                            if (!entity.has(Component.Character.class)) {// non-player entity // TODO: SEPARATE TYPES OF ENTITIES!!
-                                                if (entity.get(Component.Position.class) == null)
+                                synchronized ( EntityController.getInstance().entityWorldState[col][row].entities) {
+                                    Map<Integer, Entity> tileEntities = EntityController.getInstance().entityWorldState[col][row].entities;
+                                    if (tileEntities.size() > 0) { // for each visible tile that has entities
+                                        Iterator<Entity> iterator = tileEntities.values().iterator();
+                                        while (iterator.hasNext()) {
+                                            Entity entity = iterator.next();
+                                            if (entity.get(Component.Position.class) == null) // non-player entity // TODO: SEPARATE TYPES OF ENTITIES!!
                                                     continue;
-                                                state.creatureUpdates.add(EntityController.getInstance().getCreatureData(entity));
-                                            } else { // player entity
-                                                if (entity.get(Component.Character.class) == null)
-                                                    continue;
-                                                state.characterUpdates.add(entity.get(Component.Character.class).getCharacterData());
-                                            }
+                                            state.creatureUpdates.add(EntityController.getInstance().getCreatureData(entity));
+                                        }
+
+                                    }
+                                }
+                                synchronized ( EntityController.getInstance().entityWorldState[col][row].characters) { // for each character
+                                    Map<Integer, Character> tileCharacters = EntityController.getInstance().entityWorldState[col][row].characters;
+                                    if (tileCharacters.size() > 0) { // for each visible tile that has entities
+                                        Iterator<Character> iterator = tileCharacters.values().iterator();
+                                        while (iterator.hasNext()) {
+                                            Character character = iterator.next();
+                                            if (character == null) // non-player entity // TODO: SEPARATE TYPES OF ENTITIES!!
+                                                continue;
+                                            state.characterUpdates.add(character.getCharacterData());
                                         }
                                     }
                                 }
@@ -161,6 +185,13 @@ public class Component {
             }
             //state.tileLayers = aoiLayers;
             return state;
+        }
+
+        public void reset() {
+            this.removeFrom2dArray(); // remove from state 2d array
+            this.lastMoveTs = 0;
+            this.lastMoveId = 0;
+            this.lastTilePos = null;
         }
     }
 
@@ -189,12 +220,7 @@ public class Component {
             if(tPos.x > TILES_WIDTH) tPos.x = TILES_WIDTH-1;
             if(tPos.y > TILES_HEIGHT) tPos.y = TILES_HEIGHT-1;
 
-            int id = -1;
-            if(!entity.has(Component.Character.class)) {// non-player entity
-                id = entity.get(Tag.class).id;
-            }
-            else // player entity
-                id = entity.get(Component.Character.class).tag.id;
+            int id = entity.get(Tag.class).id;
 
             // if it has no last tile (null tilepos) just add to the 2d array
             if(lastTilePos == null) {
@@ -209,6 +235,46 @@ public class Component {
                 EntityController.getInstance().entityWorldState[(int)lastTilePos.x][(int)lastTilePos.y].entities.remove(id);
                 // add in new position
                 EntityController.getInstance().entityWorldState[(int)tPos.x][(int)tPos.y].entities.putIfAbsent(id, entity);
+//                System.out.printf("Entity moved from %s to %s\n",
+//                        lastTilePos, tPos);
+                // update last position
+                lastTilePos.x = tPos.x; lastTilePos.y = tPos.y;
+            }
+        }
+
+        /**
+         * Checks and updates position in 2d Array of characters if different from last one
+         */
+        public void updatePositionIn2dArray(Character character) {
+            // calculate current tilePos
+            Vector2 tPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(x, y));
+
+//            System.out.printf("Entity moved to %s\n",
+//                    new Vector2(x, y));
+
+            // System.out.println(tPos);
+
+            // makes sure its within world state bounds
+            if(tPos.x < 0) tPos.x = 0;
+            if(tPos.y < 0) tPos.y = 0;
+            if(tPos.x > TILES_WIDTH) tPos.x = TILES_WIDTH-1;
+            if(tPos.y > TILES_HEIGHT) tPos.y = TILES_HEIGHT-1;
+
+            int id = character.tag.id;
+
+            // if it has no last tile (null tilepos) just add to the 2d array
+            if(lastTilePos == null) {
+                EntityController.getInstance().entityWorldState[(int) tPos.x][(int) tPos.y].characters.putIfAbsent(id, character);
+                lastTilePos = new Vector2(tPos.x, tPos.y); // create last tile position vector2
+            }
+            else {
+                if(lastTilePos.equals(tPos)) // if its the same, there is no need to update in 2d state array
+                    return;
+                // if its different:
+                // remove from old position in state array
+                EntityController.getInstance().entityWorldState[(int)lastTilePos.x][(int)lastTilePos.y].characters.remove(id);
+                // add in new position
+                EntityController.getInstance().entityWorldState[(int)tPos.x][(int)tPos.y].characters.putIfAbsent(id, character);
 //                System.out.printf("Entity moved from %s to %s\n",
 //                        lastTilePos, tPos);
                 // update last position
@@ -265,14 +331,14 @@ public class Component {
             TARGET_IN_RANGE, TARGET_OUT_OF_RANGE, PLAYER_LEFT_AOI
         }
         private Type type; // the type of this event
-        public Entity trigger; // the entity responsible for triggering the event
+        public Character trigger; // the character responsible for triggering the event
 
-        public Event(Type type, Entity trigger) {this.type = type; this.trigger = trigger;}
+        public Event(Type type, Character trigger) {this.type = type; this.trigger = trigger;}
     }
 
     public static class AI {
         private final Entity body; // the body that this ai controls (the entity with AI component)
-        public Entity target = null;
+        public Character target = null;
         public State state = State.IDLE;
 
         public AI(Entity body) {
@@ -363,15 +429,8 @@ public class Component {
             Component.Position position = body.get(Component.Position.class);
             Component.Attributes attributes = body.get(Component.Attributes.class);
 
-            Component.Position targetPos = null;
-            Component.Attributes targetAttr = null;
-            if(!target.has(Component.Character.class)) {
-                targetPos = target.get(Component.Position.class);
-                targetAttr = target.get(Component.Attributes.class);
-            } else {
-                targetPos = target.get(Component.Character.class).position;
-                targetAttr = target.get(Component.Character.class).attr;
-            }
+            Component.Position targetPos = target.position;
+            Component.Attributes targetAttr = target.attr;
 
             Vector2 goalPos = new Vector2(targetPos.x - targetAttr.width/2f, targetPos.y - targetAttr.height/2f);
             Vector2 aiPos = new Vector2(position.x, position.y);
@@ -395,15 +454,8 @@ public class Component {
             Component.Velocity velocity = body.get(Component.Velocity.class);
             Component.Attributes attributes = body.get(Component.Attributes.class);
 
-            Component.Position targetPos = null;
-            Component.Attributes targetAttr = null;
-            if(!target.has(Component.Character.class)) {
-                targetPos = target.get(Component.Position.class);
-                targetAttr = target.get(Component.Attributes.class);
-            } else {
-                targetPos = target.get(Component.Character.class).position;
-                targetAttr = target.get(Component.Character.class).attr;
-            }
+            Component.Position targetPos = target.position;
+            Component.Attributes targetAttr = target.attr;
 
 //            System.out.printf("Target %s\n",
 //                    targetAttr.width/2f);

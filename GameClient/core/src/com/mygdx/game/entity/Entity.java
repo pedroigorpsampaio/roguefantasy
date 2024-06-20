@@ -31,6 +31,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public abstract class Entity implements Comparable<Entity> {
     public static AssetManager assetManager; // screen asset manager
     public static Stage stage; // screen stage
+    public String entityName = "";
+    public boolean isClient = false;
     protected Pixmap debugCircle; // for debug
     protected Texture debugTex; // for debug
     public static float tagScale = WorldMap.unitScale * 0.66f;
@@ -163,6 +165,7 @@ public abstract class Entity implements Comparable<Entity> {
 
         public Character(String name, int id, int role_level, float x, float y, float speed) {
             this.name = name; this.id = id; this.role_level = role_level; this.outfitId = 0;
+            this.entityName = name;
             this.uId = EntityController.getInstance().generateUid();
             this.position = new Vector2(x, y); this.interPos = new Vector2(x, y);
             this.drawPos = new Vector2(x, y);
@@ -508,7 +511,7 @@ public abstract class Entity implements Comparable<Entity> {
 
         public Creature(String name, int creatureId, long spawnId, float x, float y, float speed, float attackSpeed,
                         float range, float lastVelocityX, float lastVelocityY, String stateName, int targetId) {
-            this.name = name;
+            this.name = name; this.entityName = name;
             this.creatureId = creatureId; this.spawnId = spawnId;
             this.uId = EntityController.getInstance().generateUid();
             this.position = new Vector2(x, y);

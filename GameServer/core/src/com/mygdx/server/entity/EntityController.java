@@ -1,5 +1,9 @@
 package com.mygdx.server.entity;
 
+import static com.mygdx.server.entity.WorldMap.TILES_HEIGHT;
+import static com.mygdx.server.entity.WorldMap.TILES_WIDTH;
+
+import com.badlogic.gdx.math.Vector2;
 import com.mygdx.server.network.GameRegister;
 import com.mygdx.server.ui.RogueFantasyServer;
 
@@ -9,6 +13,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 
 import dev.dominion.ecs.api.Dominion;
@@ -17,9 +22,10 @@ import dev.dominion.ecs.api.Results;
 import dev.dominion.ecs.api.Scheduler;
 
 class Tile {
-    Map<Integer, Entity> entities; // map of entities of this tile
+    Map<Integer, Entity> entities; // map of entities of this tile (excluding characters)
+    Map<Integer, Component.Character> characters; // map of characters of this tile
 
-    public Tile() {entities = new ConcurrentHashMap<>();}
+    public Tile() {entities = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>();}
 }
 
 public class EntityController {
@@ -72,6 +78,19 @@ public class EntityController {
         synchronized (entityWorldState) {
             return entityWorldState[i][j].entities;
         }
+    }
+
+    public Vector2 placeCharacter(Component.Character character) {
+        Vector2 tPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(character.position.x, character.position.y));
+
+        // makes sure its within world state bounds
+        if(tPos.x < 0) tPos.x = 0;
+        if(tPos.y < 0) tPos.y = 0;
+        if(tPos.x > TILES_WIDTH) tPos.x = TILES_WIDTH-1;
+        if(tPos.y > TILES_HEIGHT) tPos.y = TILES_HEIGHT-1;
+
+        EntityController.getInstance().entityWorldState[(int) tPos.x][(int) tPos.y].characters.putIfAbsent(character.tag.id, character);
+        return tPos;
     }
 
     // creates all game systems
@@ -131,9 +150,9 @@ public class EntityController {
         creatureUpdate.lastVelocityY = entity.get(Component.Position.class).lastVelocityY;
         creatureUpdate.state = entity.get(Component.AI.class).state.getName();
         creatureUpdate.timestamp = Instant.now().toEpochMilli();
-        Entity target = entity.get(Component.AI.class).target;
+        Component.Character target = entity.get(Component.AI.class).target;
         if (target != null)
-            creatureUpdate.targetId = entity.get(Component.AI.class).target.get(Component.Character.class).tag.id;
+            creatureUpdate.targetId = entity.get(Component.AI.class).target.tag.id;
         else
             creatureUpdate.targetId = -1;
 
@@ -165,9 +184,9 @@ public class EntityController {
             creatureUpdate.lastVelocityY = entity.entity().get(Component.Position.class).lastVelocityY;
             creatureUpdate.state = entity.entity().get(Component.AI.class).state.getName();
             creatureUpdate.timestamp = Instant.now().toEpochMilli();
-            Entity target = entity.entity().get(Component.AI.class).target;
+            Component.Character target = entity.entity().get(Component.AI.class).target;
             if(target != null)
-                creatureUpdate.targetId = entity.entity().get(Component.AI.class).target.get(Component.Character.class).tag.id;
+                creatureUpdate.targetId = entity.entity().get(Component.AI.class).target.tag.id;
             else
                 creatureUpdate.targetId = -1;
             creatureData.add(creatureUpdate);
@@ -194,4 +213,5 @@ public class EntityController {
     public void removeEntity (Entity entity) {
         dominion.deleteEntity(entity);
     }
+
 }

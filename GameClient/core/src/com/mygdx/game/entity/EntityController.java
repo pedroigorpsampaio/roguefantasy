@@ -5,6 +5,7 @@ import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.mygdx.game.network.GameClient;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
@@ -20,9 +21,9 @@ import java.util.concurrent.ConcurrentSkipListSet;
 public class EntityController {
     private static EntityController instance = null;
 
-    //public ConcurrentSkipListSet<Entity> entities; // ordered list (thread-safe) containing visible entities in draw order
-    public ConcurrentSkipListMap<Integer, Entity> entities;
+    public ConcurrentSkipListMap<Integer, Entity> entities; // list (thread-safe) containing entities to be drawn
     private int lastUid;
+    public ArrayList<Integer> lastAoIEntities;  // list of last entities UiDs received in last state
 
     public static EntityController getInstance() {
         if(instance == null)
@@ -33,6 +34,7 @@ public class EntityController {
     private EntityController() {
         //entities = new ConcurrentSkipListSet<>(new EntityIsoSorter());
         entities = new ConcurrentSkipListMap<>();
+        lastAoIEntities = new ArrayList<>();
         lastUid = 0; // starts unique ids at 0
     }
 
@@ -41,18 +43,19 @@ public class EntityController {
      * @param batch The sprite batch to render the entities. Begin must be called before
      */
     public void renderEntities(SpriteBatch batch) {
-        // creates a sorted list version of entities and iterates it
+        // creates a sorted list version of entities and iterates it to draw in correct order
         synchronized (entities) {
             for (Map.Entry<Integer, Entity> entry : entriesSortedByValues(entities)) {
                 //System.out.println(entry.getKey()+":"+entry.getValue());
                 Entity e = entry.getValue();
-                if (WorldMap.isWithinPlayerAOI(e.drawPos) ||
-                        e.uId == GameClient.getInstance().getClientUid()) // render if entity is within player AoI or if its client render anyway
+//                if (WorldMap.isWithinPlayerAOI(e.drawPos) ||
+//                        e.uId == GameClient.getInstance().getClientUid()) // render if entity is within player AoI or if its client render anyway
                     e.render(batch);
-                else {
-                    entities.remove(e.uId); // if not visible, remove from ordered list of visible entities
-                    GameClient.getInstance().removeEntity(e.uId); // remove from list of entities
-                }
+//                else {
+//                    entities.remove(e.uId); // if not visible, remove from ordered list of visible entities
+//                    GameClient.getInstance().removeEntity(e.uId); // remove from list of entities
+//                    //System.out.println(e.uId+":"+e.entityName);
+//                }
             }
         }
         //System.out.println("\n\n");
@@ -86,8 +89,32 @@ public class EntityController {
         entities.remove(id);
     }
 
+    // generates unique ids for entities to be drawn in world
     public int generateUid() {
-        return lastUid++;
+        int uid = 0;
+        synchronized (entities) {
+            uid = entities.size();
+            while(entities.containsKey(uid)) {
+                uid--;
+            }
+        }
+        //System.out.println("key: " + uid);
+        return uid;
+    }
+
+    // based on last state received remove entities out of this player AoI
+    public void removeOutOfAoIEntities() {
+        synchronized (entities) {
+            Iterator<Map.Entry<Integer, Entity>> itr = entities.entrySet().iterator();
+            while (itr.hasNext()) {
+                Entity entity = itr.next().getValue();
+                if(entity.uId == GameClient.getInstance().getClientUid()) continue; // no point in removing client from drawing list of entities
+                if(!lastAoIEntities.contains(entity.uId)) { // remove entity from lists if has not been in last AoI state update
+                    itr.remove(); // remove from list of entities to draw
+                    GameClient.getInstance().removeEntity(entity.uId); // remove from data list of entities
+                }
+            }
+        }
     }
 
     /**

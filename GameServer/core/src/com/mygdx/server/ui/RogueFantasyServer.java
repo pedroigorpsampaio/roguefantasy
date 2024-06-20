@@ -624,7 +624,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				else b.append("offline");
 				b.append("\n\n");
 				b.append("Players online: ");
-				if(loginIsOn) b.append(loginServer.getNumberOfPlayersOnline());
+				if(loginIsOn) b.append(gameServer.getNumberOfPlayersOnline());
 				b.append("\n");
 				b.append("CPU Usage: ");
 				b.append((int)(cpuLoad*1000f));

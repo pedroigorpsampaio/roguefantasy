@@ -66,8 +66,11 @@ public class MainMenuScreen implements Screen {
         this.manager = manager;
         this.game = RogueFantasy.getInstance();
         this.loginClient = loginClient;
-        loginClient.connect();
-        loginClient.sendHello();
+
+        new Thread(() -> {
+            loginClient.connect();
+            loginClient.sendHello();
+        }).start();
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");

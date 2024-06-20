@@ -220,7 +220,29 @@ public class GameClient extends DispatchServer {
         }).start();
     }
 
-    public HashMap<Integer, Entity.Character> getOnlineCharacters() {
+    // log off from server
+    public void logoff() {
+        new Thread(() -> {
+            //client.sendTCP(new GameRegister.Response(GameRegister.Response.Type.LOGOFF)); // sends msg to server to log me off
+            client.close();
+        }).start();
+        if(pingDelay.isScheduled()) pingDelay.cancel();
+
+        // resets counts requests of each type of request
+        // for server reconciliation
+        requestsCounter = new ConcurrentHashMap<>();
+        // resets pending move msgs
+        pendingMoves = new ConcurrentLinkedQueue<>();
+
+        isConnected = false;
+        // tell interested listeners that server has lost connection
+        listeners.firePropertyChange("lostConnection", null, true);
+        // disposes lists of entities
+        serverController.dispose();
+    }
+
+
+    public Map<Integer, Entity.Character> getOnlineCharacters() {
         return serverController.characters;
     }
     public Map<Long, Entity.Creature> getCreatures() {
@@ -244,32 +266,48 @@ public class GameClient extends DispatchServer {
 
     static class ServerController {
 
-        HashMap<Integer, Entity.Character> characters = new HashMap();
+        Map<Integer, Entity.Character> characters = new ConcurrentHashMap<>();
         Map<Long, Entity.Creature> creatures = new ConcurrentHashMap<>();
 
         public void addCharacter (Entity.Character character) {
-            characters.put(character.id, character);
-            EntityController.getInstance().entities.put(character.uId, character); // put on list of entities (which will manage if its visible or not)
-            System.out.println(character.name + " added at " + character.x + ", " + character.y);
-            // if is client, save client uId
-            if(character.id == instance.clientCharId)
-                instance.clientUid = character.uId;
-            character.update(character.x, character.y);
+//            characters.put(character.id, character);
+//            System.out.println("first add to draw list: " + character.id + " / " + character.name);
+//            EntityController.getInstance().entities.put(character.uId, character); // put on list of entities (which will manage if its visible or not)
+//            System.out.println(character.name + " added at " + character.x + ", " + character.y);
+//            // if is client, save client uId
+//            if(character.id == instance.clientCharId)
+//                instance.clientUid = character.uId;
+//            character.update(character.x, character.y);
         }
 
         public void updateState(GameRegister.UpdateState state) {
+            //System.out.println("creatures:" + state.creatureUpdates.size() + " / chars: " + state.characterUpdates.size());
+            // clears list of entities received in the last state
+            EntityController.getInstance().lastAoIEntities.clear();
+
             if(state.tileLayers != null) {
                 WorldMap.layers = state.tileLayers;
                 WorldMap.tileOffsetX = state.tileOffsetX;
                 WorldMap.tileOffsetY = state.tileOffsetY;
                 //WorldMap.debugMap();
             }
-            if(state.characterUpdates != null) // there are character updates
-                for(UpdateCharacter charUpdate : state.characterUpdates)
+            if(state.characterUpdates != null) { // there are character updates
+                for (UpdateCharacter charUpdate : state.characterUpdates) {
                     updateCharacter(charUpdate);
-            if(state.creatureUpdates != null) // there are game creature updates
-                for(UpdateCreature creatureUpdate : state.creatureUpdates)
+                    Entity.Character character = characters.get(charUpdate.character.id);
+                    EntityController.getInstance().lastAoIEntities.add(character.uId);
+                }
+            }
+            if(state.creatureUpdates != null) { // there are game creature updates
+                for (UpdateCreature creatureUpdate : state.creatureUpdates) {
                     updateCreature(creatureUpdate);
+                    Entity.Creature creature = creatures.get(creatureUpdate.spawnId);
+                    EntityController.getInstance().lastAoIEntities.add(creature.uId);
+                }
+            }
+
+            EntityController.getInstance().removeOutOfAoIEntities(); // removes entities not in AoI
+
             // sets flag to inform that first update was processed
             if(!instance.firstStateProcessed)
                 instance.firstStateProcessed = true;
@@ -318,7 +356,10 @@ public class GameClient extends DispatchServer {
             if(!characters.containsKey(msg.character.id)) { // if creature spawn is not in client list, create and add it
                 character = Entity.Character.toCharacter(msg.character);
                 characters.put(msg.character.id, character);
+                System.out.println("second add to draw list: " + character.uId + " / " + character.name + " / " + character.drawPos);
                 EntityController.getInstance().entities.put(character.uId, character); // put on list of entities (which will manage if its visible or not)
+                if(character.id == instance.clientCharId)
+                    instance.clientUid = character.uId;
             } else { // if its already on list, get it to update it
                 character = characters.get(msg.character.id);
                 //EntityController.getInstance().removeEntity(creature.uId); // remove to reorder list correctly
@@ -335,6 +376,7 @@ public class GameClient extends DispatchServer {
             character.update(msg.character.x, msg.character.y);
 
             if(GameClient.getInstance().clientCharId == msg.character.id) {
+                //System.out.println(msg.lastRequestId + " / " + msg.character.name);
                 if(Common.serverReconciliation) {
                     GameClient.getInstance().isPredictingRecon.set(true);
                     ConcurrentLinkedQueue<GameRegister.MoveCharacter> pending = GameClient.getInstance().getMoveMsgListCopy();
@@ -358,9 +400,9 @@ public class GameClient extends DispatchServer {
         }
 
         public void removeCharacter (int id) {
-            synchronized (characters) { //  wait for libgdx UI thread in case its iterating it
+            synchronized (characters) {
                 Entity.Character character = characters.remove(id); // remove from list of logged chars
-                if (character != null) {
+                if (character != null) { // only proceeds if remove is made, meaning id was found in list still
                     EntityController.getInstance().removeEntity(character.uId); // remove from list of drawn entities
                     character.dispose();
                     System.out.println(character.name + " removed");
@@ -380,7 +422,7 @@ public class GameClient extends DispatchServer {
         public void removeCreature(long id) {
             synchronized (creatures) {
                 Entity.Creature creature = creatures.remove(id); // remove from list of creatures
-                if (creature != null) {
+                if (creature != null) { // only proceeds if remove is made, meaning id was found in list still
                     EntityController.getInstance().removeEntity(creature.uId); // remove from list of drawn entities
                     creature.dispose();
                     System.out.println(creature.name + " removed");
@@ -398,6 +440,7 @@ public class GameClient extends DispatchServer {
 //            }
             characters.clear();
             creatures.clear();
+            EntityController.getInstance().entities.clear();
         }
 
         // iterates through data maps containing the different types of entities to remove one by its unique id

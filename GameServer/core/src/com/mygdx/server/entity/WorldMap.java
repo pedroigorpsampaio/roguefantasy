@@ -105,7 +105,7 @@ public class WorldMap implements InputProcessor {
     private SpriteBatch batch;
     private ShapeRenderer shapeRenderer; // for debug
     private int specId = 0; // id of concurrent hash map for players to spectate (in order of login)
-    private Entity spectatee; // the spectatee to watch for debug from server view
+    private Component.Character spectatee; // the spectatee to watch for debug from server view
     private ArrayList<TiledMapTileLayer> cutLayers; // the spliced map layers containing only in view tiles to player
 
     // constructor loads map from file and prepares the vars for controlling world state
@@ -194,13 +194,13 @@ public class WorldMap implements InputProcessor {
 //        cam.position.y = MathUtils.clamp(cam.position.y, effectiveViewportHeight / 2f, 100 - effectiveViewportHeight / 2f);
 
         if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
-            if(spectatee == null || spectatee.get(Component.Character.class) == null) {
+            if(spectatee == null) {
                 spectatee = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
                         get().getValue().character;
-                Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
+                Log.info("game-server", "Spectating player: " + spectatee.tag.name);
             } else {
-                cam.position.x = spectatee.get(Component.Character.class).position.x + spectatee.get(Component.Character.class).attr.width / 2f;
-                cam.position.y = spectatee.get(Component.Character.class).position.y + spectatee.get(Component.Character.class).attr.height / 2f;
+                cam.position.x = spectatee.position.x + spectatee.attr.width / 2f;
+                cam.position.y = spectatee.position.y + spectatee.attr.height / 2f;
             }
         }
 
@@ -283,10 +283,10 @@ public class WorldMap implements InputProcessor {
         ArrayList<GameRegister.Layer> aoiLayers = new ArrayList<>();
 
         if(GameServer.getInstance().getNumberOfPlayersOnline() > 0) {
-            if (spectatee == null || spectatee.get(Component.Character.class) == null) { // cant spectate if its null
+            if (spectatee == null) { // cant spectate if its null
                 spectatee = GameServer.getInstance().loggedIn.entrySet().stream().findFirst().
                         get().getValue().character;
-                Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
+                Log.info("game-server", "Spectating player: " + spectatee.tag.name);
                 return;
             }
             int l = 0;
@@ -294,8 +294,8 @@ public class WorldMap implements InputProcessor {
                 if (mapLayer.getClass().equals(TiledMapTileLayer.class)) { // only cuts tile map layers TODO: object layer can be at client side also? or should it be sent?
                     TiledMapTileLayer layerBase = (TiledMapTileLayer) mapLayer;
 
-                    float playerX = spectatee.get(Component.Character.class).position.x;
-                    float playerY = spectatee.get(Component.Character.class).position.y;
+                    float playerX = spectatee.position.x;
+                    float playerY = spectatee.position.y;
                     Vector2 playerPos = new Vector2(playerX, playerY);
 
                     Vector2 tPos = toIsoTileCoordinates(playerPos);
@@ -474,8 +474,8 @@ public class WorldMap implements InputProcessor {
                 col2 = TILES_WIDTH;
             }
 
-            float playerX = spectatee.get(Component.Character.class).position.x;
-            float playerY = spectatee.get(Component.Character.class).position.y;
+            float playerX = spectatee.position.x;
+            float playerY = spectatee.position.y;
             Vector2 playerPos = new Vector2(playerX, playerY);
 
             float pX = (int) translateScreenToIso(playerPos).x;
@@ -815,7 +815,7 @@ public class WorldMap implements InputProcessor {
                 Map.Entry<Integer, GameServer.CharacterConnection> entry = it.next();
                 if(i == specId) {
                     spectatee = entry.getValue().character;
-                    Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
+                    Log.info("game-server", "Spectating player: " + spectatee.tag.name);
                     break;
                 }
                 i++;
@@ -828,7 +828,7 @@ public class WorldMap implements InputProcessor {
                 Map.Entry<Integer, GameServer.CharacterConnection> entry = it.next();
                 if (i == specId) {
                     spectatee = entry.getValue().character;
-                    Log.info("game-server", "Spectating player: " + spectatee.get(Component.Character.class).tag.name);
+                    Log.info("game-server", "Spectating player: " + spectatee.tag.name);
                     break;
                 }
                 i++;

@@ -140,6 +140,7 @@ public class WorldMap {
     public static boolean isWithinPlayerAOI(Vector2 position) {
         Vector2 otherTilePos = toIsoTileCoordinates(position);
         Entity.Character player = GameClient.getInstance().getClientCharacter();
+        if(player == null) return false;
         Vector2 playerPos = new Vector2(player.interPos.x, player.interPos.y);
         Vector2 playerTilePos = toIsoTileCoordinates(playerPos);
         float pX = playerTilePos.x;
@@ -169,10 +170,10 @@ public class WorldMap {
             maxJ = TILES_WIDTH;
         }
 
-        if(otherTilePos.x < minJ+2) { return false; } // +2/-2s are a way to guarantee that we remove them before server stops considering
-        if(otherTilePos.y < minI+2) { return false; } // out of AoI and stop sending message updates about it
-        if(otherTilePos.x > maxJ-2) { return false; }
-        if(otherTilePos.y > maxI-2) {return false; }
+        if(otherTilePos.x < minJ+1) { return false; } // +1/-1s are a way to guarantee that we remove them before server stops considering
+        if(otherTilePos.y < minI+1) { return false; } // out of AoI and stop sending message updates about it
+        if(otherTilePos.x > maxJ-1) { return false; }
+        if(otherTilePos.y > maxI-1) {return false; }
 
         return true;
     }
