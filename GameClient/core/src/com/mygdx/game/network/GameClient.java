@@ -356,7 +356,7 @@ public class GameClient extends DispatchServer {
             if(!characters.containsKey(msg.character.id)) { // if creature spawn is not in client list, create and add it
                 character = Entity.Character.toCharacter(msg.character);
                 characters.put(msg.character.id, character);
-                System.out.println("second add to draw list: " + character.uId + " / " + character.name + " / " + character.drawPos);
+                //System.out.println("second add to draw list: " + character.uId + " / " + character.name + " / " + character.drawPos);
                 EntityController.getInstance().entities.put(character.uId, character); // put on list of entities (which will manage if its visible or not)
                 if(character.id == instance.clientCharId)
                     instance.clientUid = character.uId;

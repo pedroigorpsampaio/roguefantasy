@@ -121,7 +121,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         // loads world map (TODO: load it in load screen)
         TiledMap map = manager.get("world/testmap.tmx");
-        world = new WorldMap(map, batch, camera);
+        world = WorldMap.getInstance();
+        world.init(map, batch, camera);
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
@@ -247,6 +248,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
      * Apply movement to the character based on current client-server strategies enabled
      */
     private void moveCharacter() {
+        Entity.Character player = gameClient.getClientCharacter();
+
         GameRegister.MoveCharacter msg = new GameRegister.MoveCharacter();
         msg.x = movement.x;
         msg.y = movement.y/2f; // isometric world
@@ -254,9 +257,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
         msg.xEnd = movement.xEnd; msg.yEnd = movement.yEnd;
         msg.requestId = gameClient.getRequestId(GameRegister.MoveCharacter.class);
 
+        // checks if movement is possible before sending it to server
+        if(!player.isMovePossible(msg))
+            return;
+
         // sends to server the raw movement to be calculated by the authoritative server
         gameClient.moveCharacter(msg);
-        Entity.Character player = gameClient.getClientCharacter();
+
         // if client prediction is enabled, try to predict the movement calculating it locally
         if(Common.clientPrediction)
             player.predictMovement(msg);

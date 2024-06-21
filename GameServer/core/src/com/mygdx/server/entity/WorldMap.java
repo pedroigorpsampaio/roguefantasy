@@ -242,7 +242,7 @@ public class WorldMap implements InputProcessor {
     public Vector2 toIsoTileCoordinates(Vector2 position) {
         float tileWidth = TEX_WIDTH * unitScale;
 
-        float pX = MathUtils.floor(translateScreenToIso(position).x / tileWidth);
+        float pX = MathUtils.floor(translateScreenToIso(position).x / tileWidth) + 1;
         float pY = MathUtils.floor(translateScreenToIso(position).y / tileWidth);
 
         return new Vector2(pX, pY);
@@ -266,6 +266,20 @@ public class WorldMap implements InputProcessor {
         if(tPos.y > TILES_HEIGHT) {return false; }
 
         return true;
+    }
+
+    /**
+     * Checks if tile at position received in parameter is walkable
+     * @param position  world coordinates to check if respective isometric tile is walkable
+     * @return true if it is, false otherwise
+     */
+    public boolean isWalkable(Vector2 position) {
+        Vector2 tPos = toIsoTileCoordinates(position);
+        TiledMapTileLayer floorLayer = (TiledMapTileLayer) map.getLayers().get(0);
+        if(floorLayer.getCell((int)tPos.x, (int)tPos.y).getTile().getProperties().get("walkable", Boolean.class))
+            return true;
+        else
+            return false;
     }
 
     public void render() {
@@ -515,22 +529,19 @@ public class WorldMap implements InputProcessor {
                     // if its on the wall layer render entities alongside for correct drawing
                     if (layer.getProperties().get("entity_layer", Boolean.class)) {
                         Map<Integer, Entity> tileEntities = EntityController.getInstance().getEntitiesAtTilePos(col, row);
+                        Map<Integer, Component.Character> characters = EntityController.getInstance().entityWorldState[col][row].characters;
                         if (tileEntities.size() > 0) { // render entities of tile if any exists
                             for (Map.Entry<Integer, Entity> entry : tileEntities.entrySet()) {
                                 Integer eId = entry.getKey();
                                 Entity entity = entry.getValue();
                                 Vector2 pos;
                                 Component.Attributes attr;
-                                if (!entity.has(Component.Character.class)) {// non-player entity
-                                    if(entity.get(Component.Position.class) == null) continue;
-                                    pos = new Vector2(entity.get(Component.Position.class).x, entity.get(Component.Position.class).y);
-                                    attr = entity.get(Component.Attributes.class);
-                                } else {
-                                    if(entity.get(Component.Character.class) == null) continue;
-                                    pos = new Vector2(entity.get(Component.Character.class).position.x,
-                                            entity.get(Component.Character.class).position.y);
-                                    attr = entity.get(Component.Character.class).attr;
-                                }
+
+                                if(entity.get(Component.Position.class) == null) continue;
+
+                                pos = new Vector2(entity.get(Component.Position.class).x, entity.get(Component.Position.class).y);
+                                attr = entity.get(Component.Attributes.class);
+
                                 rand = new Random(eId);
                                 float r = rand.nextFloat();
                                 float g = rand.nextFloat();
@@ -539,7 +550,31 @@ public class WorldMap implements InputProcessor {
                                 shapeRenderer.setProjectionMatrix(cam.combined);
                                 shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
                                 shapeRenderer.setColor(new Color(r, g, b, 1f));
-                                shapeRenderer.rect(pos.x, pos.y + attr.height / 2f, attr.width, attr.height);
+                                shapeRenderer.rect(pos.x, pos.y, attr.width, attr.height);
+                                shapeRenderer.end();
+                            }
+                        }
+                        if (characters.size() > 0) { // render characters of tile if any exists
+                            for (Map.Entry<Integer, Component.Character> entry : characters.entrySet()) {
+                                Integer eId = entry.getKey();
+                                Component.Character entity = entry.getValue();
+                                Vector2 pos;
+                                Component.Attributes attr;
+
+                                if(entity == null) continue;
+
+                                pos = new Vector2(entity.position.x, entity.position.y);
+                                attr = entity.attr;
+
+                                rand = new Random(eId);
+                                float r = rand.nextFloat();
+                                float g = rand.nextFloat();
+                                float b = rand.nextFloat();
+
+                                shapeRenderer.setProjectionMatrix(cam.combined);
+                                shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+                                shapeRenderer.setColor(new Color(r, g, b, 1f));
+                                shapeRenderer.rect(pos.x, pos.y, attr.width, attr.height);
                                 shapeRenderer.end();
                             }
                         }

@@ -20,6 +20,7 @@ import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
+import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
 
 import java.util.Map;
@@ -64,7 +65,7 @@ public abstract class Entity implements Comparable<Entity> {
                 }
             }
             //throw new Exception("No enum constant with text " + text + " found");
-            return null;
+            return Direction.SOUTH;// if no direction was found, return south as default
         }
     }
 
@@ -379,6 +380,33 @@ public abstract class Entity implements Comparable<Entity> {
             }
         }
 
+        /**
+         * Checks if movement is possible (not blocked by walls, unwalkable tiles, other collisions...)
+         * @param msg   the move character message containing the desired movement to be checked
+         * @return  true if move is possible, false otherwise
+         */
+        public boolean isMovePossible(GameRegister.MoveCharacter msg) {
+            if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
+                Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
+                Vector2 charPos = new Vector2(this.x, this.y);
+                Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
+                deltaVec.nor().scl(this.speed * GameRegister.clientTickrate());
+                Vector2 futurePos = new Vector2(charPos).add(deltaVec);
+
+                if(!WorldMap.isWithinWorldBounds(futurePos) ||
+                        !WorldMap.getInstance().isWalkable(futurePos))
+                    return false;
+            } else { // wasd movement already has direction in it, just normalize and scale
+                Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(this.speed * GameRegister.clientTickrate());
+                Vector2 futurePos = new Vector2(this.x, this.y).add(moveVec);
+
+                if(!WorldMap.isWithinWorldBounds(futurePos) ||
+                        !WorldMap.getInstance().isWalkable(futurePos))
+                    return false;
+            }
+            return true;
+        }
+
         @Override
         public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
 
@@ -406,14 +434,15 @@ public abstract class Entity implements Comparable<Entity> {
 
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
-            batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()*WorldMap.unitScale,
+            batch.draw(currentFrame, this.interPos.x + spriteW/12f, this.interPos.y + spriteH/12f, currentFrame.getRegionWidth()*WorldMap.unitScale,
                     currentFrame.getRegionHeight()*WorldMap.unitScale);
 
+            //System.out.println("playerW: " + currentFrame.getRegionWidth() + " / playerH: " + currentFrame.getRegionHeight());
             spriteH = currentFrame.getRegionHeight()*WorldMap.unitScale;
             spriteW = currentFrame.getRegionWidth()*WorldMap.unitScale;
-            centerPos = new Vector2(this.interPos.x + spriteW/2f, this.interPos.y + spriteH/2f);
-            this.drawPos.x = this.interPos.x + spriteW/2f;
-            this.drawPos.y = this.interPos.y + spriteH/12f;
+            centerPos = new Vector2(this.interPos.x + spriteW/2f + spriteW/20f, this.interPos.y + spriteH/2f + spriteH/20f);
+            this.drawPos.x = this.interPos.x + spriteW/2f + spriteW/20f;
+            this.drawPos.y = this.interPos.y + spriteH/12f + spriteH/20f;
 
             batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2*WorldMap.unitScale, 2*WorldMap.unitScale);
 
@@ -693,10 +722,10 @@ public abstract class Entity implements Comparable<Entity> {
 
             // try to predict position if its following this player
             if(target != null && target.id == GameClient.getInstance().getClientCharacter().id) {
-                this.x = target.interPos.x - target.spriteW/2f;
-                this.y = target.interPos.y - target.spriteH/2f;
-                this.position.x = target.interPos.x - target.spriteW/2f;
-                this.position.y = target.interPos.y - target.spriteH/2f;
+                this.x = target.drawPos.x - spriteW/2f;
+                this.y = target.drawPos.y - spriteH/3f;
+                this.position.x = target.drawPos.x - spriteW/2f;
+                this.position.y = target.drawPos.y - spriteH/3f;
             }
 
             if(interPos.dst(position) != 0f && Common.entityInterpolation) {
@@ -723,6 +752,7 @@ public abstract class Entity implements Comparable<Entity> {
                     currentFrame.getRegionHeight()*WorldMap.unitScale);//, 60, 60,
             //                120, 120, 1f, 1f, 0);
 
+            //System.out.println("wolf: " + currentFrame.getRegionWidth() + " / wolf: " + currentFrame.getRegionHeight());
             spriteH = currentFrame.getRegionHeight()*WorldMap.unitScale;
             spriteW = currentFrame.getRegionWidth()*WorldMap.unitScale;
 
@@ -777,7 +807,7 @@ public abstract class Entity implements Comparable<Entity> {
             // adjust for client prediction if this is the client player
             float clientOffset = 0f;
             if(target != null && target.id == GameClient.getInstance().getClientCharacter().id)
-                clientOffset = range;
+                clientOffset = range + speedFactor;
 
             if(interPos.dst(position) <= speedFactor + clientOffset) { // walks towards position until its close enough
                 //updateStage(position.x, position.y, true);

@@ -51,10 +51,11 @@ import com.mygdx.game.network.GameRegister;
 import java.util.ArrayList;
 
 public class WorldMap {
+    private static WorldMap instance = null;
     public static ArrayList<GameRegister.Layer> layers = new ArrayList<>();
     public static int tileOffsetX=0,tileOffsetY=0;
-    private final TiledMap map;
-    private final SpriteBatch batch;
+    private TiledMap map;
+    private SpriteBatch batch;
     public static float WORLD_WIDTH, WORLD_HEIGHT;
     public static int TILES_WIDTH = 1000, TILES_HEIGHT = 1000, TEX_WIDTH = 32, TEX_HEIGHT = 16; // in agreement with server map
     public static final float unitScale = 1 / 32f;
@@ -70,11 +71,24 @@ public class WorldMap {
     ArrayList<TiledMapTileLayer> tmxLayers = new ArrayList<>();
     private Rectangle viewBounds = new Rectangle();
 
-    public WorldMap(TiledMap map, SpriteBatch batch, OrthographicCamera camera) {
+    public static WorldMap getInstance() {
+        if(instance == null)
+            instance = new WorldMap();
+        return instance;
+    }
+
+    private WorldMap() {
+
+    }
+
+    public void init(TiledMap map, SpriteBatch batch, OrthographicCamera camera) {
         Log.info("game-server", "Loading world map...");
         this.map = map; // map loaded in load screen
         this.batch = batch;
         this.camera = camera;
+        tmxLayers = new ArrayList<>();
+        viewBounds = new Rectangle();
+        layers = new ArrayList<>();
 
         WORLD_WIDTH = TILES_WIDTH * 32f;
         WORLD_HEIGHT = TILES_HEIGHT * 16f;
@@ -127,7 +141,7 @@ public class WorldMap {
     public static Vector2 toIsoTileCoordinates(Vector2 position) {
         float tileWidth = TEX_WIDTH * unitScale;
 
-        float pX = MathUtils.floor(translateScreenToIso(position).x / tileWidth);
+        float pX = MathUtils.floor(translateScreenToIso(position).x / tileWidth) +1;
         float pY = MathUtils.floor(translateScreenToIso(position).y / tileWidth);
 
         return new Vector2(pX, pY);
@@ -182,7 +196,7 @@ public class WorldMap {
      * Checks if world space coordinates is within world bound
      * @return true if it is, false otherwise
      */
-    public boolean isWithinWorldBounds(Vector2 position) {
+    public static boolean isWithinWorldBounds(Vector2 position) {
         Vector2 tPos = toIsoTileCoordinates(position);
 
         if(tPos.x < 0) { return false; }
@@ -191,6 +205,20 @@ public class WorldMap {
         if(tPos.y > TILES_HEIGHT) {return false; }
 
         return true;
+    }
+
+    /**
+     * Checks if tile at position received in parameter is walkable
+     * @param position  world coordinates to check if respective isometric tile is walkable
+     * @return true if it is, false otherwise
+     */
+    public boolean isWalkable(Vector2 position) {
+        Vector2 tPos = toIsoTileCoordinates(position);
+        TiledMapTileLayer floorLayer = tmxLayers.get(0);
+        if(floorLayer.getCell((int)tPos.x, (int)tPos.y).getTile().getProperties().get("walkable", Boolean.class))
+            return true;
+        else
+            return false;
     }
 
     /**

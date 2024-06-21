@@ -10,11 +10,13 @@ import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Output;
 import com.mygdx.server.network.GameRegister;
 import com.mygdx.server.ui.RogueFantasyServer;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -32,6 +34,7 @@ public class Component {
         public Component.Attributes attr;
         public Component.Position position;
         public Vector2 lastTilePos = null;
+        Output lastState = null;
 
         /**
          * Prepares character data to be sent to clients with
@@ -192,6 +195,37 @@ public class Component {
             this.lastMoveTs = 0;
             this.lastMoveId = 0;
             this.lastTilePos = null;
+            this.lastState = null;
+        }
+
+        public boolean compareStates(GameRegister.UpdateState state) {
+            // state message serialization
+            Output newState = new Output(1024, -1);
+            Kryo kryo = new Kryo();
+            kryo.register(GameRegister.UpdateCreature.class);
+            kryo.register(GameRegister.UpdateCharacter.class);
+            kryo.register(GameRegister.UpdateState.class);
+            kryo.register(ArrayList.class);
+            kryo.register(short[][].class);
+            kryo.register(short[].class);
+            kryo.register(int[][].class);
+            kryo.register(int[].class);
+            kryo.register(com.mygdx.server.network.GameRegister.Character.class);
+            kryo.register(Vector2.class);
+            kryo.register(GameRegister.Layer.class);
+            kryo.writeObject(newState, state);
+
+            if(lastState == null) {
+                lastState = new Output(1024, -1);
+                return false;
+            }
+            if(!Arrays.equals(this.lastState.getBuffer(), newState.getBuffer())) {
+                lastState.setBuffer(newState.getBuffer());
+                RogueFantasyServer.worldStateMessageSize = String.valueOf(newState.total());
+                return false;
+            }
+
+            return true;
         }
     }
 
@@ -430,10 +464,10 @@ public class Component {
             Component.Attributes attributes = body.get(Component.Attributes.class);
 
             Component.Position targetPos = target.position;
-            Component.Attributes targetAttr = target.attr;
+            Component.Attributes targetAttr = target.attr;;
 
-            Vector2 goalPos = new Vector2(targetPos.x - targetAttr.width/2f, targetPos.y - targetAttr.height/2f);
-            Vector2 aiPos = new Vector2(position.x, position.y);
+            Vector2 goalPos = new Vector2(targetPos.x + targetAttr.width/2f, targetPos.y + targetAttr.height/12f);
+            Vector2 aiPos = new Vector2(position.x + attributes.width/2f, position.y + attributes.height/3f);
             Vector2 deltaVec = new Vector2(goalPos).sub(aiPos);
             deltaVec.nor().scl(attributes.speed*GameRegister.clientTickrate());
             Vector2 futurePos = new Vector2(aiPos).add(deltaVec);
@@ -460,8 +494,8 @@ public class Component {
 //            System.out.printf("Target %s\n",
 //                    targetAttr.width/2f);
 
-            Vector2 goalPos = new Vector2(targetPos.x - targetAttr.width/4f, targetPos.y + targetAttr.height/4f);
-            Vector2 aiPos = new Vector2(position.x, position.y);
+            Vector2 goalPos = new Vector2(targetPos.x + targetAttr.width/2f, targetPos.y + targetAttr.height/12f);
+            Vector2 aiPos = new Vector2(position.x + attributes.width/2f, position.y + attributes.height/3f);
             Vector2 deltaVec = new Vector2(goalPos).sub(aiPos);
             deltaVec.nor().scl(attributes.speed*GameRegister.clientTickrate());
             Vector2 futurePos = new Vector2(aiPos).add(deltaVec);
