@@ -215,6 +215,10 @@ public class WorldMap {
     public boolean isWalkable(Vector2 position) {
         Vector2 tPos = toIsoTileCoordinates(position);
         TiledMapTileLayer floorLayer = tmxLayers.get(0);
+
+        if(floorLayer.getCell((int)tPos.x, (int)tPos.y) == null) // if its a cell that does not exist, its not walkable
+            return false;
+
         if(floorLayer.getCell((int)tPos.x, (int)tPos.y).getTile().getProperties().get("walkable", Boolean.class))
             return true;
         else

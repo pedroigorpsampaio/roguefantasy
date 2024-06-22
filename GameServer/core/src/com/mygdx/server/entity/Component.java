@@ -13,6 +13,7 @@ import com.badlogic.gdx.math.Vector2;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Output;
 import com.mygdx.server.network.GameRegister;
+import com.mygdx.server.network.GameServer;
 import com.mygdx.server.ui.RogueFantasyServer;
 
 import java.util.ArrayList;
@@ -75,6 +76,84 @@ public class Component {
             this.position.x += movement.x;
             this.position.y += movement.y;
             updatePositionIn2dArray(); // calls method that manages entity position in 2d array
+        }
+
+        /**
+         * Checks if movement is possible (not blocked by walls, unwalkable tiles, other collisions...)
+         * @param msg   the move character message containing the desired movement to be checked
+         * @return  true if move is possible, false otherwise
+         */
+        public boolean isMovePossible(GameRegister.MoveCharacter msg) {
+            if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
+                Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
+                Vector2 charPos = new Vector2(this.position.x, this.position.y);
+                Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
+                deltaVec.nor().scl(this.attr.speed * GameRegister.clientTickrate());
+                Vector2 futurePos = new Vector2(charPos).add(deltaVec);
+
+                if(!RogueFantasyServer.world.isWithinWorldBounds(futurePos) ||
+                        !RogueFantasyServer.world.isWalkable(futurePos))
+                    return false;
+            } else { // wasd movement already has direction in it, just normalize and scale
+                Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(this.attr.speed * GameRegister.clientTickrate());
+                Vector2 futurePos = new Vector2(this.position.x, this.position.y).add(moveVec);
+
+                if(!RogueFantasyServer.world.isWithinWorldBounds(futurePos) ||
+                        !RogueFantasyServer.world.isWalkable(futurePos))
+                    return false;
+            }
+            return true;
+        }
+
+        /**
+         * Given an initial movement that collided, search for a direction to slide and return a possible movement
+         * @param initMove  the initial move that collided
+         * @return  the new movement with the new direction to slide on collision
+         */
+        public Vector2 findSlide(GameRegister.MoveCharacter initMove) {
+            Vector2 newMove = new Vector2(0,0);
+            Vector2 moveVec = new Vector2(initMove.x, initMove.y).nor().scl(this.attr.speed * GameRegister.clientTickrate());
+            Vector2 moveVecCounter = new Vector2(initMove.x, initMove.y).nor().scl(this.attr.speed * GameRegister.clientTickrate());
+            // degree step for each rotation try
+            float degree = 2f;
+
+            if (initMove.hasEndPoint) { // if it has endpoint, do the movement calculations accordingly
+                Vector2 touchPos = new Vector2(initMove.xEnd, initMove.yEnd);
+                Vector2 charPos = new Vector2(this.position.x, this.position.y);
+                Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
+                deltaVec.nor().scl(this.attr.speed * GameRegister.clientTickrate());
+                moveVecCounter.x = deltaVec.x;
+                moveVecCounter.y = deltaVec.y;
+                moveVec.x = deltaVec.x;
+                moveVec.y = deltaVec.y;
+                degree /= 1.1f;
+            }
+
+            Vector2 futurePos = new Vector2(this.position.x, this.position.y).add(moveVec);
+            Vector2 futurePosCounter = new Vector2(this.position.x, this.position.y).add(moveVecCounter);
+
+            int tries = 0;
+            while(tries < 45) { // search for new angle to move
+                if(RogueFantasyServer.world.isWithinWorldBounds(futurePos) &&
+                        RogueFantasyServer.world.isWalkable(futurePos)) { // found a new movement to make searching clockwise
+                    newMove.x = moveVec.x;
+                    newMove.y = moveVec.y;
+                    break;
+                }
+                if(RogueFantasyServer.world.isWithinWorldBounds(futurePosCounter) &&
+                        RogueFantasyServer.world.isWalkable(futurePosCounter)) { // found a new movement to make searching counter-clockwise
+                    newMove.x = moveVecCounter.x;
+                    newMove.y = moveVecCounter.y;
+                    break;
+                }
+                moveVecCounter.rotateDeg(degree);
+                moveVec.rotateDeg(-degree);
+//                System.out.println("Rot: " + moveVec + " / " + moveVecCounter);
+                futurePos = new Vector2(this.position.x, this.position.y).add(moveVec);
+                futurePosCounter = new Vector2(this.position.x, this.position.y).add(moveVecCounter);
+                tries++;
+            }
+            return newMove;
         }
 
         /**

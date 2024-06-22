@@ -67,6 +67,10 @@ public abstract class Entity implements Comparable<Entity> {
             //throw new Exception("No enum constant with text " + text + " found");
             return Direction.SOUTH;// if no direction was found, return south as default
         }
+
+        public static Vector2 fromDirection(Direction dir) {
+            return new Vector2(dir.dirX, dir.dirY);
+        }
     }
 
     public enum State {
@@ -405,6 +409,57 @@ public abstract class Entity implements Comparable<Entity> {
                     return false;
             }
             return true;
+        }
+
+        /**
+         * Given an initial movement that collided, search for a direction to slide and return a possible movement
+         * @param initMove  the initial move that collided
+         * @return  the new movement with the new direction to slide on collision
+         */
+        public Vector2 findSlide(GameRegister.MoveCharacter initMove) {
+            Vector2 newMove = new Vector2(0,0);
+            Vector2 moveVec = new Vector2(initMove.x, initMove.y).nor().scl(this.speed * GameRegister.clientTickrate());
+            Vector2 moveVecCounter = new Vector2(initMove.x, initMove.y).nor().scl(this.speed * GameRegister.clientTickrate());
+            // degree step for each rotation try
+            float degree = 2f;
+
+            if (initMove.hasEndPoint) { // if it has endpoint, do the movement calculations accordingly
+                Vector2 touchPos = new Vector2(initMove.xEnd, initMove.yEnd);
+                Vector2 charPos = new Vector2(this.x, this.y);
+                Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
+                deltaVec.nor().scl(this.speed * GameRegister.clientTickrate());
+                moveVecCounter.x = deltaVec.x;
+                moveVecCounter.y = deltaVec.y;
+                moveVec.x = deltaVec.x;
+                moveVec.y = deltaVec.y;
+                degree /= 1.1f;
+            }
+
+            Vector2 futurePos = new Vector2(this.x, this.y).add(moveVec);
+            Vector2 futurePosCounter = new Vector2(this.x, this.y).add(moveVecCounter);
+
+            int tries = 0;
+            while(tries < 45) { // search for new angle to move
+                if(WorldMap.isWithinWorldBounds(futurePos) &&
+                        WorldMap.getInstance().isWalkable(futurePos)) { // found a new movement to make searching clockwise
+                    newMove.x = moveVec.x;
+                    newMove.y = moveVec.y;
+                    break;
+                }
+                if(WorldMap.isWithinWorldBounds(futurePosCounter) &&
+                        WorldMap.getInstance().isWalkable(futurePosCounter)) { // found a new movement to make searching counter-clockwise
+                    newMove.x = moveVecCounter.x;
+                    newMove.y = moveVecCounter.y;
+                    break;
+                }
+                moveVecCounter.rotateDeg(degree);
+                moveVec.rotateDeg(-degree);
+//                System.out.println("Rot: " + moveVec + " / " + moveVecCounter);
+                futurePos = new Vector2(this.x, this.y).add(moveVec);
+                futurePosCounter = new Vector2(this.x, this.y).add(moveVecCounter);
+                tries++;
+            }
+            return newMove;
         }
 
         @Override

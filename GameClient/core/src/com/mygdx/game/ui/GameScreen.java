@@ -1,5 +1,6 @@
 package com.mygdx.game.ui;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Preferences;
@@ -9,13 +10,9 @@ import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
-import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.graphics.glutils.FrameBuffer;
-import com.badlogic.gdx.graphics.glutils.HdpiUtils;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
@@ -28,7 +25,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
-import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.Timer;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.StretchViewport;
@@ -43,8 +39,6 @@ import com.mygdx.game.util.Common;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.util.Iterator;
-import java.util.Map;
 
 /**
  * Implements the game screen
@@ -83,11 +77,16 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Vector2 touchPos;
     private Vector2 clientPos;
     private Vector2 deltaVec;
+    private Joystick joystick;
     private GameRegister.MoveCharacter movement; // player movement message (for tests rn)
     // time counters
     private float timeForUpdate = 0f;
+    ShapeRenderer uiDebug;
     private float aimZoom;
     private static boolean isInputHappening = false;
+    private Vector3 unprojectedMouse = new Vector3();
+    private Vector3 screenMouse = new Vector3();
+    private Vector2 joystickDir; // the current joystick direction (for android)
 
     /**
      * Prepares the screen/stage of the game
@@ -105,6 +104,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
         batch = new SpriteBatch();
         resW = Gdx.graphics.getWidth();
         resH = Gdx.graphics.getHeight();
+
+        uiDebug = new ShapeRenderer();
+        joystick = new Joystick(5, 20, 50);
 
         // Constructs a new OrthographicCamera, using the given viewport width and height
         // Height is multiplied by aspect ratio.
@@ -221,6 +223,30 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 //camera.zoom += amountY;
                 return super.scrolled(event, x, y, amountX, amountY);
             }
+
+        });
+
+        stage.addListener(new InputListener() {
+            @Override
+            public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+                if(!Gdx.input.isTouched(1) && Gdx.app.getType() == Application.ApplicationType.Android) {
+                    screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
+                    joystick.setInitialX(screenMouse.x);
+                    joystick.setInitialY(screenMouse.y);
+                    joystick.setActive(true);
+                }
+                return true;
+            }
+
+            @Override
+            public void touchUp(InputEvent event, float x, float y, int pointer, int button) {
+                if(!Gdx.input.isTouched(0) && Gdx.app.getType() == Application.ApplicationType.Android) {
+                    joystick.setActive(false);
+                    joystickDir.x = 0;
+                    joystickDir.y = 0;
+                    joystick.reset();
+                }
+            }
         });
 
         Entity.stage = stage;
@@ -258,8 +284,20 @@ public class GameScreen implements Screen, PropertyChangeListener {
         msg.requestId = gameClient.getRequestId(GameRegister.MoveCharacter.class);
 
         // checks if movement is possible before sending it to server
-        if(!player.isMovePossible(msg))
-            return;
+        if(!player.isMovePossible(msg)) {
+            // search for another direction to slide when colliding
+            Vector2 newMove = player.findSlide(msg);
+
+            msg.x = newMove.x;
+            msg.y = newMove.y;
+            if(msg.hasEndPoint) msg.hasEndPoint = false; // new dir has been calculated, send it as wasd move to server
+
+            // test new move once again
+            if(!player.isMovePossible(msg) || newMove.len() == 0) // if failed again, give up this movement
+                return;
+        }
+
+        //System.out.println("msg: " + msg.x + " / " + msg.y);
 
         // sends to server the raw movement to be calculated by the authoritative server
         gameClient.moveCharacter(msg);
@@ -293,15 +331,24 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         // check if there is touch velocity
         if(Gdx.input.isTouched(0)){
-            vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
-            vec3 = camera.unproject(vec3); // unproject screen touch
-            touchPos = new Vector2(vec3.x - gameClient.getClientCharacter().spriteW/2f,  // compensate to use center of char sprite as anchor
-                    vec3.y - gameClient.getClientCharacter().spriteH/2f);
-            movement.xEnd = touchPos.x; movement.yEnd = touchPos.y;
-            movement.hasEndPoint = true;
-        } else { // if no click/touch is made, there is no end point goal of movement
-            movement.xEnd = 0; movement.yEnd = 0;
-            movement.hasEndPoint = false;
+            if(Gdx.app.getType() == Application.ApplicationType.Android) { // use joystick movement if its on android
+                movement.x = joystickDir.x;
+                movement.y = joystickDir.y;
+            } else if (Gdx.app.getType() == Application.ApplicationType.Desktop) {    // if its on pc move accordingly
+                vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
+                screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
+                unprojectedMouse = camera.unproject(vec3);
+                touchPos = new Vector2(unprojectedMouse.x - gameClient.getClientCharacter().spriteW/2f,  // compensate to use center of char sprite as anchor
+                        unprojectedMouse.y - gameClient.getClientCharacter().spriteH/2f);
+                movement.xEnd = touchPos.x; movement.yEnd = touchPos.y;
+                movement.hasEndPoint = true;
+            }
+        } else { // if no click/touch is made, there is no end point goal of movement for pc
+            if (Gdx.app.getType() == Application.ApplicationType.Desktop) {
+                movement.xEnd = 0;
+                movement.yEnd = 0;
+                movement.hasEndPoint = false;
+            }
         }
 
         if(movement.x != 0 || movement.y != 0 || movement.hasEndPoint) {
@@ -389,27 +436,6 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         world.render(); // render world
 
-        // draw creatures
-//        Map<Long, Entity.Creature> creatures = gameClient.getCreatures();
-//        synchronized (creatures) {
-//            Iterator<Map.Entry<Long, Entity.Creature>> iterator = creatures.entrySet().iterator();
-//            while (iterator.hasNext()) {
-//                Map.Entry<Long, Entity.Creature> entry = iterator.next();
-//                Entity.Creature creature = entry.getValue();
-//                creature.render(batch);
-//            }
-//        }
-        // draw characters
-//        Map<Integer, Entity.Character> characters = gameClient.getOnlineCharacters();
-//        synchronized (characters) {
-//            Iterator<Map.Entry<Integer, Entity.Character>> iterator = characters.entrySet().iterator();
-//            while (iterator.hasNext()) {
-//                Map.Entry<Integer, Entity.Character> entry = iterator.next();
-//                Entity.Character character = entry.getValue();
-//                character.render(batch);
-//            }
-//        }
-
         // draw entities using ordered list (if there is any)
         if(entityController.entities.size() > 0)
             entityController.renderEntities(batch);
@@ -424,6 +450,31 @@ public class GameScreen implements Screen, PropertyChangeListener {
 //        batch.end();
 
         int calls = batch.totalRenderCalls;
+
+        // updates and renders joystick
+        if (joystick.isActive() && Gdx.app.getType() == Application.ApplicationType.Android) {
+            screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
+            joystick.updateValues(screenMouse.x, screenMouse.y);
+            joystickDir = new Vector2(joystick.getX(), joystick.getY()).nor();
+//            viewport.getCamera().getPosition().add(
+//                    joystick.getStickDistPercentageX() * delta * IMV * 10,
+//                    joystick.getStickDistPercentageY() * delta * IMV * 10, 0f);
+            // CENTER TO MOUSE POSITION SOMEHOW
+            uiDebug.begin(ShapeRenderer.ShapeType.Line);
+            uiDebug.setProjectionMatrix(stage.getViewport().getCamera().combined);
+            uiDebug.setColor(Color.YELLOW);
+            float screenRadius = joystick.getRadius()*2f;
+            uiDebug.circle(joystick.getInitialX(), joystick.getInitialY(), screenRadius, 50);
+            uiDebug.end();
+            uiDebug.begin(ShapeRenderer.ShapeType.Filled);
+            uiDebug.setColor(Color.WHITE);
+            uiDebug.circle(joystick.getInitialX() + (joystick.getStickDistPercentageX() * screenRadius),
+                    joystick.getInitialY() + (joystick.getStickDistPercentageY() * screenRadius), screenRadius/3, 50);
+//            uiDebug.setColor(Color.CYAN);
+//            uiDebug.circle(joystick.getInitialX() + joystick.getX(), joystick.getInitialY() + joystick.getY(), screenRadius/5, 50);
+            uiDebug.end();
+            //System.out.println(joystickDir);
+        }
 
         //Log or render to screen
         //System.out.println(calls);

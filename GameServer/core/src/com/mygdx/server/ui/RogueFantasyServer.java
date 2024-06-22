@@ -634,10 +634,6 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				b.append(ramLoad);
 				b.append(" MB");
 				b.append("\n\n");
-				b.append("World state message size: ");
-				b.append(worldStateMessageSize);
-				b.append(" (Bytes)");
-				b.append("\n\n");
 				b.append("Global log size: ");
 				b.append(globalLogs.size());
 				b.append("\n");

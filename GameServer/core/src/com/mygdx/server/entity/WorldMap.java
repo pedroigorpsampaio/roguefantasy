@@ -868,6 +868,22 @@ public class WorldMap implements InputProcessor {
                 }
                 i++;
             }
+        } else if(keycode == Input.Keys.W && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+            if(spectatee != null && spectatee.position !=null) {
+                spectatee.position.y++;
+            }
+        } else if(keycode == Input.Keys.S && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+            if(spectatee != null && spectatee.position !=null) {
+                spectatee.position.y--;
+            }
+        } else if(keycode == Input.Keys.A && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+            if(spectatee != null && spectatee.position !=null) {
+                spectatee.position.x--;
+            }
+        } else if(keycode == Input.Keys.D && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+            if(spectatee != null && spectatee.position !=null) {
+                spectatee.position.x++;
+            }
         }
         return false;
     }

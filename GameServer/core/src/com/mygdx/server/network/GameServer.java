@@ -189,10 +189,25 @@ public class GameServer implements CmdReceiver {
                         character.dir = new Vector2(msg.x, msg.y).nor();
 
                         Vector2 futurePos = new Vector2(character.position.x, character.position.y).add(moveVec);
+//
+//                        if(!RogueFantasyServer.world.isWithinWorldBounds(futurePos) ||
+//                                !RogueFantasyServer.world.isWalkable(futurePos)) {
+//                            return;
 
-                        if(!RogueFantasyServer.world.isWithinWorldBounds(futurePos) ||
-                                !RogueFantasyServer.world.isWalkable(futurePos))
-                            return;
+                        // checks if movement is possible before sending it to server
+                        if(!character.isMovePossible(msg)) {
+                            // search for another direction to slide when colliding
+                            Vector2 newMove = character.findSlide(msg);
+
+                            msg.x = newMove.x;
+                            msg.y = newMove.y;
+                            if(msg.hasEndPoint) msg.hasEndPoint = false; // new dir has been calculated, send it as wasd move to server
+
+                            // test new move once again
+                            if(!character.isMovePossible(msg)) // if failed again, give up this movement
+                                return;
+                        }
+//
 
 //                        while(!RogueFantasyServer.world.isWithinWorldBounds(futurePos)) {
 ////                            if(moveVec.x != 0 && moveVec.y != 0) { // diagonal inputs
@@ -415,14 +430,7 @@ public class GameServer implements CmdReceiver {
                 CharacterConnection charConn = entry.getValue();
                 Component.Character charComp = charConn.character;
                 state = charComp.buildStateAoI();
-                if(charComp.compareStates(state)) return; // if last state is the same, dont bother send to client
-
-//                GameRegister.UpdateCharacter update = charComp.getCharacterData();
-//                update.id = charComp.tag.id;
-//                update.x = charComp.position.x;
-//                update.y = charComp.position.y;
-//                update.dir = charComp.dir;
-//                update.lastRequestId = charComp.lastMoveId;
+                //if(charComp.compareStates(state)) return; // if last state is the same, dont bother send to client
 
                 //state.characterUpdates.add(update);
 
@@ -431,21 +439,8 @@ public class GameServer implements CmdReceiver {
                 else
                     charConn.sendUDP(state);
             }
-            // prepare creature updates
-            //state.creatureUpdates = entityController.getCreaturesData();
+
         }
-
-        //System.out.println("pos server: " + character.position.x + " / " + character.position.y);
-
-
-//        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
-//            Collection<Connection> connections = server.getConnections();
-//            Iterator<Connection> it = connections.iterator();
-//            for (int i = 0, n = connections.size(); i < n; i++) {
-//                lagNetwork.send(state, (CharacterConnection)it.next());
-//            }
-//        } else
-//            server.sendToAllUDP(state);
     }
 
     Component.Character loadCharacter (Component.Character character) {
