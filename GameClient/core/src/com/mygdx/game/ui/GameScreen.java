@@ -121,7 +121,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         camera.update();
         uiCam.update();
 
-        // loads world map (TODO: load it in load screen)
+        // loads world map
         TiledMap map = manager.get("world/testmap.tmx");
         world = WorldMap.getInstance();
         world.init(map, batch, camera);
@@ -422,7 +422,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         if(startDelay)
             timeElapsed+=Gdx.graphics.getDeltaTime();
 
-        if(timeElapsed < 0.67f) { // TODO: ACTUALLY DO A LOAD SCREEN AND W8 FIRST STATE TO BE FULLY LOADED
+        if(timeElapsed < 0.17f) { // TODO: ACTUALLY DO A LOAD SCREEN AND W8 FIRST STATE TO BE FULLY LOADED
             return;
         }
         startDelay = false;
@@ -456,6 +456,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
             screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
             joystick.updateValues(screenMouse.x, screenMouse.y);
             joystickDir = new Vector2(joystick.getX(), joystick.getY()).nor();
+            joystickDir = new Vector2(MathUtils.round(joystickDir.x), MathUtils.round(joystickDir.y));
 //            viewport.getCamera().getPosition().add(
 //                    joystick.getStickDistPercentageX() * delta * IMV * 10,
 //                    joystick.getStickDistPercentageY() * delta * IMV * 10, 0f);

@@ -6,8 +6,15 @@ import com.badlogic.gdx.Graphics;
 import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.ui.LoadScreen;
+
+import de.eskalon.commons.core.ManagedGame;
+import de.eskalon.commons.screen.ManagedScreen;
+import de.eskalon.commons.screen.transition.ScreenTransition;
+import de.eskalon.commons.screen.transition.impl.BlendingTransition;
 
 public class RogueFantasy extends Game {
 

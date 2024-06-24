@@ -525,7 +525,7 @@ public abstract class Entity implements Comparable<Entity> {
 
             float speedFactor = speed*Gdx.graphics.getDeltaTime();
             //if(!isClient)
-            speedFactor *= 0.94f;
+            speedFactor *= 0.97573f;
 
             if(interPos.dst(position) <= speedFactor) { // updates to players position if its close enough
                 updateStage(position.x, position.y, true);

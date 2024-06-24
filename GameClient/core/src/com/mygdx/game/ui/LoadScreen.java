@@ -1,5 +1,8 @@
 package com.mygdx.game.ui;
 
+import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeOut;
+import static com.badlogic.gdx.scenes.scene2d.actions.Actions.run;
+
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.Screen;
@@ -17,7 +20,10 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGeneratorLoader;
 import com.badlogic.gdx.graphics.g2d.freetype.FreetypeFontLoader;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
+import com.badlogic.gdx.math.Interpolation;
+import com.badlogic.gdx.scenes.scene2d.Action;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.actions.SequenceAction;
 import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
@@ -40,6 +46,7 @@ import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Encoder;
 
 import java.util.Locale;
+import java.util.Random;
 
 /**
  * Load screen that loads resources async while showing a loading bar
@@ -47,12 +54,15 @@ import java.util.Locale;
 public class LoadScreen implements Screen {
     final RogueFantasy game;
     final String screen;
+    private Texture bgTexture;
     private String decryptedToken;
     Stage stage;
     AssetManager manager;
     Skin skin;
     ProgressBar pgBar;
     Preferences prefs;
+    private Image bg;
+    private Screen nextScreen;
 
 
     /**
@@ -69,6 +79,10 @@ public class LoadScreen implements Screen {
 
         stage = new Stage(new ScreenViewport());
         Gdx.input.setInputProcessor(stage);
+
+        Random rand = new Random();
+        bgTexture=new Texture("img/initial_splash_screen_"+rand.nextInt(2)+".png");
+        bg=new Image(bgTexture);
 
         // loads skin blocking progress
         if(!manager.isLoaded("skin/neutralizer/neutralizer-ui.json")) {
@@ -171,7 +185,11 @@ public class LoadScreen implements Screen {
 
         }
 
-        pgBar = new ProgressBar(0, 1, 0.1f, false, skin);
+        stage.addActor(bg);
+
+        pgBar = new ProgressBar(0, 1, 0.01f, false, skin);
+        pgBar.setBounds(Gdx.graphics.getWidth()/2f - Gdx.graphics.getWidth() / 8f, Gdx.graphics.getHeight()/32f,
+                Gdx.graphics.getWidth() / 4f, Gdx.graphics.getHeight()/4f);
         stage.addActor(pgBar);
     }
 
@@ -181,6 +199,10 @@ public class LoadScreen implements Screen {
         this.screen = screen;
         this.manager = manager;
         this.decryptedToken = decryptedToken;
+
+        // background image
+        bgTexture=new Texture("img/loading_screen_bg.png");
+        bg=new Image(bgTexture);
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
@@ -199,7 +221,11 @@ public class LoadScreen implements Screen {
         par.generateMipMaps = true;
         manager.load("world/testmap.tmx", TiledMap.class, par);
 
-        pgBar = new ProgressBar(0, 1, 0.1f, false, skin);
+        stage.addActor(bg);
+
+        pgBar = new ProgressBar(0, 1, 0.01f, false, skin);
+        pgBar.setBounds(Gdx.graphics.getWidth()/2f - Gdx.graphics.getWidth() / 8f, Gdx.graphics.getHeight()/32f,
+                Gdx.graphics.getWidth() / 4f, Gdx.graphics.getHeight()/4f);
         stage.addActor(pgBar);
     }
 
@@ -208,35 +234,58 @@ public class LoadScreen implements Screen {
 
     }
 
-    @Override
-    public void render(float delta) {
-        if(manager.update()) {
-            dispose();
+    public void switchScreen(){
+        stage.getRoot().getColor().a = 1;
+        SequenceAction sequenceAction = new SequenceAction();
+        sequenceAction.addAction(fadeOut(0.5f));
+        sequenceAction.addAction(run(() -> {
+            if(screen == "game") {
+                pgBar.remove();
+                bg.remove();
+            }
+            //dispose();
             if(screen.equals("menu")) {
-                // we are done loading, let's move to another screen!
                 game.setScreen(new MainMenuScreen(manager, LoginClient.getInstance()));
             } else if(screen.equals("game")) {
                 GameClient gameClient = GameClient.getInstance(); // gets gameclient instance
-                game.setScreen(new GameScreen(manager, gameClient));
+                GameScreen gameScreen = new GameScreen(manager, gameClient);
                 gameClient.connect(); // connects gameclient with server
                 gameClient.sendTokenAsync(decryptedToken); // login using token received
+                while(gameClient.getClientCharacter() == null);
+                game.setScreen(gameScreen);
             }
+        }));
+        stage.getRoot().addAction(sequenceAction);
+    }
 
-        }
+    float lifeTime = 2f;
+    float elapsed = 0f;
+    @Override
+    public void render(float delta) {
+        elapsed += delta;
 
         // display loading information
         float progress = manager.getProgress();
-        System.out.println(progress);
-        pgBar.setValue(progress);
+        float alpha = Math.min(1f, elapsed/lifeTime);
+        float simProgress = progress*alpha;
+
+        pgBar.setValue(simProgress);
 
         ScreenUtils.clear(0.2f, 0.2f, 0.2f, 1);
         stage.act(Math.min(Gdx.graphics.getDeltaTime(), 1 / 30f));
         stage.draw();
+
+        if(manager.update() && simProgress >= 1f) {
+            switchScreen(); // switches screen with a fade out transition
+        }
     }
 
     @Override
     public void resize(int width, int height) {
         stage.getViewport().update(width, height, true);
+        pgBar.setBounds(Gdx.graphics.getWidth()/2f - Gdx.graphics.getWidth() / 8f, Gdx.graphics.getHeight()/32f,
+                Gdx.graphics.getWidth() / 4f, Gdx.graphics.getHeight()/4f);
+        bg.setBounds(0, 0, width, height);
     }
 
     @Override
@@ -256,7 +305,7 @@ public class LoadScreen implements Screen {
 
     @Override
     public void dispose() {
-        pgBar.remove();
+        //pgBar.remove();
         stage.dispose();
     }
 }

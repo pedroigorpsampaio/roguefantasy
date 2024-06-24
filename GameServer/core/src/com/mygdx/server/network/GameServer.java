@@ -158,26 +158,10 @@ public class GameServer implements CmdReceiver {
                         Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
                         deltaVec.nor().scl(character.attr.speed*GameRegister.clientTickrate());
                         Vector2 futurePos = new Vector2(charPos).add(deltaVec);
-                        character.dir = new Vector2(deltaVec.x, deltaVec.y).nor();
+                        character.dir = new Vector2(deltaVec.x, deltaVec.y*2f).nor();
 
                         if(touchPos.dst(futurePos) <= deltaVec.len()) // close enough, do not move anymore
                             return;
-//                        while(!RogueFantasyServer.world.isWithinWorldBounds(futurePos)) {
-////                            if(RogueFantasyServer.world.isWithinWorldBounds(new Vector2(futurePos.x, charPos.y)))
-////                                character.position.x += deltaVec.x;
-////                            else if(RogueFantasyServer.world.isWithinWorldBounds(new Vector2(charPos.x, futurePos.y)))
-////                                character.position.y += deltaVec.y;
-////                            else if(RogueFantasyServer.world.isWithinWorldBounds(new Vector2(futurePos.x, character.position.y - deltaVec.y))) {
-////                                character.position.x += deltaVec.x;
-////                                character.position.y -= deltaVec.y;
-////                            } else if(RogueFantasyServer.world.isWithinWorldBounds(new Vector2(character.position.x - deltaVec.x, futurePos.y))) {
-////                                character.position.x -= deltaVec.x;
-////                                character.position.y += deltaVec.y;
-////                            }
-//                            deltaVec.scl(0.1f); // just try to move as much as possible
-//                            futurePos = new Vector2(charPos).add(deltaVec);
-//                            //return;
-//                        }
 
                         if(!RogueFantasyServer.world.isWithinWorldBounds(futurePos) ||
                             !RogueFantasyServer.world.isWalkable(futurePos))
@@ -186,7 +170,7 @@ public class GameServer implements CmdReceiver {
                         character.move(deltaVec);
                     } else { // wasd movement already has direction in it, just normalize and scale
                         Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(character.attr.speed*GameRegister.clientTickrate());
-                        character.dir = new Vector2(msg.x, msg.y).nor();
+                        character.dir = new Vector2(msg.x, msg.y*2f).nor();
 
                         Vector2 futurePos = new Vector2(character.position.x, character.position.y).add(moveVec);
 //

@@ -353,7 +353,7 @@ public class GameClient extends DispatchServer {
         public void updateCharacter (UpdateCharacter msg) {
             Entity.Character character = null;
 
-            if(!characters.containsKey(msg.character.id)) { // if creature spawn is not in client list, create and add it
+            if(!characters.containsKey(msg.character.id)) { // if character is not in client list, create and add it
                 character = Entity.Character.toCharacter(msg.character);
                 characters.put(msg.character.id, character);
                 //System.out.println("second add to draw list: " + character.uId + " / " + character.name + " / " + character.drawPos);

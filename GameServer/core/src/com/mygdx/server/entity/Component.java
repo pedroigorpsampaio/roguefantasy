@@ -25,6 +25,39 @@ import dev.dominion.ecs.api.Entity;
 
 
 public class Component {
+    public enum Direction {
+        NORTHWEST(-1, 1),
+        NORTH(0, 1),
+        NORTHEAST(1, 1),
+        EAST(1, 0),
+        SOUTHEAST(1, -1),
+        SOUTH(0, -1),
+        SOUTHWEST(-1, -1),
+        WEST(-1, 0)
+        ;
+
+        public int dirX, dirY;
+
+        Direction(int x, int y) {
+            this.dirX = x;
+            this.dirY = y;
+        }
+
+        public static Direction getDirection(int x, int y){
+            //System.out.println(x + " / \\ " + y);
+            for (Direction dir : Direction.values()) {
+                if (dir.dirX == x && dir.dirY == y) {
+                    return dir;
+                }
+            }
+            //throw new Exception("No enum constant with text " + text + " found");
+            return Direction.SOUTH;// if no direction was found, return south as default
+        }
+
+        public static Vector2 fromDirection(Direction dir) {
+            return new Vector2(dir.dirX, dir.dirY);
+        }
+    }
     public static class Character {
         public String token;
         public int role_level;
