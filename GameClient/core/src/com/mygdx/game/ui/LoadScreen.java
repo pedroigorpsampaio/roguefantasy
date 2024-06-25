@@ -176,7 +176,8 @@ public class LoadScreen implements Screen {
         if(screen.equals("menu")) {
             //manager.load("eldamar.mp3", Music.class);
             // load music
-            manager.load("bgm/mystic_dungeons.mp3", Music.class);
+            manager.load("bgm/menu/menu_0.mp3", Music.class);
+            manager.load("bgm/menu/menu_1.mp3", Music.class);
             // loads language bundles
             Locale defaultLocale = new Locale(prefs.getString("lastLangLocale", "en"), prefs.getString("lastCountry", ""));
             I18NBundleLoader.I18NBundleParameter langParams = new I18NBundleLoader.I18NBundleParameter(defaultLocale, "UTF-8");
@@ -212,7 +213,9 @@ public class LoadScreen implements Screen {
 
         // load game specific assets
         skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
-        manager.load("bgm/time_commando.mp3", Music.class);
+        manager.load("bgm/maps/bgm_0.mp3", Music.class);
+        manager.load("bgm/maps/bgm_1.mp3", Music.class);
+        manager.load("bgm/maps/bgm_2.mp3", Music.class);
         // only needed once
         manager.setLoader(TiledMap.class, new TmxMapLoader(new InternalFileHandleResolver()));
         TmxMapLoader.Parameters par = new TmxMapLoader.Parameters();
@@ -239,10 +242,8 @@ public class LoadScreen implements Screen {
         SequenceAction sequenceAction = new SequenceAction();
         sequenceAction.addAction(fadeOut(0.5f));
         sequenceAction.addAction(run(() -> {
-            if(screen == "game") {
-                pgBar.remove();
-                bg.remove();
-            }
+            pgBar.remove();
+            bg.remove();
             //dispose();
             if(screen.equals("menu")) {
                 game.setScreen(new MainMenuScreen(manager, LoginClient.getInstance()));

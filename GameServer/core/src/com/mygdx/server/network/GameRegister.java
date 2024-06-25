@@ -2,6 +2,7 @@ package com.mygdx.server.network;
 
 
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.maps.MapLayers;
 import com.badlogic.gdx.maps.MapObjects;
 import com.badlogic.gdx.maps.MapProperties;
 import com.badlogic.gdx.maps.objects.RectangleMapObject;
@@ -66,11 +67,11 @@ public class GameRegister {
         kryo.register(int[][].class);
         kryo.register(int[].class);
         kryo.register(Layer.class);
+        kryo.register(Wall.class);
     }
 
     static public class Layer {
         public int[][] tiles =  new int[N_ROWS][N_COLS];
-        public boolean isEntityLayer = false;
     }
 
     static public class Ping {
@@ -123,6 +124,7 @@ public class GameRegister {
     static public class UpdateState {
         public ArrayList<UpdateCharacter> characterUpdates = new ArrayList<>();
         public ArrayList<UpdateCreature> creatureUpdates = new ArrayList<>();
+        public  ArrayList<Wall> wallUpdates = new ArrayList<>();
         public ArrayList<Layer> tileLayers = new ArrayList<>();
         public int tileOffsetX, tileOffsetY;
     }
@@ -149,5 +151,11 @@ public class GameRegister {
 
     public static class ClientId {
         int id;
+    }
+
+    public static class Wall {
+        public int wallId;
+        public int tileId;
+        public int tileX, tileY;
     }
 }

@@ -23,7 +23,6 @@ import static com.badlogic.gdx.graphics.g2d.Batch.Y4;
 import static com.mygdx.server.network.GameRegister.N_COLS;
 import static com.mygdx.server.network.GameRegister.N_ROWS;
 
-import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputProcessor;
@@ -34,48 +33,25 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.MapLayer;
-import com.badlogic.gdx.maps.MapObject;
-import com.badlogic.gdx.maps.MapObjects;
-import com.badlogic.gdx.maps.MapProperties;
-import com.badlogic.gdx.maps.objects.RectangleMapObject;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.TiledMapTileSets;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
 import com.badlogic.gdx.maps.tiled.renderers.IsometricTiledMapRenderer;
-import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.tiles.AnimatedTiledMapTile;
-import com.badlogic.gdx.maps.tiled.tiles.StaticTiledMapTile;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
-import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.scenes.scene2d.ui.Window;
-import com.badlogic.gdx.utils.Align;
-import com.badlogic.gdx.utils.Array;
-import com.badlogic.gdx.utils.ObjectMap;
-import com.badlogic.gdx.utils.ScreenUtils;
 import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.minlog.Log;
 import com.mygdx.server.network.GameRegister;
 import com.mygdx.server.network.GameServer;
 import com.mygdx.server.ui.RogueFantasyServer;
-import com.mygdx.server.util.Common;
-
-import org.openjdk.jol.info.GraphLayout;
-import org.openjdk.jol.vm.VM;
 
 import java.io.ByteArrayOutputStream;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
@@ -157,6 +133,33 @@ public class WorldMap implements InputProcessor {
         // ... and the inverse matrix
         invIsotransform = new Matrix4(isoTransform);
         invIsotransform.inv();
+
+        TiledMapTileLayer entityLayer =  (TiledMapTileLayer) map.getLayers().get(2);
+        loadWallsAsEntities(entityLayer);
+    }
+
+    /**
+     * Loads walls creating wall entities with wall id, tile id and position in world 2d array
+     * to send to clients that treats them as entities to render in correct order
+     */
+    private void loadWallsAsEntities(TiledMapTileLayer layer) {
+        int wallId = 0;
+        if (layer.getProperties().get("entity_layer", Boolean.class)) {
+            for(int i = 0; i < layer.getHeight(); i++) {
+                for (int j = 0; j < layer.getWidth(); j++) {
+                    final TiledMapTileLayer.Cell cell = layer.getCell(j, i);
+
+                    if(cell != null) {
+                        GameRegister.Wall wall = new GameRegister.Wall();
+                        wall.wallId = wallId;
+                        wall.tileId = cell.getTile().getId();
+                        wall.tileX = j; wall.tileY = i;
+                        EntityController.getInstance().entityWorldState[j][i].wall = wall;
+                        wallId++;
+                    }
+                }
+            }
+        }
     }
 
     public void resize(int width, int height) {
@@ -366,21 +369,11 @@ public class WorldMap implements InputProcessor {
                     cutLayers.add(layerCut);
                     GameRegister.Layer aoiLayer = new GameRegister.Layer();
                     aoiLayer.tiles = aoiTiles;
-                    aoiLayer.isEntityLayer = layerBase.getProperties().get("entity_layer", Boolean.class);
                     aoiLayers.add(aoiLayer);
                     // AFTER SENDING TO CLIENT, CLIENT CAN RECREATE IN THE CORRECT POSITION WITH THE FOLLOWING STEPS:
 
                     // create big layer that contains the size of the world
                     TiledMapTileLayer bigLayer = new TiledMapTileLayer(TILES_WIDTH, TILES_HEIGHT, 32, 16);
-//                    bigLayer.setName(layerBase.getName());
-//                    bigLayer.setOpacity(layerBase.getOpacity());
-//                    bigLayer.setOffsetX(layerBase.getOffsetX());
-//                    bigLayer.setOffsetY(layerBase.getOffsetY());
-//                    bigLayer.setParallaxX(layerBase.getParallaxX());
-//                    bigLayer.setParallaxY(layerBase.getParallaxY());
-//                    bigLayer.setVisible(layerBase.isVisible());
-//                    bigLayer.getProperties().putAll(layerBase.getProperties());
-                    bigLayer.getProperties().put("entity_layer", aoiLayer.isEntityLayer);
 
                     TiledMapTileSets tilesets = map.getTileSets();
                     int MASK_CLEAR = 0xE0000000;
@@ -438,8 +431,10 @@ public class WorldMap implements InputProcessor {
 
         /** THE FOLLOWING METHOD IS ALREADY OPTIMIZED FOR DRAWING VISIBLE TILES!!! **/
 
+        int rl = 0;
         // render each layer from lowest to highest (higher layers will be on top)
         for(TiledMapTileLayer layer : renderLayers) {
+            rl++;
             float tileWidth = layer.getTileWidth() * unitScale;
             float tileHeight = layer.getTileHeight() * unitScale;
 
@@ -526,8 +521,7 @@ public class WorldMap implements InputProcessor {
                     if (cell != null)
                         renderCell(cell, x, y, layerOffsetX, layerOffsetY, layer.getOpacity());
 
-                    // if its on the wall layer render entities alongside for correct drawing
-                    if (layer.getProperties().get("entity_layer", Boolean.class)) {
+                    if (rl == renderLayers.size()) {
                         Map<Integer, Entity> tileEntities = EntityController.getInstance().getEntitiesAtTilePos(col, row);
                         Map<Integer, Component.Character> characters = EntityController.getInstance().entityWorldState[col][row].characters;
                         if (tileEntities.size() > 0) { // render entities of tile if any exists

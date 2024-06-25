@@ -24,6 +24,7 @@ public class CommandDispatcher {
         this.gameServer = gameServer;
         // sets arg size for each cmd
         cmdArgsSize = new HashMap<>();
+        cmdArgsSize.put(CmdType.ATTRIBUTE, 3);
         cmdArgsSize.put(CmdType.CLEAR_LOG, 1);
         cmdArgsSize.put(CmdType.BROADCAST, 1);
         cmdArgsSize.put(CmdType.RESTART, 1);
@@ -124,6 +125,9 @@ public class CommandDispatcher {
                     Log.info("cmd", "Invalid server: "+cmd.args[0]);
                     break;
             }
+        } else if(cmd.type == CmdType.ATTRIBUTE) {
+            gameServer.process(cmd);
+            //consoleUI.process(cmd);
         }
 
     }
@@ -155,6 +159,7 @@ public class CommandDispatcher {
     }
 
     public enum CmdType {
+        ATTRIBUTE("attribute", "player_name attribute_name value"),
         CLEAR_LOG("clear", "(all, global, login, chat, game)"),
         BROADCAST("broadcast", "(\"message\")"),
         START("start", "(all, login, chat, game)"),

@@ -117,24 +117,28 @@ public class Component {
          * @return  true if move is possible, false otherwise
          */
         public boolean isMovePossible(GameRegister.MoveCharacter msg) {
+            Vector2 futurePos;
             if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
                 Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
                 Vector2 charPos = new Vector2(this.position.x, this.position.y);
                 Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
                 deltaVec.nor().scl(this.attr.speed * GameRegister.clientTickrate());
-                Vector2 futurePos = new Vector2(charPos).add(deltaVec);
-
-                if(!RogueFantasyServer.world.isWithinWorldBounds(futurePos) ||
-                        !RogueFantasyServer.world.isWalkable(futurePos))
-                    return false;
+                futurePos = new Vector2(charPos).add(deltaVec);
             } else { // wasd movement already has direction in it, just normalize and scale
                 Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(this.attr.speed * GameRegister.clientTickrate());
-                Vector2 futurePos = new Vector2(this.position.x, this.position.y).add(moveVec);
-
-                if(!RogueFantasyServer.world.isWithinWorldBounds(futurePos) ||
-                        !RogueFantasyServer.world.isWalkable(futurePos))
-                    return false;
+                futurePos = new Vector2(this.position.x, this.position.y).add(moveVec);
             }
+
+            if(!RogueFantasyServer.world.isWithinWorldBounds(futurePos) ||
+                    !RogueFantasyServer.world.isWalkable(futurePos))
+                return false;
+
+            // check if has jumped more than one tile in this movement (forbidden!)
+            Vector2 tInitialPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(this.position.x, this.position.y));
+            Vector2 tFuturePos = RogueFantasyServer.world.toIsoTileCoordinates(futurePos);
+            if(Math.abs(tInitialPos.x-tFuturePos.x) > 1 || Math.abs(tInitialPos.y-tFuturePos.y) > 1)
+                return false;
+
             return true;
         }
 
@@ -167,14 +171,25 @@ public class Component {
 
             int tries = 0;
             while(tries < 45) { // search for new angle to move
+                Vector2 tInitialPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(this.position.x, this.position.y));
+                Vector2 tFuturePos = RogueFantasyServer.world.toIsoTileCoordinates(futurePos);
+                Vector2 tFuturePosCounter = RogueFantasyServer.world.toIsoTileCoordinates(futurePosCounter);
+                boolean isWithinOneTile = true;
+                boolean isWithinOneTileCounter = true;
+                if(Math.abs(tInitialPos.x-tFuturePos.x) > 1 || Math.abs(tInitialPos.y-tFuturePos.y) > 1)
+                    isWithinOneTile = false;
+                if(Math.abs(tInitialPos.x-tFuturePosCounter.x) > 1 || Math.abs(tInitialPos.y-tFuturePosCounter.y) > 1)
+                    isWithinOneTileCounter = false;
                 if(RogueFantasyServer.world.isWithinWorldBounds(futurePos) &&
-                        RogueFantasyServer.world.isWalkable(futurePos)) { // found a new movement to make searching clockwise
+                        RogueFantasyServer.world.isWalkable(futurePos) &&
+                        isWithinOneTile) { // found a new movement to make searching clockwise
                     newMove.x = moveVec.x;
                     newMove.y = moveVec.y;
                     break;
                 }
                 if(RogueFantasyServer.world.isWithinWorldBounds(futurePosCounter) &&
-                        RogueFantasyServer.world.isWalkable(futurePosCounter)) { // found a new movement to make searching counter-clockwise
+                        RogueFantasyServer.world.isWalkable(futurePosCounter) &&
+                        isWithinOneTileCounter) { // found a new movement to make searching counter-clockwise
                     newMove.x = moveVecCounter.x;
                     newMove.y = moveVecCounter.y;
                     break;
@@ -255,18 +270,16 @@ public class Component {
                     TiledMapTileLayer layerBase = (TiledMapTileLayer) mapLayer;
                     // add aoi tiles as a layer of the state message
                     GameRegister.Layer aoiLayer = new GameRegister.Layer();
-                    aoiLayer.isEntityLayer = layerBase.getProperties().get("entity_layer", Boolean.class);
                     // stores visible tiles in the aoi 2d Array of tiles
                     for (int row = minI; row <= maxI; row++) {
                         for (int col = minJ; col <= maxJ; col++) {
                             final TiledMapTileLayer.Cell cell = layerBase.getCell(col, row);
-                            if (cell != null)
-                                aoiLayer.tiles[col - minJ][row - minI] = (short) cell.getTile().getId();
-                            else
-                                aoiLayer.tiles[col - minJ][row - minI] = -1; // represents null tile/cell
-
-                            // if its entity layer, prepare creature and character updates of the ones that are in range
-                            if (layerBase.getProperties().get("entity_layer", Boolean.class)) {
+                            if (!layerBase.getProperties().get("entity_layer", Boolean.class)) {
+                                if (cell != null)
+                                    aoiLayer.tiles[col - minJ][row - minI] = (short) cell.getTile().getId();
+                                else
+                                    aoiLayer.tiles[col - minJ][row - minI] = -1; // represents null tile/cell
+                            } else {  // if its entity layer, prepare creature and character updates of the ones that are in range as well as walls
                                 synchronized ( EntityController.getInstance().entityWorldState[col][row].entities) {
                                     Map<Integer, Entity> tileEntities = EntityController.getInstance().entityWorldState[col][row].entities;
                                     if (tileEntities.size() > 0) { // for each visible tile that has entities
@@ -277,7 +290,6 @@ public class Component {
                                                     continue;
                                             state.creatureUpdates.add(EntityController.getInstance().getCreatureData(entity));
                                         }
-
                                     }
                                 }
                                 synchronized ( EntityController.getInstance().entityWorldState[col][row].characters) { // for each character
@@ -292,10 +304,14 @@ public class Component {
                                         }
                                     }
                                 }
+                                if(EntityController.getInstance().entityWorldState[col][row].wall != null) { // add wall as wall update for client that treats it as entity
+                                    state.wallUpdates.add(EntityController.getInstance().entityWorldState[col][row].wall);
+                                }
                             }
                         }
                     }
-                    state.tileLayers.add(aoiLayer);
+                    if (!layerBase.getProperties().get("entity_layer", Boolean.class))
+                        state.tileLayers.add(aoiLayer);
                 }
             }
             //state.tileLayers = aoiLayers;

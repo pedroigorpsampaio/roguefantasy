@@ -23,21 +23,14 @@ import static com.badlogic.gdx.graphics.g2d.Batch.Y4;
 import static com.mygdx.game.network.GameRegister.N_COLS;
 import static com.mygdx.game.network.GameRegister.N_ROWS;
 
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
-import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.graphics.g2d.freetype.FreeType;
-import com.badlogic.gdx.maps.MapLayer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.TiledMapTileSets;
-import com.badlogic.gdx.maps.tiled.TmxMapLoader;
-import com.badlogic.gdx.maps.tiled.renderers.IsometricTiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.tiles.AnimatedTiledMapTile;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
@@ -49,6 +42,8 @@ import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Map;
 
 public class WorldMap {
     private static WorldMap instance = null;
@@ -93,9 +88,10 @@ public class WorldMap {
         WORLD_WIDTH = TILES_WIDTH * 32f;
         WORLD_HEIGHT = TILES_HEIGHT * 16f;
 
-        // creates array of tmx layers with the right size to be able to correctly draw info received by server (only tile layers)
+        // creates array of tmx layers with the right size to be able to correctly draw info received by server (only tile layers and not entity layers)
         for(int l = 0; l < map.getLayers().size(); l++) {
             if(!map.getLayers().get(l).getClass().equals(TiledMapTileLayer.class)) continue;
+            if(map.getLayers().get(l).getProperties().get("entity_layer", Boolean.class)) continue;
             TiledMapTileLayer tmxLayer = new TiledMapTileLayer(TILES_WIDTH, TILES_HEIGHT, 32, 16);
             tmxLayer.getProperties().putAll(map.getLayers().get(l).getProperties());
             tmxLayer.setName(map.getLayers().get(l).getName());
@@ -219,6 +215,18 @@ public class WorldMap {
         if(floorLayer.getCell((int)tPos.x, (int)tPos.y) == null) // if its a cell that does not exist, its not walkable
             return false;
 
+        // check if there is a wall on tile
+        synchronized (GameClient.getInstance().getWalls()) {
+            Iterator<Map.Entry<Integer, Entity.Wall>> iterator = GameClient.getInstance().getWalls().entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<Integer, Entity.Wall> entry = iterator.next();
+                if(entry.getValue().tileX == (int)tPos.x &&
+                        entry.getValue().tileY == (int)tPos.y) {
+                    return false;
+                }
+            }
+        }
+
         if(floorLayer.getCell((int)tPos.x, (int)tPos.y).getTile().getProperties().get("walkable", Boolean.class))
             return true;
         else
@@ -317,7 +325,8 @@ public class WorldMap {
 
                     float x = (col * halfTileWidth) + (row * halfTileWidth);
                     float y = (row * halfTileHeight) - (col * halfTileHeight);
-                    renderCell(layer.getCell(col, row), x, y, layerOffsetX, layerOffsetY, layer.getOpacity());
+                    if(!layer.getProperties().get("entity_layer", Boolean.class))
+                        renderCell(layer.getCell(col, row), x, y, layerOffsetX, layerOffsetY, layer.getOpacity());
                 }
             }
             l++;
@@ -351,6 +360,43 @@ public class WorldMap {
         }
         return cell;
     }
+
+//    public ArrayList<Entity.Wall> getWallList() {
+//        ArrayList<Entity.Wall> walls = new ArrayList<>();
+//
+//        Entity.Character spectatee = GameClient.getInstance().getClientCharacter();
+//
+//        if(spectatee == null) return walls; // player is not loaded yet, return empty walls
+//
+//        TiledMapTileSets tilesets = map.getTileSets();
+//        int MASK_CLEAR = 0xE0000000;
+//        int FLAG_FLIP_HORIZONTALLY = 0x80000000;
+//        int FLAG_FLIP_VERTICALLY = 0x40000000;
+//        int FLAG_FLIP_DIAGONALLY = 0x20000000;
+//
+//        int l = 0;
+//        for (TiledMapTileLayer layer : tmxLayers) {
+//            if(!layer.getProperties().get("entity_layer", Boolean.class)) {
+//                l++;
+//                continue;
+//            }
+//
+//            // loop only through AoI of player creating walls as entities to be rendered in order
+//            for (int i = 0; i < layers.get(l).tiles.length; i++) {
+//                for (int j = 0; j < layers.get(l).tiles[i].length; j++) {
+//                    int id = layers.get(l).tiles[j][i];
+//                    if (id < 0) continue;
+//
+//                    TiledMapTile tile = tilesets.getTile(id & ~MASK_CLEAR);
+//
+//                    if (tile != null) {
+//                        walls.add(new Entity.Wall(id, tile, new Vector2(j, i)));
+//                    }
+//                }
+//            }
+//        }
+//        return walls;
+//    }
 
     /**
      * Renders a cell from a tile map layer
@@ -485,7 +531,6 @@ public class WorldMap {
         System.out.println("### MAP DEBUG ### \n\n");
 
         for(int l = 0; l < layers.size(); l++) {
-            System.out.println("\n\nLAYER "+l+": isEntityLayer? : " + layers.get(l).isEntityLayer + "\n");
             int[][] tiles = layers.get(l).tiles;
             for (int i = 0; i < tiles.length; i++) {
                 System.out.println(" ");
@@ -500,5 +545,12 @@ public class WorldMap {
 
     public void dispose () {
         map.dispose();
+    }
+
+    public TiledMapTile getTileFromId(int tileId) {
+        TiledMapTileSets tileset = map.getTileSets();
+        int MASK_CLEAR = 0xE0000000;
+        TiledMapTile tile = tileset.getTile(tileId & ~MASK_CLEAR);
+        return tile;
     }
 }

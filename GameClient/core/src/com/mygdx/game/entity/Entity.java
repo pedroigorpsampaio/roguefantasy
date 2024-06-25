@@ -1,5 +1,8 @@
 package com.mygdx.game.entity;
 
+import static com.mygdx.game.entity.WorldMap.TEX_HEIGHT;
+import static com.mygdx.game.entity.WorldMap.TEX_WIDTH;
+import static com.mygdx.game.entity.WorldMap.unitScale;
 import static com.mygdx.game.ui.CommonUI.getPixmapCircle;
 
 import com.badlogic.gdx.Gdx;
@@ -11,18 +14,18 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.maps.tiled.TiledMapTile;
+import com.badlogic.gdx.maps.tiled.TiledMapTileSets;
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
-import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
 
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -36,7 +39,7 @@ public abstract class Entity implements Comparable<Entity> {
     public boolean isClient = false;
     protected Pixmap debugCircle; // for debug
     protected Texture debugTex; // for debug
-    public static float tagScale = WorldMap.unitScale * 0.66f;
+    public static float tagScale = unitScale * 0.66f;
     public Vector2 drawPos = new Vector2(0,0); // position to draw this entity
     public int uId;
     public enum Direction {
@@ -205,14 +208,14 @@ public abstract class Entity implements Comparable<Entity> {
                 // Use the split utility method to create a 2D array of TextureRegions. This is
                 // possible because this sprite sheet contains frames of equal size and they are
                 // all aligned.
-                spriteW = (spriteSheet.getWidth() / FRAME_COLS) * WorldMap.unitScale;
-                spriteH = (spriteSheet.getHeight() / FRAME_ROWS) * WorldMap.unitScale;
+                spriteW = (spriteSheet.getWidth() / FRAME_COLS) * unitScale;
+                spriteH = (spriteSheet.getHeight() / FRAME_ROWS) * unitScale;
                 TextureRegion[][] tmp = TextureRegion.split(spriteSheet,
                         spriteSheet.getWidth() / FRAME_COLS,
                         spriteSheet.getHeight() / FRAME_ROWS);
 
                 float atkFactor = 20f / (speed*0.33f); // TODO: ATTK SPEEd
-                float walkFactor = (20f / (speed*0.33f)) * WorldMap.unitScale;
+                float walkFactor = (4f / (speed*0.10f)) * unitScale;
 
                 // Place the regions into a 1D array in the correct order, starting from the top
                 // left, going across first. The Animation constructor requires a 1D array.
@@ -311,6 +314,24 @@ public abstract class Entity implements Comparable<Entity> {
             });
         }
 
+        /**
+         * Updates speed of character adjusting animation speed as well (should be used instead of changing speed var directly)
+         * @param speed the new speed of the player (should be between 1.0 and 9.0)
+         */
+        public void updateSpeed(float speed) {
+            if(speed < 1.0 || speed > 9.0) return;
+
+            this.speed = speed;
+            float newFrameDuration = (4f / (speed*0.10f)) * unitScale * ANIM_BASE_INTERVAL;
+            synchronized (walk) {
+                Iterator<Animation<TextureRegion>> itr = walk.values().iterator();
+                while(itr.hasNext()) {
+                    Animation<TextureRegion> anim = itr.next();
+                    anim.setFrameDuration(newFrameDuration);
+                }
+            }
+        }
+
         // updates based on character changes
         public void update(float x, float y) {
             this.x = x;
@@ -380,7 +401,6 @@ public abstract class Entity implements Comparable<Entity> {
             } else { // wasd movement already has direction in it, just normalize and scale
                 Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(this.speed * GameRegister.clientTickrate());
                 this.move(moveVec);
-
             }
         }
 
@@ -390,24 +410,27 @@ public abstract class Entity implements Comparable<Entity> {
          * @return  true if move is possible, false otherwise
          */
         public boolean isMovePossible(GameRegister.MoveCharacter msg) {
+            Vector2 futurePos;
             if (msg.hasEndPoint) { // if it has endpoint, do the movement calculations
                 Vector2 touchPos = new Vector2(msg.xEnd, msg.yEnd);
                 Vector2 charPos = new Vector2(this.x, this.y);
                 Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
                 deltaVec.nor().scl(this.speed * GameRegister.clientTickrate());
-                Vector2 futurePos = new Vector2(charPos).add(deltaVec);
-
-                if(!WorldMap.isWithinWorldBounds(futurePos) ||
-                        !WorldMap.getInstance().isWalkable(futurePos))
-                    return false;
+                futurePos = new Vector2(charPos).add(deltaVec);
             } else { // wasd movement already has direction in it, just normalize and scale
                 Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(this.speed * GameRegister.clientTickrate());
-                Vector2 futurePos = new Vector2(this.x, this.y).add(moveVec);
-
-                if(!WorldMap.isWithinWorldBounds(futurePos) ||
-                        !WorldMap.getInstance().isWalkable(futurePos))
-                    return false;
+                futurePos = new Vector2(this.x, this.y).add(moveVec);
             }
+            if(!WorldMap.isWithinWorldBounds(futurePos) ||
+                    !WorldMap.getInstance().isWalkable(futurePos))
+                return false;
+
+            // check if has jumped more than one tile in this movement (forbidden!)
+            Vector2 tInitialPos = WorldMap.toIsoTileCoordinates(new Vector2(this.x, this.y));
+            Vector2 tFuturePos = WorldMap.toIsoTileCoordinates(futurePos);
+            if(Math.abs(tInitialPos.x-tFuturePos.x) > 1 || Math.abs(tInitialPos.y-tFuturePos.y) > 1)
+                return false;
+
             return true;
         }
 
@@ -440,14 +463,26 @@ public abstract class Entity implements Comparable<Entity> {
 
             int tries = 0;
             while(tries < 45) { // search for new angle to move
+                Vector2 tInitialPos = WorldMap.toIsoTileCoordinates(new Vector2(this.x, this.y));
+                Vector2 tFuturePos = WorldMap.toIsoTileCoordinates(futurePos);
+                Vector2 tFuturePosCounter = WorldMap.toIsoTileCoordinates(futurePosCounter);
+                boolean isWithinOneTile = true;
+                boolean isWithinOneTileCounter = true;
+                if(Math.abs(tInitialPos.x-tFuturePos.x) > 1 || Math.abs(tInitialPos.y-tFuturePos.y) > 1)
+                    isWithinOneTile = false;
+                if(Math.abs(tInitialPos.x-tFuturePosCounter.x) > 1 || Math.abs(tInitialPos.y-tFuturePosCounter.y) > 1)
+                    isWithinOneTileCounter = false;
+
                 if(WorldMap.isWithinWorldBounds(futurePos) &&
-                        WorldMap.getInstance().isWalkable(futurePos)) { // found a new movement to make searching clockwise
+                        WorldMap.getInstance().isWalkable(futurePos) &&
+                            isWithinOneTile) { // found a new movement to make searching clockwise
                     newMove.x = moveVec.x;
                     newMove.y = moveVec.y;
                     break;
                 }
                 if(WorldMap.isWithinWorldBounds(futurePosCounter) &&
-                        WorldMap.getInstance().isWalkable(futurePosCounter)) { // found a new movement to make searching counter-clockwise
+                        WorldMap.getInstance().isWalkable(futurePosCounter) &&
+                        isWithinOneTileCounter) { // found a new movement to make searching counter-clockwise
                     newMove.x = moveVecCounter.x;
                     newMove.y = moveVecCounter.y;
                     break;
@@ -489,17 +524,20 @@ public abstract class Entity implements Comparable<Entity> {
 
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
-            batch.draw(currentFrame, this.interPos.x + spriteW/12f, this.interPos.y + spriteH/12f, currentFrame.getRegionWidth()*WorldMap.unitScale,
-                    currentFrame.getRegionHeight()*WorldMap.unitScale);
+            batch.draw(currentFrame, this.interPos.x + spriteW/12f, this.interPos.y + spriteH/12f, currentFrame.getRegionWidth()* unitScale,
+                    currentFrame.getRegionHeight()* unitScale);
 
             //System.out.println("playerW: " + currentFrame.getRegionWidth() + " / playerH: " + currentFrame.getRegionHeight());
-            spriteH = currentFrame.getRegionHeight()*WorldMap.unitScale;
-            spriteW = currentFrame.getRegionWidth()*WorldMap.unitScale;
+            spriteH = currentFrame.getRegionHeight()* unitScale;
+            spriteW = currentFrame.getRegionWidth()* unitScale;
             centerPos = new Vector2(this.interPos.x + spriteW/2f + spriteW/20f, this.interPos.y + spriteH/2f + spriteH/20f);
             this.drawPos.x = this.interPos.x + spriteW/2f + spriteW/20f;
-            this.drawPos.y = this.interPos.y + spriteH/12f + spriteH/20f;
+            this.drawPos.y = this.interPos.y + spriteH/12f + spriteH/18f;
 
-            batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2*WorldMap.unitScale, 2*WorldMap.unitScale);
+            batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
+
+//            Vector2 tPos = toIsoTileCoordinates(position);
+//            System.out.println(tPos);
 
             // draw player tag
 
@@ -571,6 +609,73 @@ public abstract class Entity implements Comparable<Entity> {
 
     }
 
+    public static class Wall extends Entity {
+        private final int tileId;
+        public int tileX, tileY;
+        public TiledMapTile tile;
+        public int wallId;
+        private boolean assetsLoaded;
+
+        public Wall(int wallId, int tileId, TiledMapTile tile, int tileX, int tileY) {
+            this.tile = tile;
+            this.tileX = tileX;
+            this.tileY = tileY;
+            this.wallId = wallId;
+            this.tileId = tileId;
+
+            float tileWidth = TEX_WIDTH * unitScale;
+            float tileHeight = TEX_HEIGHT * unitScale;
+            float halfTileWidth = tileWidth * 0.5f;
+            float halfTileHeight = tileHeight * 0.5f;
+            this.drawPos.x =  (tileX * halfTileWidth) + (tileY * halfTileWidth);
+            this.drawPos.y = (tileY * halfTileHeight) - (tileX * halfTileHeight) + tileHeight; // adjust to match origin to tile origin
+            this.uId = EntityController.getInstance().generateUid();
+
+            Gdx.app.postRunnable(() -> {
+                debugCircle = getPixmapCircle(40, Color.BROWN,true);
+                debugTex=new Texture(debugCircle);
+                debugTex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+                assetsLoaded = true;
+            });
+        }
+
+        public static Wall toWall(GameRegister.Wall wallUpdate) {
+            return new Wall(wallUpdate.wallId, wallUpdate.tileId,  WorldMap.getInstance().getTileFromId(wallUpdate.tileId),
+                                wallUpdate.tileX, wallUpdate.tileY);
+        }
+
+        @Override
+        public void render(SpriteBatch batch) {
+            // if assets are not loaded, return
+            if(assetsLoaded == false) return;
+
+            float tileHeight = TEX_HEIGHT * unitScale;
+            float halfTileHeight = tileHeight * 0.5f;
+
+            batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight,
+                    tile.getTextureRegion().getRegionWidth()* unitScale, tile.getTextureRegion().getRegionHeight()* unitScale);
+            batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
+        }
+
+        @Override
+        public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
+
+        }
+
+        @Override
+        public int compareTo(Entity entity) {
+            Vector2 e1Iso = this.drawPos;
+            Vector2 e2Iso = entity.drawPos;
+            float e1Depth = e1Iso.y;
+            float e2Depth = e2Iso.y;
+
+            if(e1Depth > e2Depth)
+                return -1;
+            else
+                return 1;
+        }
+    }
+
     public static class Creature extends Entity {
         // Constant rows and columns of the sprite sheet
         private static final int FRAME_COLS = 15, FRAME_ROWS = 16;
@@ -638,7 +743,7 @@ public abstract class Entity implements Comparable<Entity> {
                 // Place the regions into a 1D array in the correct order, starting from the top
                 // left, going across first. The Animation constructor requires a 1D array.
 
-                float walkFactor = (20f / (speed*0.85f)) * WorldMap.unitScale;
+                float walkFactor = (20f / (speed*0.85f)) * unitScale;
 
                 TextureRegion[] frames = new TextureRegion[8];
                 int index = 0;
@@ -668,8 +773,8 @@ public abstract class Entity implements Comparable<Entity> {
                     frames[index++] = tmp[15][j];
                 }
                 walk.put(Direction.NORTHEAST, new Animation<>(ANIM_BASE_INTERVAL * walkFactor, frames));
-                spriteW = frames[0].getRegionWidth() * WorldMap.unitScale;
-                spriteH = frames[0].getRegionHeight() * WorldMap.unitScale;
+                spriteW = frames[0].getRegionWidth() * unitScale;
+                spriteH = frames[0].getRegionHeight() * unitScale;
                 // idle
                 frames = new TextureRegion[4];
                 index = 0;
@@ -803,15 +908,15 @@ public abstract class Entity implements Comparable<Entity> {
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
 
-            batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()*WorldMap.unitScale,
-                    currentFrame.getRegionHeight()*WorldMap.unitScale);//, 60, 60,
+            batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()* unitScale,
+                    currentFrame.getRegionHeight()* unitScale);//, 60, 60,
             //                120, 120, 1f, 1f, 0);
 
             //System.out.println("wolf: " + currentFrame.getRegionWidth() + " / wolf: " + currentFrame.getRegionHeight());
-            spriteH = currentFrame.getRegionHeight()*WorldMap.unitScale;
-            spriteW = currentFrame.getRegionWidth()*WorldMap.unitScale;
+            spriteH = currentFrame.getRegionHeight()* unitScale;
+            spriteW = currentFrame.getRegionWidth()* unitScale;
 
-            batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2*WorldMap.unitScale, 2*WorldMap.unitScale);
+            batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
 
 
             // draw creature tag
@@ -912,8 +1017,6 @@ public abstract class Entity implements Comparable<Entity> {
             Vector2 e2Iso = entity.drawPos;
             float e1Depth = e1Iso.y;
             float e2Depth = e2Iso.y;
-
-            //System.out.println("Wolf Depth: " + e1Depth + " / Player: " + e2Depth);
 
             if(e1Depth > e2Depth)
                 return -1;

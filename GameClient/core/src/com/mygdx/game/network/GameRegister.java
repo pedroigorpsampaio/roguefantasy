@@ -57,11 +57,11 @@ public class GameRegister {
         kryo.register(int[][].class);
         kryo.register(int[].class);
         kryo.register(Layer.class);
+        kryo.register(Wall.class);
     }
 
     static public class Layer {
         public int[][] tiles =  new int[N_ROWS][N_COLS];
-        public boolean isEntityLayer = false;
     }
 
     static public class Ping {
@@ -112,9 +112,10 @@ public class GameRegister {
     }
 
     static public class UpdateState {
-        ArrayList<UpdateCharacter> characterUpdates = new ArrayList<>();
-        ArrayList<UpdateCreature> creatureUpdates = new ArrayList<>();
-        ArrayList<Layer> tileLayers = new ArrayList<>();
+        public ArrayList<UpdateCharacter> characterUpdates = new ArrayList<>();
+        public ArrayList<UpdateCreature> creatureUpdates = new ArrayList<>();
+        public  ArrayList<Wall> wallUpdates = new ArrayList<>();
+        public ArrayList<Layer> tileLayers = new ArrayList<>();
         public int tileOffsetX, tileOffsetY;
     }
 
@@ -141,5 +142,11 @@ public class GameRegister {
 
     public static class ClientId {
         int id;
+    }
+
+    public static class Wall {
+        public int wallId;
+        public int tileId;
+        public int tileX, tileY;
     }
 }

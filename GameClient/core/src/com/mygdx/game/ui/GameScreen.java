@@ -39,6 +39,7 @@ import com.mygdx.game.util.Common;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.util.Random;
 
 /**
  * Implements the game screen
@@ -133,7 +134,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // BitmapFont fontMedium = manager.get("fonts/immortalMedium.ttf", BitmapFont.class);
 
         // get and play music
-        bgm = manager.get("bgm/time_commando.mp3", Music.class);
+        Random rand = new Random();
+        bgm = manager.get("bgm/maps/bgm_"+rand.nextInt(3)+".mp3", Music.class);
         bgm.setLooping(true);
         bgm.setVolume(prefs.getFloat("bgmVolume", 1.0f));
         bgm.play();
@@ -381,7 +383,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 float playerY = player.interPos.y + player.spriteH/2f;
 
                 Vector3 target = new Vector3(playerX,playerY,0);
-                final float speed=Gdx.graphics.getDeltaTime()*player.speed,ispeed=1.0f-speed;
+                final float speed=Gdx.graphics.getDeltaTime()*9.0f,ispeed=1.0f-speed;
                 Vector3 cameraPosition = camera.position;
                 cameraPosition.scl(ispeed);
                 target.scl(speed);
@@ -526,7 +528,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
     @Override
     public void dispose() {
-        stage.dispose();
+        //stage.dispose();
+        bgm.dispose();
         world.dispose();
     }
 
@@ -547,6 +550,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 RogueFantasy.getInstance().setScreen(new LoadScreen("menu"));
                 // stops update timer
                 updateTimer.stop();
+                dispose();
             }
         });
     }

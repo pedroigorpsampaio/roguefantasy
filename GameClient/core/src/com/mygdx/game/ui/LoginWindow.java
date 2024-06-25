@@ -242,6 +242,7 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
                 }
             } else if(propertyChangeEvent.getPropertyName().equals("tokenResponse")) { // login authorized, received token to connect to game server
                 LoginRegister.Token token = (LoginRegister.Token) propertyChangeEvent.getNewValue();
+                if(encoder == null) encoder = Encoder.getInstance();
                 String decryptedToken = encoder.decryptSignedData(token.token);
                 if(parent instanceof MainMenuScreen) { // perform change screen from menu to game screen
                     ((MainMenuScreen) parent).update(getInstance(), false, MainMenuScreen.ScreenCommands.DISPOSE);

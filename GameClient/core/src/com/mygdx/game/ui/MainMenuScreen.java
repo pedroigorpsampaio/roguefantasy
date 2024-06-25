@@ -27,6 +27,8 @@ import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Encoder;
 
+import java.util.Random;
+
 /**
  * Main menu screen class
  */
@@ -79,7 +81,8 @@ public class MainMenuScreen implements Screen {
        // BitmapFont fontMedium = manager.get("fonts/immortalMedium.ttf", BitmapFont.class);
 
         // get and play music
-        bgm = manager.get("bgm/mystic_dungeons.mp3", Music.class);
+        Random rand = new Random();
+        bgm = manager.get("bgm/menu/menu_"+rand.nextInt(2)+".mp3", Music.class);
         bgm.setLooping(true);
         bgm.setVolume(prefs.getFloat("bgmVolume", 1.0f));
         bgm.play();

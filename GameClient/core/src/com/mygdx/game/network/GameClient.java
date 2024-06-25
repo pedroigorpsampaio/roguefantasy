@@ -2,7 +2,6 @@ package com.mygdx.game.network;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.math.MathUtils;
-import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Timer;
 import com.esotericsoftware.kryonet.Client;
 import com.esotericsoftware.kryonet.Connection;
@@ -23,7 +22,6 @@ import com.mygdx.game.util.Encoder;
 import java.beans.PropertyChangeSupport;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -91,7 +89,8 @@ public class GameClient extends DispatchServer {
                         //System.out.println("Ping: " + Common.calculateAverage(latencies));
                         avgLatency = Common.calculateAverage(latencies); // stores avg ping value
                     }
-                    Timer.schedule(pingDelay, 5f); // delay new ping update
+                    if(!pingDelay.isScheduled())
+                        Timer.schedule(pingDelay, 5f); // delay new ping update
                 }
                 if (object instanceof ClientId) {
                     ClientId msg = (ClientId)object;
@@ -233,7 +232,6 @@ public class GameClient extends DispatchServer {
         requestsCounter = new ConcurrentHashMap<>();
         // resets pending move msgs
         pendingMoves = new ConcurrentLinkedQueue<>();
-
         isConnected = false;
         // tell interested listeners that server has lost connection
         listeners.firePropertyChange("lostConnection", null, true);
@@ -264,10 +262,15 @@ public class GameClient extends DispatchServer {
         serverController.removeEntity(uId);
     }
 
+    public Map<Integer, Entity.Wall> getWalls() {
+        return serverController.walls;
+    }
+
     static class ServerController {
 
         Map<Integer, Entity.Character> characters = new ConcurrentHashMap<>();
         Map<Long, Entity.Creature> creatures = new ConcurrentHashMap<>();
+        Map<Integer, Entity.Wall> walls = new ConcurrentHashMap<>();
 
         public void addCharacter (Entity.Character character) {
 //            characters.put(character.id, character);
@@ -291,6 +294,13 @@ public class GameClient extends DispatchServer {
                 WorldMap.tileOffsetY = state.tileOffsetY;
                 //WorldMap.debugMap();
             }
+            if(state.wallUpdates != null) { // there are wall updates
+                for(GameRegister.Wall wallUpdate : state.wallUpdates){
+                    updateWall(wallUpdate);
+                    Entity.Wall wall = walls.get(wallUpdate.wallId);
+                    EntityController.getInstance().lastAoIEntities.add(wall.uId);
+                }
+            }
             if(state.characterUpdates != null) { // there are character updates
                 for (UpdateCharacter charUpdate : state.characterUpdates) {
                     updateCharacter(charUpdate);
@@ -311,6 +321,15 @@ public class GameClient extends DispatchServer {
             // sets flag to inform that first update was processed
             if(!instance.firstStateProcessed)
                 instance.firstStateProcessed = true;
+        }
+
+        private void updateWall(GameRegister.Wall wallUpdate) {
+            Entity.Wall wall = null;
+            if(!walls.containsKey(wallUpdate.wallId)) {
+                wall = Entity.Wall.toWall(wallUpdate);
+                walls.put(wallUpdate.wallId, wall);
+                EntityController.getInstance().entities.put(wall.uId, wall); // put on list of entities (which will manage if its visible or not)
+            }
         }
 
         private void updateCreature(UpdateCreature creatureUpdate) {
@@ -370,7 +389,10 @@ public class GameClient extends DispatchServer {
             if(GameClient.getInstance().clientCharId != msg.character.id)
                 character.direction = Entity.Direction.getDirection(MathUtils.round(msg.dir.x), MathUtils.round(msg.dir.y));
 
-            // if there is no change in pos, ignore
+            // updates attributes
+            character.updateSpeed(msg.character.speed);
+
+            // if there is no change in pos, ignore movement
             if(character.x - msg.character.x == 0 && character.y - msg.character.y == 0) return;
 
             character.update(msg.character.x, msg.character.y);
@@ -440,11 +462,23 @@ public class GameClient extends DispatchServer {
 //            }
             characters.clear();
             creatures.clear();
+            walls.clear();
             EntityController.getInstance().entities.clear();
         }
 
         // iterates through data maps containing the different types of entities to remove one by its unique id
         public void removeEntity(int uId) {
+            // look in walls map
+            synchronized (walls) {
+                Iterator<Map.Entry<Integer, Entity.Wall>> iterator = walls.entrySet().iterator();
+                while (iterator.hasNext()) {
+                    Map.Entry<Integer, Entity.Wall> entry = iterator.next();
+                    if(entry.getValue().uId == uId) {
+                        iterator.remove();
+                        return;
+                    }
+                }
+            }
             // look uId in creatures map
             synchronized (creatures) {
                 Iterator<Map.Entry<Long, Entity.Creature>> iterator = creatures.entrySet().iterator();

@@ -24,8 +24,9 @@ import dev.dominion.ecs.api.Scheduler;
 class Tile {
     Map<Integer, Entity> entities; // map of entities of this tile (excluding characters)
     Map<Integer, Component.Character> characters; // map of characters of this tile
+    GameRegister.Wall wall; //  if there is a wall on this tile (walls are treated as entities to render them in order client-side)
 
-    public Tile() {entities = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>();}
+    public Tile() {entities = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>(); wall = null;}
 }
 
 public class EntityController {

@@ -108,7 +108,7 @@ public class EntityController {
             Iterator<Map.Entry<Integer, Entity>> itr = entities.entrySet().iterator();
             while (itr.hasNext()) {
                 Entity entity = itr.next().getValue();
-                if(entity.uId == GameClient.getInstance().getClientUid()) continue; // no point in removing client from drawing list of entities
+                if(entity.uId == GameClient.getInstance().getClientUid()) continue; // no point in removing client entity from drawing list of entities
                 if(!lastAoIEntities.contains(entity.uId)) { // remove entity from lists if has not been in last AoI state update
                     itr.remove(); // remove from list of entities to draw
                     GameClient.getInstance().removeEntity(entity.uId); // remove from data list of entities

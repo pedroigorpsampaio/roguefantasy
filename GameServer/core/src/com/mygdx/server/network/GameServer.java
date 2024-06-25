@@ -243,8 +243,6 @@ public class GameServer implements CmdReceiver {
                     Component.Character charComp = connection.character;
                     removeCharacter.id = charComp.tag.id;
 
-                    System.out.println(charComp.tag.id);
-
                     if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
                         Collection<Connection> connections = server.getConnections();
                         Iterator<Connection> it = connections.iterator();
@@ -479,9 +477,73 @@ public class GameServer implements CmdReceiver {
             case RESTART:   // only stops server, will be restarted in UI module
                 stop();
                 break;
+            case ATTRIBUTE:
+                changePlayerAttribute(cmd);
+                break;
             default:
                 break;
         }
+    }
+
+    /**
+     * Change attributes of online players
+     * @param cmd   the command received from console containing the necessary data to change attribute
+     */
+    private void changePlayerAttribute(Command cmd) {
+        String pName = cmd.getArgs()[0];
+        String attrName = cmd.getArgs()[1];
+        float value = -1;
+        try {
+            value = Float.parseFloat(cmd.getArgs()[2]);
+        } catch (NumberFormatException e) {
+            Log.info("cmd", "Value parameter should be a float number (use . instead of ,)");
+            return;
+        }
+
+        System.out.println(pName + " / " + attrName + " / " + value);
+
+        Component.Character c = null;
+        boolean foundPlayerOnline = false;
+        synchronized(loggedIn) {
+            Iterator<Map.Entry<Integer, CharacterConnection>> i = loggedIn.entrySet().iterator();
+            while (i.hasNext()) {
+                Map.Entry<Integer, CharacterConnection> entry = i.next();
+                CharacterConnection connectChar = entry.getValue();
+                c = connectChar.character;
+
+                if(c.tag.name.equals(pName)) {
+                    foundPlayerOnline = true;
+                    break;
+                }
+            }
+        }
+        if(!foundPlayerOnline || c == null) {
+            Log.info("cmd", "Player "+pName+" is not online");
+            return;
+        }
+
+        switch (attrName) {
+            case "speed":
+                if(value >= 1.0 && value <= 9.0)
+                    c.attr.speed = value;
+                else {
+                    Log.info("cmd", "Attribute " + attrName + " value should be between 1.0 and 9.0");
+                    return;
+                }
+                break;
+            case "range":
+                c.attr.range = value;
+                break;
+            case "attack_speed":
+                c.attr.attackSpeed = value;
+                break;
+            default:
+                Log.info("cmd", "Attribute "+attrName+" is not valid to change (only speed, attack_speed and range can be changed)");
+                return;
+        }
+
+        Log.info("cmd", "Changed player "+pName+" " +attrName+ " to "+value);
+
     }
 
     public boolean isOnline() {
