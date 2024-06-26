@@ -297,6 +297,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
             // test new move once again
             if(!player.isMovePossible(msg) || newMove.len() == 0) // if failed again, give up this movement
                 return;
+
+            Vector2 tInitialPos = WorldMap.toIsoTileCoordinates(new Vector2(player.position.x, player.position.y));
+            Vector2 tFuturePos = WorldMap.toIsoTileCoordinates(new Vector2(player.position.x, player.position.y).add(newMove));
+            if(Math.abs(tInitialPos.x-tFuturePos.x) > 1 || Math.abs(tInitialPos.y-tFuturePos.y) > 1)
+                return;
         }
 
         //System.out.println("msg: " + msg.x + " / " + msg.y);

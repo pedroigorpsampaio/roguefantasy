@@ -122,12 +122,13 @@ public class GameClient extends DispatchServer {
             }
 
             public void disconnected (Connection connection) {
-                System.err.println("Disconnected from game server");
-                isConnected = false;
-                // tell interested listeners that server has lost connection
-                listeners.firePropertyChange("lostConnection", null, true);
-                // disposes lists of entities
-                serverController.dispose();
+//                System.err.println("Disconnected from game server");
+//                isConnected = false;
+//                // tell interested listeners that server has lost connection
+//                listeners.firePropertyChange("lostConnection", null, true);
+//                // disposes lists of entities
+//                serverController.dispose();
+                logoff();
             }
         }));
 
@@ -135,12 +136,15 @@ public class GameClient extends DispatchServer {
         host = "192.168.0.192";
     }
 
-    public void connect() {
-        try {
-            client.connect(5000, host, GameRegister.tcp_port, GameRegister.udp_port);
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
+    public void connect(String decryptedToken) {
+        new Thread(() -> {
+            try {
+                client.connect(5000, host, GameRegister.tcp_port, GameRegister.udp_port);
+                sendTokenAsync(decryptedToken); // login using token received
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }).start();
 
         // show keyboard on android for testing
         //Gdx.input.setOnscreenKeyboardVisible(true);
@@ -221,12 +225,6 @@ public class GameClient extends DispatchServer {
 
     // log off from server
     public void logoff() {
-        new Thread(() -> {
-            //client.sendTCP(new GameRegister.Response(GameRegister.Response.Type.LOGOFF)); // sends msg to server to log me off
-            client.close();
-        }).start();
-        if(pingDelay.isScheduled()) pingDelay.cancel();
-
         // resets counts requests of each type of request
         // for server reconciliation
         requestsCounter = new ConcurrentHashMap<>();
@@ -237,6 +235,11 @@ public class GameClient extends DispatchServer {
         listeners.firePropertyChange("lostConnection", null, true);
         // disposes lists of entities
         serverController.dispose();
+        new Thread(() -> {
+            client.sendTCP(new GameRegister.Response(GameRegister.Response.Type.LOGOFF)); // sends msg to server to log me off
+            client.close();
+        }).start();
+        if(pingDelay.isScheduled()) pingDelay.cancel();
     }
 
 

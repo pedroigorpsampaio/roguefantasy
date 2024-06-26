@@ -573,6 +573,10 @@
   <properties>
    <property name="walkable" type="bool" value="false"/>
   </properties>
+  <animation>
+   <frame tileid="99" duration="800"/>
+   <frame tileid="100" duration="800"/>
+  </animation>
  </tile>
  <tile id="100">
   <properties>

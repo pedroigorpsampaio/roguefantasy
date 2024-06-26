@@ -167,30 +167,42 @@ public class GameServer implements CmdReceiver {
                             !RogueFantasyServer.world.isWalkable(futurePos))
                             return;
 
+                        // check if has jumped more than one tile in this movement (forbidden!)
+                        Vector2 tInitialPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(character.position.x, character.position.y));
+                        Vector2 tFuturePos = RogueFantasyServer.world.toIsoTileCoordinates(futurePos);
+                        if(Math.abs(tInitialPos.x-tFuturePos.x) > 1 || Math.abs(tInitialPos.y-tFuturePos.y) > 1)
+                            return;
+
                         character.move(deltaVec);
                     } else { // wasd movement already has direction in it, just normalize and scale
                         Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(character.attr.speed*GameRegister.clientTickrate());
                         character.dir = new Vector2(msg.x, msg.y*2f).nor();
 
                         Vector2 futurePos = new Vector2(character.position.x, character.position.y).add(moveVec);
+
+                        if(!RogueFantasyServer.world.isWithinWorldBounds(futurePos) ||
+                                !RogueFantasyServer.world.isWalkable(futurePos))
+                            return;
+
+                        // check if has jumped more than one tile in this movement (forbidden!)
+                        Vector2 tInitialPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(character.position.x, character.position.y));
+                        Vector2 tFuturePos = RogueFantasyServer.world.toIsoTileCoordinates(futurePos);
+                        if(Math.abs(tInitialPos.x-tFuturePos.x) > 1 || Math.abs(tInitialPos.y-tFuturePos.y) > 1)
+                            return;
+
+                        // checks if movement is possible
+//                        if(!character.isMovePossible(msg)) {
+//                            // search for another direction to slide when colliding
+//                            Vector2 newMove = character.findSlide(msg);
 //
-//                        if(!RogueFantasyServer.world.isWithinWorldBounds(futurePos) ||
-//                                !RogueFantasyServer.world.isWalkable(futurePos)) {
-//                            return;
-
-                        // checks if movement is possible before sending it to server
-                        if(!character.isMovePossible(msg)) {
-                            // search for another direction to slide when colliding
-                            Vector2 newMove = character.findSlide(msg);
-
-                            msg.x = newMove.x;
-                            msg.y = newMove.y;
-                            if(msg.hasEndPoint) msg.hasEndPoint = false; // new dir has been calculated, send it as wasd move to server
-
-                            // test new move once again
-                            if(!character.isMovePossible(msg)) // if failed again, give up this movement
-                                return;
-                        }
+//                            msg.x = newMove.x;
+//                            msg.y = newMove.y;
+//                            if(msg.hasEndPoint) msg.hasEndPoint = false; // new dir has been calculated, send it as wasd move to server
+//
+//                            // test new move once again
+//                            if(!character.isMovePossible(msg) || newMove.len() == 0) // if failed again, give up this movement
+//                                return;
+//                        }
 //
 
 //                        while(!RogueFantasyServer.world.isWithinWorldBounds(futurePos)) {

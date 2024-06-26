@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.10.2" orientation="isometric" renderorder="right-down" width="1" height="1" tilewidth="32" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="3">
+<map version="1.10" tiledversion="1.10.2" orientation="isometric" renderorder="right-down" width="1" height="1" tilewidth="32" tileheight="16" infinite="0" nextlayerid="7" nextobjectid="3">
  <editorsettings>
   <chunksize width="30" height="30"/>
   <export target="testmap..tmx" format="tmx"/>
  </editorsettings>
  <tileset firstgid="1" source="tileset_base.tsx"/>
+ <tileset firstgid="122" source="walls_base.tsx"/>
  <layer id="1" name="Floor 0" width="1" height="1">
   <properties>
    <property name="entity_layer" type="bool" value="false"/>

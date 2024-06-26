@@ -25,6 +25,7 @@ import dev.dominion.ecs.api.Entity;
 
 
 public class Component {
+    static float rectOffsetUp = 0.2f, rectOffsetDown = 0.2f, rectOffsetLeft = 0.4f, rectOffsetRight = 0.4f;
     public enum Direction {
         NORTHWEST(-1, 1),
         NORTH(0, 1),

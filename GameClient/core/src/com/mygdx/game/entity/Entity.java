@@ -40,6 +40,7 @@ public abstract class Entity implements Comparable<Entity> {
     protected Pixmap debugCircle; // for debug
     protected Texture debugTex; // for debug
     public static float tagScale = unitScale * 0.66f;
+    static float rectOffsetUp = 0.2f, rectOffsetDown = 0.2f, rectOffsetLeft = 0.4f, rectOffsetRight = 0.4f;
     public Vector2 drawPos = new Vector2(0,0); // position to draw this entity
     public int uId;
     public enum Direction {
@@ -534,7 +535,16 @@ public abstract class Entity implements Comparable<Entity> {
             this.drawPos.x = this.interPos.x + spriteW/2f + spriteW/20f;
             this.drawPos.y = this.interPos.y + spriteH/12f + spriteH/18f;
 
+            Vector2 tPosDown = new Vector2(drawPos.x, drawPos.y-rectOffsetDown);
+            Vector2 tPosUp = new Vector2(drawPos.x, drawPos.y+rectOffsetUp);
+            Vector2 tPosLeft = new Vector2(drawPos.x-rectOffsetLeft, drawPos.y);
+            Vector2 tPosRight = new Vector2(drawPos.x+rectOffsetRight, drawPos.y);
+
             batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
+            batch.draw(debugTex, tPosDown.x, tPosDown.y, 2* unitScale, 2* unitScale);
+            batch.draw(debugTex, tPosUp.x, tPosUp.y, 2* unitScale, 2* unitScale);
+            batch.draw(debugTex, tPosLeft.x, tPosLeft.y, 2* unitScale, 2* unitScale);
+            batch.draw(debugTex, tPosRight.x, tPosRight.y, 2* unitScale, 2* unitScale);
 
 //            Vector2 tPos = toIsoTileCoordinates(position);
 //            System.out.println(tPos);
@@ -614,6 +624,7 @@ public abstract class Entity implements Comparable<Entity> {
         public int tileX, tileY;
         public TiledMapTile tile;
         public int wallId;
+        public boolean walkable;
         private boolean assetsLoaded;
 
         public Wall(int wallId, int tileId, TiledMapTile tile, int tileX, int tileY) {
@@ -622,6 +633,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.tileY = tileY;
             this.wallId = wallId;
             this.tileId = tileId;
+            this.walkable = tile.getProperties().get("walkable", Boolean.class);
 
             float tileWidth = TEX_WIDTH * unitScale;
             float tileHeight = TEX_HEIGHT * unitScale;
@@ -648,11 +660,12 @@ public abstract class Entity implements Comparable<Entity> {
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
+            if(tile == null) return;
 
             float tileHeight = TEX_HEIGHT * unitScale;
             float halfTileHeight = tileHeight * 0.5f;
 
-            batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight,
+            batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight*1.25f,
                     tile.getTextureRegion().getRegionWidth()* unitScale, tile.getTextureRegion().getRegionHeight()* unitScale);
             batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
         }

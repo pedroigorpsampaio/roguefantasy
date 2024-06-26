@@ -20,6 +20,10 @@ import static com.badlogic.gdx.graphics.g2d.Batch.Y1;
 import static com.badlogic.gdx.graphics.g2d.Batch.Y2;
 import static com.badlogic.gdx.graphics.g2d.Batch.Y3;
 import static com.badlogic.gdx.graphics.g2d.Batch.Y4;
+import static com.mygdx.game.entity.Entity.rectOffsetDown;
+import static com.mygdx.game.entity.Entity.rectOffsetLeft;
+import static com.mygdx.game.entity.Entity.rectOffsetRight;
+import static com.mygdx.game.entity.Entity.rectOffsetUp;
 import static com.mygdx.game.network.GameRegister.N_COLS;
 import static com.mygdx.game.network.GameRegister.N_ROWS;
 
@@ -194,11 +198,15 @@ public class WorldMap {
      */
     public static boolean isWithinWorldBounds(Vector2 position) {
         Vector2 tPos = toIsoTileCoordinates(position);
+        Vector2 tPosDown = toIsoTileCoordinates(new Vector2(position.x, position.y-rectOffsetDown));
+        Vector2 tPosUp = toIsoTileCoordinates(new Vector2(position.x, position.y+rectOffsetUp));
+        Vector2 tPosLeft = toIsoTileCoordinates(new Vector2(position.x-rectOffsetLeft, position.y));
+        Vector2 tPosRight = toIsoTileCoordinates(new Vector2(position.x+rectOffsetRight, position.y));
 
-        if(tPos.x < 0) { return false; }
-        if(tPos.y < 0) { return false; }
-        if(tPos.x > TILES_WIDTH) { return false; }
-        if(tPos.y > TILES_HEIGHT) {return false; }
+        if(tPos.x < 0 || tPosDown.x < 0 || tPosUp.x < 0 || tPosLeft.x < 0 || tPosRight.x < 0) { return false; }
+        if(tPos.y < 0 || tPosDown.y < 0 || tPosUp.y < 0 || tPosLeft.y < 0 || tPosRight.y < 0) { return false; }
+        if(tPos.x > TILES_WIDTH || tPosDown.x > TILES_WIDTH || tPosUp.x > TILES_WIDTH || tPosLeft.x > TILES_WIDTH || tPosRight.x > TILES_WIDTH) { return false; }
+        if(tPos.y > TILES_HEIGHT || tPosDown.y > TILES_HEIGHT || tPosUp.y > TILES_HEIGHT || tPosLeft.y > TILES_HEIGHT || tPosRight.y > TILES_HEIGHT) {return false; }
 
         return true;
     }
@@ -209,10 +217,26 @@ public class WorldMap {
      * @return true if it is, false otherwise
      */
     public boolean isWalkable(Vector2 position) {
-        Vector2 tPos = toIsoTileCoordinates(position);
+        Vector2 tPosCenter = toIsoTileCoordinates(new Vector2(position.x, position.y));
+        Vector2 tPosDown = toIsoTileCoordinates(new Vector2(position.x, position.y-rectOffsetDown));
+        Vector2 tPosUp = toIsoTileCoordinates(new Vector2(position.x, position.y+rectOffsetUp));
+        Vector2 tPosLeft = toIsoTileCoordinates(new Vector2(position.x-rectOffsetLeft, position.y));
+        Vector2 tPosRight = toIsoTileCoordinates(new Vector2(position.x+rectOffsetRight, position.y));
         TiledMapTileLayer floorLayer = tmxLayers.get(0);
 
-        if(floorLayer.getCell((int)tPos.x, (int)tPos.y) == null) // if its a cell that does not exist, its not walkable
+        if(floorLayer.getCell((int)tPosCenter.x, (int)tPosCenter.y) == null) // if its a cell that does not exist, its not walkable
+            return false;
+
+        if(floorLayer.getCell((int)tPosDown.x, (int)tPosDown.y) == null) // if its a cell that does not exist, its not walkable
+            return false;
+
+        if(floorLayer.getCell((int)tPosUp.x, (int)tPosUp.y) == null) // if its a cell that does not exist, its not walkable
+            return false;
+
+        if(floorLayer.getCell((int)tPosLeft.x, (int)tPosLeft.y) == null) // if its a cell that does not exist, its not walkable
+            return false;
+
+        if(floorLayer.getCell((int)tPosRight.x, (int)tPosRight.y) == null) // if its a cell that does not exist, its not walkable
             return false;
 
         // check if there is a wall on tile
@@ -220,14 +244,39 @@ public class WorldMap {
             Iterator<Map.Entry<Integer, Entity.Wall>> iterator = GameClient.getInstance().getWalls().entrySet().iterator();
             while (iterator.hasNext()) {
                 Map.Entry<Integer, Entity.Wall> entry = iterator.next();
-                if(entry.getValue().tileX == (int)tPos.x &&
-                        entry.getValue().tileY == (int)tPos.y) {
-                    return false;
+                if(entry.getValue().tileX == (int)tPosDown.x &&
+                        entry.getValue().tileY == (int)tPosDown.y) {
+                    if(!entry.getValue().walkable)
+                        return false;
+                }
+                if(entry.getValue().tileX == (int)tPosUp.x &&
+                        entry.getValue().tileY == (int)tPosUp.y) {
+                    if(!entry.getValue().walkable)
+                        return false;
+                }
+                if(entry.getValue().tileX == (int)tPosCenter.x &&
+                        entry.getValue().tileY == (int)tPosCenter.y) {
+                    if(!entry.getValue().walkable)
+                        return false;
+                }
+                if(entry.getValue().tileX == (int)tPosLeft.x &&
+                        entry.getValue().tileY == (int)tPosLeft.y) {
+                    if(!entry.getValue().walkable)
+                        return false;
+                }
+                if(entry.getValue().tileX == (int)tPosRight.x &&
+                        entry.getValue().tileY == (int)tPosRight.y) {
+                    if(!entry.getValue().walkable)
+                        return false;
                 }
             }
         }
 
-        if(floorLayer.getCell((int)tPos.x, (int)tPos.y).getTile().getProperties().get("walkable", Boolean.class))
+        if(floorLayer.getCell((int)tPosUp.x, (int)tPosUp.y).getTile().getProperties().get("walkable", Boolean.class) &&
+                floorLayer.getCell((int)tPosDown.x, (int)tPosDown.y).getTile().getProperties().get("walkable", Boolean.class) &&
+                floorLayer.getCell((int)tPosCenter.x, (int)tPosCenter.y).getTile().getProperties().get("walkable", Boolean.class) &&
+                floorLayer.getCell((int)tPosLeft.x, (int)tPosLeft.y).getTile().getProperties().get("walkable", Boolean.class) &&
+                floorLayer.getCell((int)tPosRight.x, (int)tPosRight.y).getTile().getProperties().get("walkable", Boolean.class))
             return true;
         else
             return false;
