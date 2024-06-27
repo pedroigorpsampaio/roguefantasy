@@ -188,7 +188,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		// cmd dispatcher
 		dispatcher = new CommandDispatcher(this, loginServer, gameServer);
 		// load map
-		world = new WorldMap("world/testmap.tmx", batch);
+		world = new WorldMap("world/novaterra.tmx", batch);
 		// starts all servers
 		startServer(ServerChannel.ALL);
 	}
@@ -369,6 +369,9 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		stage.dispose();
 		skin.dispose();
 		world.dispose();
+
+		System.exit(0);
+		Gdx.app.exit();
 	}
 
 	// closes all servers saving changes before ending process
@@ -389,8 +392,8 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				Gdx.app.postRunnable(new Runnable() {
 					@Override
 					public void run() {
-						Gdx.app.exit();
-						//System.exit(-1);
+						//Gdx.app.exit();
+						System.exit(0);
 					}
 				});
 			}

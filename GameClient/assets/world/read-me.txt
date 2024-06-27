@@ -1,0 +1,8 @@
+To correctly pack raw textures and sync with world server map follow these steps!!
+
+1. Make sure raw textures are the same with the server
+2. After copying .tmx from server, remember to set width and height of map to 1.
+3. Open .tmx in editor to remove raw folder from source file names ex. "tile_000.png" is correct and "novaterra_raw_textures/tile_000.png" is incorrect.
+4. Check if DesktopLauncher flag that controls texture packing is set to true.
+
+To pack .jar for desktop, remember to set the pack texture flag to false!

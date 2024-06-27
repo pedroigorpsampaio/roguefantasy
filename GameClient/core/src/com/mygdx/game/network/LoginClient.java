@@ -116,4 +116,5 @@ public class LoginClient extends DispatchServer {
     public void sendHello() {
         client.sendTCP(new LoginRegister.Response(LoginRegister.Response.Type.DISCARD));
     }
+
 }

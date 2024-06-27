@@ -1,0 +1,1695 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="isometric" renderorder="right-down" width="1" height="1" tilewidth="32" tileheight="16" infinite="0" nextlayerid="7" nextobjectid="3">
+ <editorsettings>
+  <chunksize width="30" height="30"/>
+  <export target="testmap..tmx" format="tmx"/>
+ </editorsettings>
+ <properties>
+  <property name="atlas" value="novaterra_packed_textures/novaterra.atlas"/>
+ </properties>
+ <tileset firstgid="1" name="novaterra_tileset" tilewidth="32" tileheight="64" tilecount="235" columns="0">
+  <grid orientation="orthogonal" width="1" height="1"/>
+  <tile id="0">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_000.png"/>
+  </tile>
+  <tile id="1">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_001.png"/>
+  </tile>
+  <tile id="2">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_002.png"/>
+  </tile>
+  <tile id="3">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_003.png"/>
+  </tile>
+  <tile id="4">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_004.png"/>
+  </tile>
+  <tile id="5">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_005.png"/>
+  </tile>
+  <tile id="6">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_006.png"/>
+  </tile>
+  <tile id="7">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_007.png"/>
+  </tile>
+  <tile id="8">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_008.png"/>
+  </tile>
+  <tile id="9">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_009.png"/>
+  </tile>
+  <tile id="10">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_010.png"/>
+  </tile>
+  <tile id="11">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_011.png"/>
+  </tile>
+  <tile id="12">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_012.png"/>
+  </tile>
+  <tile id="13">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_013.png"/>
+  </tile>
+  <tile id="14">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_014.png"/>
+  </tile>
+  <tile id="15">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_015.png"/>
+  </tile>
+  <tile id="16">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_016.png"/>
+  </tile>
+  <tile id="17">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_017.png"/>
+  </tile>
+  <tile id="18">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_018.png"/>
+  </tile>
+  <tile id="19">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_019.png"/>
+  </tile>
+  <tile id="20">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_020.png"/>
+  </tile>
+  <tile id="21">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_021.png"/>
+  </tile>
+  <tile id="22">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_022.png"/>
+  </tile>
+  <tile id="23">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_023.png"/>
+  </tile>
+  <tile id="24">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_024.png"/>
+  </tile>
+  <tile id="25">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_025.png"/>
+  </tile>
+  <tile id="26">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_026.png"/>
+  </tile>
+  <tile id="27">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_027.png"/>
+  </tile>
+  <tile id="28">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_028.png"/>
+  </tile>
+  <tile id="29">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_029.png"/>
+  </tile>
+  <tile id="30">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_030.png"/>
+  </tile>
+  <tile id="31">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_031.png"/>
+  </tile>
+  <tile id="32">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_032.png"/>
+  </tile>
+  <tile id="33">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_033.png"/>
+  </tile>
+  <tile id="34">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_034.png"/>
+  </tile>
+  <tile id="35">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_035.png"/>
+  </tile>
+  <tile id="36">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_036.png"/>
+  </tile>
+  <tile id="37">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_037.png"/>
+  </tile>
+  <tile id="38">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_038.png"/>
+  </tile>
+  <tile id="39">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_039.png"/>
+  </tile>
+  <tile id="40">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_040.png"/>
+  </tile>
+  <tile id="41">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_041.png"/>
+  </tile>
+  <tile id="42">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_042.png"/>
+  </tile>
+  <tile id="43">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_043.png"/>
+  </tile>
+  <tile id="44">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_044.png"/>
+  </tile>
+  <tile id="45">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_045.png"/>
+  </tile>
+  <tile id="46">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_046.png"/>
+  </tile>
+  <tile id="47">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_047.png"/>
+  </tile>
+  <tile id="48">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_048.png"/>
+  </tile>
+  <tile id="49">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_049.png"/>
+  </tile>
+  <tile id="50">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_050.png"/>
+  </tile>
+  <tile id="51">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_051.png"/>
+  </tile>
+  <tile id="52">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_052.png"/>
+  </tile>
+  <tile id="53">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_053.png"/>
+  </tile>
+  <tile id="54">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_054.png"/>
+  </tile>
+  <tile id="55">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_055.png"/>
+  </tile>
+  <tile id="56">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_056.png"/>
+  </tile>
+  <tile id="57">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_057.png"/>
+  </tile>
+  <tile id="58">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_058.png"/>
+  </tile>
+  <tile id="59">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_059.png"/>
+  </tile>
+  <tile id="60">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_060.png"/>
+  </tile>
+  <tile id="61">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_061.png"/>
+  </tile>
+  <tile id="62">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_062.png"/>
+  </tile>
+  <tile id="63">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_063.png"/>
+  </tile>
+  <tile id="64">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_064.png"/>
+  </tile>
+  <tile id="65">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_065.png"/>
+  </tile>
+  <tile id="66">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_066.png"/>
+  </tile>
+  <tile id="67">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_067.png"/>
+  </tile>
+  <tile id="68">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_068.png"/>
+  </tile>
+  <tile id="69">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_069.png"/>
+  </tile>
+  <tile id="70">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_070.png"/>
+  </tile>
+  <tile id="71">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_071.png"/>
+  </tile>
+  <tile id="72">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_072.png"/>
+  </tile>
+  <tile id="73">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_073.png"/>
+  </tile>
+  <tile id="74">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_074.png"/>
+  </tile>
+  <tile id="75">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_075.png"/>
+   <animation>
+    <frame tileid="75" duration="840"/>
+    <frame tileid="76" duration="840"/>
+   </animation>
+  </tile>
+  <tile id="76">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_076.png"/>
+  </tile>
+  <tile id="77">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_077.png"/>
+  </tile>
+  <tile id="78">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_078.png"/>
+  </tile>
+  <tile id="79">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_079.png"/>
+  </tile>
+  <tile id="80">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_080.png"/>
+  </tile>
+  <tile id="81">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_081.png"/>
+  </tile>
+  <tile id="82">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_082.png"/>
+  </tile>
+  <tile id="83">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_083.png"/>
+  </tile>
+  <tile id="84">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_084.png"/>
+  </tile>
+  <tile id="85">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_085.png"/>
+  </tile>
+  <tile id="86">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_086.png"/>
+   <animation>
+    <frame tileid="86" duration="700"/>
+    <frame tileid="87" duration="700"/>
+   </animation>
+  </tile>
+  <tile id="87">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_087.png"/>
+  </tile>
+  <tile id="88">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_088.png"/>
+  </tile>
+  <tile id="89">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_089.png"/>
+  </tile>
+  <tile id="90">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_090.png"/>
+  </tile>
+  <tile id="91">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_091.png"/>
+  </tile>
+  <tile id="92">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_092.png"/>
+  </tile>
+  <tile id="93">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_093.png"/>
+  </tile>
+  <tile id="94">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_094.png"/>
+  </tile>
+  <tile id="95">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_095.png"/>
+  </tile>
+  <tile id="96">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_096.png"/>
+  </tile>
+  <tile id="97">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_097.png"/>
+  </tile>
+  <tile id="98">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_098.png"/>
+  </tile>
+  <tile id="99">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_099.png"/>
+  </tile>
+  <tile id="100">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_100.png"/>
+  </tile>
+  <tile id="101">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_101.png"/>
+  </tile>
+  <tile id="102">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_102.png"/>
+  </tile>
+  <tile id="103">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="32" source="tile_103.png"/>
+  </tile>
+  <tile id="104">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_104.png"/>
+  </tile>
+  <tile id="105">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_105.png"/>
+  </tile>
+  <tile id="106">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_106.png"/>
+  </tile>
+  <tile id="107">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_107.png"/>
+  </tile>
+  <tile id="108">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_108.png"/>
+  </tile>
+  <tile id="109">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_109.png"/>
+  </tile>
+  <tile id="110">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_110.png"/>
+  </tile>
+  <tile id="111">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_111.png"/>
+  </tile>
+  <tile id="112">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_112.png"/>
+  </tile>
+  <tile id="113">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_113.png"/>
+  </tile>
+  <tile id="114">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="tile_114.png"/>
+  </tile>
+  <tile id="115">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (1).png"/>
+  </tile>
+  <tile id="116">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (2).png"/>
+  </tile>
+  <tile id="117">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (3).png"/>
+  </tile>
+  <tile id="118">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (4).png"/>
+  </tile>
+  <tile id="119">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (5).png"/>
+  </tile>
+  <tile id="120">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (6).png"/>
+  </tile>
+  <tile id="121">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (7).png"/>
+  </tile>
+  <tile id="122">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (8).png"/>
+  </tile>
+  <tile id="123">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (9).png"/>
+  </tile>
+  <tile id="124">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (10).png"/>
+  </tile>
+  <tile id="125">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (11).png"/>
+  </tile>
+  <tile id="126">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (12).png"/>
+  </tile>
+  <tile id="127">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (13).png"/>
+  </tile>
+  <tile id="128">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (14).png"/>
+  </tile>
+  <tile id="129">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (15).png"/>
+  </tile>
+  <tile id="130">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (16).png"/>
+  </tile>
+  <tile id="131">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (17).png"/>
+  </tile>
+  <tile id="132">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (18).png"/>
+  </tile>
+  <tile id="133">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (19).png"/>
+  </tile>
+  <tile id="134">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (20).png"/>
+  </tile>
+  <tile id="135">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (21).png"/>
+  </tile>
+  <tile id="136">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (22).png"/>
+  </tile>
+  <tile id="137">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (23).png"/>
+  </tile>
+  <tile id="138">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (24).png"/>
+  </tile>
+  <tile id="139">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (25).png"/>
+  </tile>
+  <tile id="140">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (26).png"/>
+  </tile>
+  <tile id="141">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (27).png"/>
+  </tile>
+  <tile id="142">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (28).png"/>
+  </tile>
+  <tile id="143">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (29).png"/>
+  </tile>
+  <tile id="144">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (30).png"/>
+  </tile>
+  <tile id="145">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (31).png"/>
+  </tile>
+  <tile id="146">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (32).png"/>
+  </tile>
+  <tile id="147">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (33).png"/>
+  </tile>
+  <tile id="148">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (34).png"/>
+  </tile>
+  <tile id="149">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (35).png"/>
+  </tile>
+  <tile id="150">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (36).png"/>
+  </tile>
+  <tile id="151">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (37).png"/>
+  </tile>
+  <tile id="152">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (38).png"/>
+  </tile>
+  <tile id="153">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (39).png"/>
+  </tile>
+  <tile id="154">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (40).png"/>
+  </tile>
+  <tile id="155">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (41).png"/>
+  </tile>
+  <tile id="156">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (42).png"/>
+  </tile>
+  <tile id="157">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (43).png"/>
+  </tile>
+  <tile id="158">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (44).png"/>
+  </tile>
+  <tile id="159">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (45).png"/>
+  </tile>
+  <tile id="160">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (46).png"/>
+  </tile>
+  <tile id="161">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (47).png"/>
+  </tile>
+  <tile id="162">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (48).png"/>
+  </tile>
+  <tile id="163">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (49).png"/>
+  </tile>
+  <tile id="164">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (50).png"/>
+  </tile>
+  <tile id="165">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (51).png"/>
+  </tile>
+  <tile id="166">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (52).png"/>
+  </tile>
+  <tile id="167">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (53).png"/>
+  </tile>
+  <tile id="168">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (54).png"/>
+  </tile>
+  <tile id="169">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (55).png"/>
+  </tile>
+  <tile id="170">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (56).png"/>
+  </tile>
+  <tile id="171">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (57).png"/>
+  </tile>
+  <tile id="172">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (58).png"/>
+  </tile>
+  <tile id="173">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (59).png"/>
+  </tile>
+  <tile id="174">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (60).png"/>
+  </tile>
+  <tile id="175">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (61).png"/>
+  </tile>
+  <tile id="176">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (62).png"/>
+  </tile>
+  <tile id="177">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (63).png"/>
+  </tile>
+  <tile id="178">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (64).png"/>
+  </tile>
+  <tile id="179">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (65).png"/>
+  </tile>
+  <tile id="180">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (66).png"/>
+  </tile>
+  <tile id="181">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="64" source="tavern-walls (67).png"/>
+  </tile>
+  <tile id="189">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (1).png"/>
+  </tile>
+  <tile id="190">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (2).png"/>
+  </tile>
+  <tile id="191">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (3).png"/>
+  </tile>
+  <tile id="192">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (4).png"/>
+  </tile>
+  <tile id="193">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (5).png"/>
+  </tile>
+  <tile id="194">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (6).png"/>
+  </tile>
+  <tile id="195">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (7).png"/>
+  </tile>
+  <tile id="196">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (8).png"/>
+  </tile>
+  <tile id="197">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (9).png"/>
+  </tile>
+  <tile id="198">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (10).png"/>
+  </tile>
+  <tile id="199">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (11).png"/>
+  </tile>
+  <tile id="200">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (12).png"/>
+  </tile>
+  <tile id="201">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (13).png"/>
+  </tile>
+  <tile id="202">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (14).png"/>
+  </tile>
+  <tile id="203">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (15).png"/>
+  </tile>
+  <tile id="204">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="16" source="tavern-floor (16).png"/>
+  </tile>
+  <tile id="205">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (1).png"/>
+  </tile>
+  <tile id="206">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (2).png"/>
+  </tile>
+  <tile id="207">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (3).png"/>
+  </tile>
+  <tile id="208">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (4).png"/>
+  </tile>
+  <tile id="209">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (5).png"/>
+  </tile>
+  <tile id="210">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (6).png"/>
+  </tile>
+  <tile id="211">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (7).png"/>
+  </tile>
+  <tile id="212">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (8).png"/>
+  </tile>
+  <tile id="213">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (9).png"/>
+  </tile>
+  <tile id="214">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (10).png"/>
+  </tile>
+  <tile id="215">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (11).png"/>
+  </tile>
+  <tile id="216">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (12).png"/>
+  </tile>
+  <tile id="217">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (13).png"/>
+  </tile>
+  <tile id="218">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (14).png"/>
+  </tile>
+  <tile id="219">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (15).png"/>
+  </tile>
+  <tile id="220">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (16).png"/>
+  </tile>
+  <tile id="221">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (17).png"/>
+  </tile>
+  <tile id="222">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="64" source="tavern-medium-props (18).png"/>
+  </tile>
+  <tile id="223">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (1).png"/>
+  </tile>
+  <tile id="224">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (2).png"/>
+  </tile>
+  <tile id="225">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (3).png"/>
+  </tile>
+  <tile id="226">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (4).png"/>
+  </tile>
+  <tile id="227">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (5).png"/>
+  </tile>
+  <tile id="228">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (6).png"/>
+  </tile>
+  <tile id="229">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (7).png"/>
+  </tile>
+  <tile id="230">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (8).png"/>
+  </tile>
+  <tile id="231">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (9).png"/>
+  </tile>
+  <tile id="232">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (10).png"/>
+  </tile>
+  <tile id="233">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (11).png"/>
+  </tile>
+  <tile id="234">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (12).png"/>
+  </tile>
+  <tile id="235">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (13).png"/>
+  </tile>
+  <tile id="236">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (14).png"/>
+  </tile>
+  <tile id="237">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (15).png"/>
+  </tile>
+  <tile id="238">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (16).png"/>
+  </tile>
+  <tile id="239">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (17).png"/>
+  </tile>
+  <tile id="240">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (18).png"/>
+  </tile>
+  <tile id="241">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="16" height="16" source="tavern-small-props (19).png"/>
+  </tile>
+ </tileset>
+ <layer id="1" name="Floor 0" width="1" height="1">
+  <properties>
+   <property name="entity_layer" type="bool" value="false"/>
+  </properties>
+  <data encoding="base64">
+   AAAAAA==
+  </data>
+ </layer>
+ <layer id="2" name="Floor 0 Decor" width="1" height="1">
+  <properties>
+   <property name="entity_layer" type="bool" value="false"/>
+  </properties>
+  <data encoding="base64">
+   AAAAAA==
+  </data>
+ </layer>
+ <layer id="3" name="Floor 0 Wall" width="1" height="1" offsetx="0" offsety="-5">
+  <properties>
+   <property name="entity_layer" type="bool" value="true"/>
+  </properties>
+  <data encoding="base64">
+   AAAAAA==
+  </data>
+ </layer>
+ <objectgroup id="4" name="Floor 0 Object">
+  <properties>
+   <property name="entity_layer" type="bool" value="false"/>
+  </properties>
+ </objectgroup>
+</map>

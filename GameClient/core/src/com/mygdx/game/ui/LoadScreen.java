@@ -1,5 +1,7 @@
 package com.mygdx.game.ui;
 
+import static com.badlogic.gdx.graphics.Texture.TextureFilter.Linear;
+import static com.badlogic.gdx.graphics.Texture.TextureFilter.MipMapLinearNearest;
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeOut;
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.run;
 
@@ -18,6 +20,7 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGeneratorLoader;
 import com.badlogic.gdx.graphics.g2d.freetype.FreetypeFontLoader;
+import com.badlogic.gdx.maps.tiled.AtlasTmxMapLoader;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
 import com.badlogic.gdx.math.Interpolation;
@@ -82,6 +85,7 @@ public class LoadScreen implements Screen {
 
         Random rand = new Random();
         bgTexture=new Texture("img/initial_splash_screen_"+rand.nextInt(2)+".png");
+        bgTexture.setFilter(Linear, Linear);
         bg=new Image(bgTexture);
 
         // loads skin blocking progress
@@ -203,6 +207,7 @@ public class LoadScreen implements Screen {
 
         // background image
         bgTexture=new Texture("img/loading_screen_bg.png");
+        bgTexture.setFilter(Linear, Linear);
         bg=new Image(bgTexture);
 
         // gets preferences reference, that stores simple data persisted between executions
@@ -217,12 +222,18 @@ public class LoadScreen implements Screen {
         manager.load("bgm/maps/bgm_1.mp3", Music.class);
         manager.load("bgm/maps/bgm_2.mp3", Music.class);
         // only needed once
-        manager.setLoader(TiledMap.class, new TmxMapLoader(new InternalFileHandleResolver()));
-        TmxMapLoader.Parameters par = new TmxMapLoader.Parameters();
-        par.textureMinFilter = Texture.TextureFilter.MipMapLinearNearest;
-        par.textureMagFilter = Texture.TextureFilter.Linear;
-        par.generateMipMaps = true;
-        manager.load("world/testmap.tmx", TiledMap.class, par);
+        manager.setLoader(TiledMap.class, new AtlasTmxMapLoader(new InternalFileHandleResolver()));
+        AtlasTmxMapLoader.AtlasTiledMapLoaderParameters params = new AtlasTmxMapLoader.AtlasTiledMapLoaderParameters();
+        params.forceTextureFilters = true;
+        params.generateMipMaps = true;
+        params.textureMinFilter = Texture.TextureFilter.MipMapLinearNearest;
+        params.textureMagFilter = Texture.TextureFilter.Linear;
+
+//        AtlasTmxMapLoader.Parameters par = new AtlasTmxMapLoader.Parameters();
+//        par.textureMinFilter = Texture.TextureFilter.MipMapLinearNearest;
+//        par.textureMagFilter = Texture.TextureFilter.Linear;
+//        par.generateMipMaps = true;
+        manager.load("world/novaterra.tmx", TiledMap.class, params);
 
         stage.addActor(bg);
 

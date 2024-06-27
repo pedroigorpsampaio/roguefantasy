@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="isometric" renderorder="right-down" width="1" height="1" tilewidth="32" tileheight="16" infinite="0" nextlayerid="7" nextobjectid="3">
+ <editorsettings>
+  <chunksize width="30" height="30"/>
+  <export target="testmap..tmx" format="tmx"/>
+ </editorsettings>
+ <tileset firstgid="1" source="tileset_base.tsx"/>
+ <tileset firstgid="122" source="walls_base.tsx"/>
+ <layer id="1" name="Floor 0" width="1" height="1">
+  <properties>
+   <property name="entity_layer" type="bool" value="false"/>
+  </properties>
+  <data encoding="base64">
+   AAAAAA==
+  </data>
+ </layer>
+ <layer id="2" name="Floor 0 Decor" width="1" height="1">
+  <properties>
+   <property name="entity_layer" type="bool" value="false"/>
+  </properties>
+  <data encoding="base64">
+   AAAAAA==
+  </data>
+ </layer>
+ <layer id="3" name="Floor 0 Wall" width="1" height="1">
+  <properties>
+   <property name="entity_layer" type="bool" value="true"/>
+  </properties>
+  <data encoding="base64">
+   AAAAAA==
+  </data>
+ </layer>
+ <objectgroup id="4" name="Floor 0 Object">
+  <properties>
+   <property name="entity_layer" type="bool" value="false"/>
+  </properties>
+ </objectgroup>
+</map>

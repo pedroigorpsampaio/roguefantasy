@@ -139,7 +139,7 @@ public class GameClient extends DispatchServer {
     public void connect(String decryptedToken) {
         new Thread(() -> {
             try {
-                client.connect(5000, host, GameRegister.tcp_port, GameRegister.udp_port);
+                client.connect(15000, host, GameRegister.tcp_port, GameRegister.udp_port);
                 sendTokenAsync(decryptedToken); // login using token received
             } catch (IOException ex) {
                 ex.printStackTrace();

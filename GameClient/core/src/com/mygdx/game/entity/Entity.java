@@ -23,6 +23,7 @@ import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
+import com.mygdx.game.ui.CommonUI;
 import com.mygdx.game.util.Common;
 
 import java.util.Iterator;
@@ -445,7 +446,7 @@ public abstract class Entity implements Comparable<Entity> {
             Vector2 moveVec = new Vector2(initMove.x, initMove.y).nor().scl(this.speed * GameRegister.clientTickrate());
             Vector2 moveVecCounter = new Vector2(initMove.x, initMove.y).nor().scl(this.speed * GameRegister.clientTickrate());
             // degree step for each rotation try
-            float degree = 2f;
+            float degree = 10f;
 
             if (initMove.hasEndPoint) { // if it has endpoint, do the movement calculations accordingly
                 Vector2 touchPos = new Vector2(initMove.xEnd, initMove.yEnd);
@@ -463,7 +464,7 @@ public abstract class Entity implements Comparable<Entity> {
             Vector2 futurePosCounter = new Vector2(this.x, this.y).add(moveVecCounter);
 
             int tries = 0;
-            while(tries < 45) { // search for new angle to move
+            while(tries <= 90f/degree) { // search for new angle to move
                 Vector2 tInitialPos = WorldMap.toIsoTileCoordinates(new Vector2(this.x, this.y));
                 Vector2 tFuturePos = WorldMap.toIsoTileCoordinates(futurePos);
                 Vector2 tFuturePosCounter = WorldMap.toIsoTileCoordinates(futurePosCounter);
@@ -540,11 +541,13 @@ public abstract class Entity implements Comparable<Entity> {
             Vector2 tPosLeft = new Vector2(drawPos.x-rectOffsetLeft, drawPos.y);
             Vector2 tPosRight = new Vector2(drawPos.x+rectOffsetRight, drawPos.y);
 
-            batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
-            batch.draw(debugTex, tPosDown.x, tPosDown.y, 2* unitScale, 2* unitScale);
-            batch.draw(debugTex, tPosUp.x, tPosUp.y, 2* unitScale, 2* unitScale);
-            batch.draw(debugTex, tPosLeft.x, tPosLeft.y, 2* unitScale, 2* unitScale);
-            batch.draw(debugTex, tPosRight.x, tPosRight.y, 2* unitScale, 2* unitScale);
+            if(CommonUI.debugTex) {
+                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2 * unitScale, 2 * unitScale);
+                batch.draw(debugTex, tPosDown.x, tPosDown.y, 2 * unitScale, 2 * unitScale);
+                batch.draw(debugTex, tPosUp.x, tPosUp.y, 2 * unitScale, 2 * unitScale);
+                batch.draw(debugTex, tPosLeft.x, tPosLeft.y, 2 * unitScale, 2 * unitScale);
+                batch.draw(debugTex, tPosRight.x, tPosRight.y, 2 * unitScale, 2 * unitScale);
+            }
 
 //            Vector2 tPos = toIsoTileCoordinates(position);
 //            System.out.println(tPos);
@@ -667,7 +670,8 @@ public abstract class Entity implements Comparable<Entity> {
 
             batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight*1.25f,
                     tile.getTextureRegion().getRegionWidth()* unitScale, tile.getTextureRegion().getRegionHeight()* unitScale);
-            batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
+            if(CommonUI.debugTex)
+                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
         }
 
         @Override
@@ -929,8 +933,8 @@ public abstract class Entity implements Comparable<Entity> {
             spriteH = currentFrame.getRegionHeight()* unitScale;
             spriteW = currentFrame.getRegionWidth()* unitScale;
 
-            batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
-
+            if(CommonUI.debugTex)
+                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
 
             // draw creature tag
             nameLabel.getFont().scale(tagScale, tagScale);

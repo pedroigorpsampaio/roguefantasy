@@ -1,0 +1,7 @@
+Correct usage of tiled maps server-side:
+
+1. Separate individually any tile and add them to collection tileset of .tmx (embedded)
+2. Build the map with tiled (wall layer must have -5 vertical offset to sync with client trick for collision and draw order)
+3. Let the client handle the rest (texture packing, etc...)
+
+For now, try to keep the map within the existing layers, to avoid overloading the network as well as the client rendering.

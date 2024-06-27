@@ -10,8 +10,10 @@ import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.math.MathUtils;
@@ -123,7 +125,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         uiCam.update();
 
         // loads world map
-        TiledMap map = manager.get("world/testmap.tmx");
+        TiledMap map = manager.get("world/novaterra.tmx");
         world = WorldMap.getInstance();
         world.init(map, batch, camera);
 
@@ -412,6 +414,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
     float timeElapsed = 0f;
     boolean startDelay = true;
+
+    FrameBuffer fbo = new FrameBuffer(Pixmap.Format.RGBA8888, 1280, 720, false);
 
     @Override
     public void render(float delta) {

@@ -1,5 +1,8 @@
 package com.mygdx.game.ui;
 
+import static com.badlogic.gdx.graphics.Texture.TextureFilter.Linear;
+import static com.badlogic.gdx.graphics.Texture.TextureFilter.MipMapLinearNearest;
+
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
@@ -143,6 +146,7 @@ public class MainMenuScreen implements Screen {
 
         // background image
         bgTexture=new Texture("img/main_menu_bg.jpg");
+        bgTexture.setFilter(Linear, Linear);
         bg=new Image(bgTexture);
 
         bgStage.addActor(bg);

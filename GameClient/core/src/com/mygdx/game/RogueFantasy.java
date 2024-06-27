@@ -1,5 +1,6 @@
 package com.mygdx.game;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Graphics;
@@ -8,6 +9,7 @@ import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.ui.LoadScreen;
 
@@ -45,7 +47,12 @@ public class RogueFantasy extends Game {
 	}
 
 	public void dispose() {
-
+		if(Gdx.app.getType() == Application.ApplicationType.Desktop) {
+			System.exit(0);
+			Gdx.app.exit();
+		}
+		else
+			Gdx.app.exit();
 	}
 
 }
