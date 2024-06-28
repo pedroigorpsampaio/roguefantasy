@@ -2,7 +2,7 @@
 novaterra.png
 size: 1024, 512
 format: RGBA8888
-filter: MipMapLinearNearest, Linear
+filter: MipMap, MipMap
 repeat: none
 tavern-floor (1)
   rotate: false

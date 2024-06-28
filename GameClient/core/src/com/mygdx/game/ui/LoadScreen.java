@@ -226,8 +226,8 @@ public class LoadScreen implements Screen {
         AtlasTmxMapLoader.AtlasTiledMapLoaderParameters params = new AtlasTmxMapLoader.AtlasTiledMapLoaderParameters();
         params.forceTextureFilters = true;
         params.generateMipMaps = true;
-        params.textureMinFilter = Texture.TextureFilter.MipMapLinearNearest;
-        params.textureMagFilter = Texture.TextureFilter.Linear;
+        params.textureMinFilter = MipMapLinearNearest;
+        params.textureMagFilter = Linear;
 
 //        AtlasTmxMapLoader.Parameters par = new AtlasTmxMapLoader.Parameters();
 //        par.textureMinFilter = Texture.TextureFilter.MipMapLinearNearest;

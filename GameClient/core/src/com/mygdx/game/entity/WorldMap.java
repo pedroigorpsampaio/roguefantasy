@@ -57,6 +57,7 @@ public class WorldMap {
     private SpriteBatch batch;
     public static float WORLD_WIDTH, WORLD_HEIGHT;
     public static int TILES_WIDTH = 1000, TILES_HEIGHT = 1000, TEX_WIDTH = 32, TEX_HEIGHT = 16; // in agreement with server map
+    public final static float edgeFactor = 1.0605f; // min value that prevents tiles from edge bleeding with linear filter in texture
     public static final float unitScale = 1 / 32f;
     private OrthographicCamera camera;
     private Vector2 topRight = new Vector2();
@@ -246,27 +247,27 @@ public class WorldMap {
                 Map.Entry<Integer, Entity.Wall> entry = iterator.next();
                 if(entry.getValue().tileX == (int)tPosDown.x &&
                         entry.getValue().tileY == (int)tPosDown.y) {
-                    if(!entry.getValue().walkable)
+                    if(!entry.getValue().isWalkable)
                         return false;
                 }
                 if(entry.getValue().tileX == (int)tPosUp.x &&
                         entry.getValue().tileY == (int)tPosUp.y) {
-                    if(!entry.getValue().walkable)
+                    if(!entry.getValue().isWalkable)
                         return false;
                 }
                 if(entry.getValue().tileX == (int)tPosCenter.x &&
                         entry.getValue().tileY == (int)tPosCenter.y) {
-                    if(!entry.getValue().walkable)
+                    if(!entry.getValue().isWalkable)
                         return false;
                 }
                 if(entry.getValue().tileX == (int)tPosLeft.x &&
                         entry.getValue().tileY == (int)tPosLeft.y) {
-                    if(!entry.getValue().walkable)
+                    if(!entry.getValue().isWalkable)
                         return false;
                 }
                 if(entry.getValue().tileX == (int)tPosRight.x &&
                         entry.getValue().tileY == (int)tPosRight.y) {
-                    if(!entry.getValue().walkable)
+                    if(!entry.getValue().isWalkable)
                         return false;
                 }
             }
@@ -470,8 +471,8 @@ public class WorldMap {
 
             float x1 = x + tile.getOffsetX() * unitScale + layerOffsetX;
             float y1 = y + tile.getOffsetY() * unitScale + layerOffsetY;
-            float x2 = x1 + region.getRegionWidth() * unitScale;
-            float y2 = y1 + region.getRegionHeight() * unitScale;
+            float x2 = x1 + region.getRegionWidth() * unitScale * edgeFactor;
+            float y2 = y1 + region.getRegionHeight() * unitScale * edgeFactor;
 
             float u1 = region.getU();
             float v1 = region.getV2();

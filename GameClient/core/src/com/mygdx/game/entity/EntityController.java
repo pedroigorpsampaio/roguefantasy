@@ -1,5 +1,10 @@
 package com.mygdx.game.entity;
 
+import static com.mygdx.game.entity.Entity.rectOffsetLeft;
+import static com.mygdx.game.entity.Entity.rectOffsetRight;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
@@ -38,37 +43,45 @@ public class EntityController {
         lastUid = 0; // starts unique ids at 0
     }
 
+    float alpha = 1f;
+
     /**
      * Iterates through visible list of entities calling their render methods
      * @param batch The sprite batch to render the entities. Begin must be called before
      */
     public void renderEntities(SpriteBatch batch) {
+        boolean isPlayerOfuscated = false;
         // creates a sorted list version of entities and iterates it to draw in correct order
         synchronized (entities) {
             for (Map.Entry<Integer, Entity> entry : entriesSortedByValues(entities)) {
-                //System.out.println(entry.getKey()+":"+entry.getValue());
                 Entity e = entry.getValue();
-//                if (WorldMap.isWithinPlayerAOI(e.drawPos) ||
-//                        e.uId == GameClient.getInstance().getClientUid()) // render if entity is within player AoI or if its client render anyway
-                    e.render(batch);
-//                else {
-//                    entities.remove(e.uId); // if not visible, remove from ordered list of visible entities
-//                    GameClient.getInstance().removeEntity(e.uId); // remove from list of entities
-//                    //System.out.println(e.uId+":"+e.entityName);
-//                }
+
+                // check if its a entity that can obfuscate player and change transparency accordingly
+                Vector2 drawPos = GameClient.getInstance().getClientCharacter().drawPos;
+                Vector2 drawPosLeft = new Vector2(drawPos.x-rectOffsetLeft*0.75f, drawPos.y);
+                Vector2 drawPosRight = new Vector2(drawPos.x+rectOffsetRight*0.75f, drawPos.y);
+                boolean hit =  e.rayCast(drawPos) ||  e.rayCast(drawPosLeft) ||  e.rayCast(drawPosRight);
+                boolean obfuscatesPlayer = hit && e.isObfuscator ;
+
+                if (obfuscatesPlayer) {
+                    Color c = batch.getColor();
+                    batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
+                    isPlayerOfuscated = true;
+                }
+
+                e.render(batch);
+
+                if(obfuscatesPlayer) {
+                    Color c = batch.getColor();
+                    batch.setColor(c.r, c.g, c.b, 1f);//set alpha back to 1
+                    alpha -= 1f * Gdx.graphics.getDeltaTime();
+                    if(alpha <= 0.15f)
+                        alpha = 0.15f;
+                }
             }
         }
-        //System.out.println("\n\n");
-//        // creating an iterator
-//        Iterator<Map.Entry<Integer, Entity>> it = entities.entrySet().iterator();
-//
-//        while (it.hasNext()) {
-//            Entity e = it.next().getValue();
-//            if(isInScreen(e.drawPos)) // render if entity is visible in screen
-//                e.render(batch);
-//            else
-//                it.remove(); // if not visible, remove from ordered list of visible entities
-//        }
+        if(!isPlayerOfuscated)
+            alpha = 1.0f;
     }
 
     /**

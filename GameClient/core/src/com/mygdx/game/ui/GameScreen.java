@@ -85,6 +85,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     // time counters
     private float timeForUpdate = 0f;
     ShapeRenderer uiDebug;
+    public static ShapeRenderer shapeDebug;
     private float aimZoom;
     private static boolean isInputHappening = false;
     private Vector3 unprojectedMouse = new Vector3();
@@ -109,6 +110,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         resH = Gdx.graphics.getHeight();
 
         uiDebug = new ShapeRenderer();
+        shapeDebug = new ShapeRenderer();
         joystick = new Joystick(5, 20, 50);
 
         // Constructs a new OrthographicCamera, using the given viewport width and height
@@ -424,7 +426,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         updateCamera(); // updates camera
         batch.setProjectionMatrix(camera.combined); // sets camera for projection
 
-        //ScreenUtils.clear(0.2f, 0.6f, 0.2f, 1);
+        Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
         // wait until player is camera target and first state is received to start rendering
@@ -441,18 +443,23 @@ public class GameScreen implements Screen, PropertyChangeListener {
         while(GameClient.getInstance().isPredictingRecon.get()); // don't render world while reconciliating pos of client
 
 
+        // remember SpriteBatch's current functions
+        int srcFunc = batch.getBlendSrcFunc();
+        int dstFunc = batch.getBlendDstFunc();
+
         batch.totalRenderCalls = 0;
 
         batch.begin();
 
         world.render(); // render world
 
+        //batch.setBlendFunction(GL20.GL_DST_COLOR, GL20.GL_ONE);
         // draw entities using ordered list (if there is any)
         if(entityController.entities.size() > 0)
             entityController.renderEntities(batch);
 
         batch.end();
-
+        batch.setBlendFunction(srcFunc, dstFunc);
         // draws ui
 //        batch.setProjectionMatrix(uiCam.combined);
 //        batch.begin();

@@ -2,6 +2,7 @@ package com.mygdx.game.entity;
 
 import static com.mygdx.game.entity.WorldMap.TEX_HEIGHT;
 import static com.mygdx.game.entity.WorldMap.TEX_WIDTH;
+import static com.mygdx.game.entity.WorldMap.edgeFactor;
 import static com.mygdx.game.entity.WorldMap.unitScale;
 import static com.mygdx.game.ui.CommonUI.getPixmapCircle;
 
@@ -14,8 +15,9 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
-import com.badlogic.gdx.maps.tiled.TiledMapTileSets;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
@@ -24,6 +26,7 @@ import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.ui.CommonUI;
+import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
 
 import java.util.Iterator;
@@ -38,12 +41,26 @@ public abstract class Entity implements Comparable<Entity> {
     public static Stage stage; // screen stage
     public String entityName = "";
     public boolean isClient = false;
+    private ShapeRenderer shapeRenderer; // for debug
     protected Pixmap debugCircle; // for debug
     protected Texture debugTex; // for debug
     public static float tagScale = unitScale * 0.66f;
     static float rectOffsetUp = 0.2f, rectOffsetDown = 0.2f, rectOffsetLeft = 0.4f, rectOffsetRight = 0.4f;
+    public Rectangle hitBox = new Rectangle();
     public Vector2 drawPos = new Vector2(0,0); // position to draw this entity
     public int uId;
+    public boolean isObfuscator = false; // if this entity is obfuscator it will be rendered transparent when on top of player
+
+    /**
+     * Checks if point hits this entity
+     *
+     * @param point the point to check
+     * @return true if it hits, false otherwise
+     */
+    public boolean rayCast(Vector2 point) {
+        return hitBox.contains(point);
+    }
+
     public enum Direction {
         NORTHWEST(-1, 1),
         NORTH(0, 1),
@@ -446,7 +463,7 @@ public abstract class Entity implements Comparable<Entity> {
             Vector2 moveVec = new Vector2(initMove.x, initMove.y).nor().scl(this.speed * GameRegister.clientTickrate());
             Vector2 moveVecCounter = new Vector2(initMove.x, initMove.y).nor().scl(this.speed * GameRegister.clientTickrate());
             // degree step for each rotation try
-            float degree = 10f;
+            float degree = 9f;
 
             if (initMove.hasEndPoint) { // if it has endpoint, do the movement calculations accordingly
                 Vector2 touchPos = new Vector2(initMove.xEnd, initMove.yEnd);
@@ -464,7 +481,7 @@ public abstract class Entity implements Comparable<Entity> {
             Vector2 futurePosCounter = new Vector2(this.x, this.y).add(moveVecCounter);
 
             int tries = 0;
-            while(tries <= 90f/degree) { // search for new angle to move
+            while(tries < 90f/degree) { // search for new angle to move
                 Vector2 tInitialPos = WorldMap.toIsoTileCoordinates(new Vector2(this.x, this.y));
                 Vector2 tFuturePos = WorldMap.toIsoTileCoordinates(futurePos);
                 Vector2 tFuturePosCounter = WorldMap.toIsoTileCoordinates(futurePosCounter);
@@ -627,7 +644,7 @@ public abstract class Entity implements Comparable<Entity> {
         public int tileX, tileY;
         public TiledMapTile tile;
         public int wallId;
-        public boolean walkable;
+        public boolean isWalkable;
         private boolean assetsLoaded;
 
         public Wall(int wallId, int tileId, TiledMapTile tile, int tileX, int tileY) {
@@ -636,7 +653,8 @@ public abstract class Entity implements Comparable<Entity> {
             this.tileY = tileY;
             this.wallId = wallId;
             this.tileId = tileId;
-            this.walkable = tile.getProperties().get("walkable", Boolean.class);
+            this.isWalkable = tile.getProperties().get("walkable", Boolean.class);
+            this.isObfuscator = tile.getProperties().get("obfuscator", Boolean.class);
 
             float tileWidth = TEX_WIDTH * unitScale;
             float tileHeight = TEX_HEIGHT * unitScale;
@@ -645,6 +663,11 @@ public abstract class Entity implements Comparable<Entity> {
             this.drawPos.x =  (tileX * halfTileWidth) + (tileY * halfTileWidth);
             this.drawPos.y = (tileY * halfTileHeight) - (tileX * halfTileHeight) + tileHeight; // adjust to match origin to tile origin
             this.uId = EntityController.getInstance().generateUid();
+
+            this.hitBox.x = this.drawPos.x + halfTileWidth*0.5f;
+            this.hitBox.y = this.drawPos.y + halfTileHeight*0.8f;
+            this.hitBox.width = tile.getTextureRegion().getRegionWidth()* unitScale * 0.5f;
+            this.hitBox.height = tile.getTextureRegion().getRegionHeight()* unitScale * 0.6f;
 
             Gdx.app.postRunnable(() -> {
                 debugCircle = getPixmapCircle(40, Color.BROWN,true);
@@ -668,10 +691,18 @@ public abstract class Entity implements Comparable<Entity> {
             float tileHeight = TEX_HEIGHT * unitScale;
             float halfTileHeight = tileHeight * 0.5f;
 
-            batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight*1.25f,
-                    tile.getTextureRegion().getRegionWidth()* unitScale, tile.getTextureRegion().getRegionHeight()* unitScale);
-            if(CommonUI.debugTex)
-                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
+            batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight*1.38f,
+                    tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor, tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
+            if(CommonUI.debugTex) {
+                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2 * unitScale, 2 * unitScale);
+                batch.end();
+                GameScreen.shapeDebug.setProjectionMatrix(GameScreen.camera.combined);
+                GameScreen.shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+                GameScreen.shapeDebug.setColor(Color.RED);
+                GameScreen.shapeDebug.rect(hitBox.x, hitBox.y, hitBox.width, hitBox.height);
+                GameScreen.shapeDebug.end();
+                batch.begin();
+            }
         }
 
         @Override
