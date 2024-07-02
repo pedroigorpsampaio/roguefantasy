@@ -114,6 +114,11 @@ public class GameClient extends DispatchServer {
                     return;
                 }
 
+                if (object instanceof GameRegister.Teleport) {
+                    serverController.teleportCharacter((GameRegister.Teleport)object);
+                    return;
+                }
+
                 if (object instanceof RemoveCharacter) {
                     RemoveCharacter msg = (RemoveCharacter)object;
                     serverController.removeCharacter(msg.id);
@@ -242,6 +247,10 @@ public class GameClient extends DispatchServer {
         if(pingDelay.isScheduled()) pingDelay.cancel();
     }
 
+    public void sendResponse (GameRegister.Response response) {
+        client.sendTCP(response);
+    }
+
 
     public Map<Integer, Entity.Character> getOnlineCharacters() {
         return serverController.characters;
@@ -288,8 +297,6 @@ public class GameClient extends DispatchServer {
 
         public void updateState(GameRegister.UpdateState state) {
             //System.out.println("creatures:" + state.creatureUpdates.size() + " / chars: " + state.characterUpdates.size());
-            // clears list of entities received in the last state
-            EntityController.getInstance().lastAoIEntities.clear();
 
             if(state.tileLayers != null) {
                 WorldMap.layers = state.tileLayers;
@@ -318,12 +325,18 @@ public class GameClient extends DispatchServer {
                     EntityController.getInstance().lastAoIEntities.add(creature.uId);
                 }
             }
+            if(state.portal != null) // list of visible portals
+                WorldMap.portals = state.portal;
 
             EntityController.getInstance().removeOutOfAoIEntities(); // removes entities not in AoI
 
             // sets flag to inform that first update was processed
             if(!instance.firstStateProcessed)
                 instance.firstStateProcessed = true;
+
+            // clears list of entities received in the last state (only if player is not teleporting atm)
+            if(instance.getClientCharacter() != null && !instance.getClientCharacter().isTeleporting)
+                EntityController.getInstance().lastAoIEntities.clear();
         }
 
         private void updateWall(GameRegister.Wall wallUpdate) {
@@ -388,6 +401,24 @@ public class GameClient extends DispatchServer {
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
             }
 
+            // if its teleporting and not client, set teleport flags and proceeds with the teleportation
+            if(msg.character.id != instance.clientCharId) {
+                if (msg.character.isTeleporting) {
+                    character.isTeleporting = true;
+                    character.teleportInAnim = true;
+                    GameRegister.Teleport tp = new GameRegister.Teleport();
+                    tp.x = msg.character.x;
+                    tp.y = msg.character.y;
+                    teleportCharacter(character, tp);
+                } else {
+                    character.teleportInAnim = false;
+                    character.isTeleporting = false;
+                }
+            }
+
+            // if character is unmovable return (position will be updated again when is movable again)
+            if(character.isUnmovable()) return;
+
             // updates direction if its other player
             if(GameClient.getInstance().clientCharId != msg.character.id)
                 character.direction = Entity.Direction.getDirection(MathUtils.round(msg.dir.x), MathUtils.round(msg.dir.y));
@@ -422,6 +453,22 @@ public class GameClient extends DispatchServer {
                     GameClient.getInstance().getMoveMsgListCopy().clear();
                 }
             }
+        }
+
+        /**
+         * Teleports client character to teleport destination position
+         * @param destination   the destination to teleport client character to
+         */
+        public void teleportCharacter(GameRegister.Teleport destination) {
+            instance.getClientCharacter().teleport(destination.x, destination.y);
+        }
+
+        /**
+         * Teleports character to teleport destination position
+         * @param destination   the destination to teleport character to
+         */
+        public void teleportCharacter(Entity.Character character, GameRegister.Teleport destination) {
+            character.teleport(destination.x, destination.y);
         }
 
         public void removeCharacter (int id) {

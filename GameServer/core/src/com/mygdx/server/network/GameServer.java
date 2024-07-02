@@ -130,6 +130,9 @@ public class GameServer implements CmdReceiver {
                         case LOGOFF:
                             disconnected(c);
                             break;
+                        case TELEPORT_FINISHED:
+                            character.isTeleporting = false;
+                            break;
                         default:
                             Log.debug("game-server", "Received unknown response type message");
                             break;
@@ -326,6 +329,7 @@ public class GameServer implements CmdReceiver {
         character.attr = new Component.Attributes(character.attr.width, character.attr.height, character.attr.speed,
                                                     character.attr.attackSpeed, character.attr.range);
         character.position = new Component.Position(character.position.x, character.position.y);
+        character.connection = c;
         character.updatePositionIn2dArray();
         c.character = character;
         //c.character.remove(charComp);
@@ -633,6 +637,17 @@ public class GameServer implements CmdReceiver {
                 conn.close(); // close login connection with client, that will now connect with game server
             });
         }).start();
+    }
+
+    /**
+     * This method should be called when teleporting characters
+     * to force no interpolation and instant change of position on client
+     * @param character     the character to teleport with position already updated on destination of teleport
+     */
+    public void teleport(Component.Character character) {
+        GameRegister.Teleport tp = new GameRegister.Teleport();
+        tp.x = character.position.x; tp.y = character.position.y;
+        character.connection.sendTCP(tp);
     }
 
     // This holds per connection state.

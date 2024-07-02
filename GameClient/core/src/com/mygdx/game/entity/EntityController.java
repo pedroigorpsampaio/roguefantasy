@@ -50,11 +50,16 @@ public class EntityController {
      * @param batch The sprite batch to render the entities. Begin must be called before
      */
     public void renderEntities(SpriteBatch batch) {
+        if(GameClient.getInstance().getClientCharacter() == null) return; // client player not loaded
+
         boolean isPlayerOfuscated = false;
+
         // creates a sorted list version of entities and iterates it to draw in correct order
         synchronized (entities) {
             for (Map.Entry<Integer, Entity> entry : entriesSortedByValues(entities)) {
                 Entity e = entry.getValue();
+
+                if(GameClient.getInstance().getClientCharacter() == null) break;
 
                 // check if its a entity that can obfuscate player and change transparency accordingly
                 Vector2 drawPos = GameClient.getInstance().getClientCharacter().drawPos;

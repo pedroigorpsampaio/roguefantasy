@@ -17,6 +17,7 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
@@ -90,7 +91,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private static boolean isInputHappening = false;
     private Vector3 unprojectedMouse = new Vector3();
     private Vector3 screenMouse = new Vector3();
-    private Vector2 joystickDir; // the current joystick direction (for android)
+    private Vector2 joystickDir = new Vector2(); // the current joystick direction (for android)
 
     /**
      * Prepares the screen/stage of the game
@@ -282,6 +283,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private void moveCharacter() {
         Entity.Character player = gameClient.getClientCharacter();
 
+        // if player is unmovable return
+        if(player.isUnmovable()) return;
+
         GameRegister.MoveCharacter msg = new GameRegister.MoveCharacter();
         msg.x = movement.x;
         msg.y = movement.y/2f; // isometric world
@@ -460,6 +464,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         batch.end();
         batch.setBlendFunction(srcFunc, dstFunc);
+
+        if(WorldMap.portals != null && CommonUI.debugTex) {
+            shapeDebug.setProjectionMatrix(camera.combined);
+            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+            shapeDebug.setColor(Color.BLUE);
+
+            for(Rectangle portal : WorldMap.portals) {
+                shapeDebug.rect(portal.x, portal.y, portal.width, portal.height);
+            }
+            shapeDebug.end();
+        }
+
         // draws ui
 //        batch.setProjectionMatrix(uiCam.combined);
 //        batch.begin();

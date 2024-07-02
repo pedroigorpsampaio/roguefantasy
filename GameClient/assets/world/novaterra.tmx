@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.10.2" orientation="isometric" renderorder="right-down" width="1" height="1" tilewidth="32" tileheight="16" infinite="0" nextlayerid="7" nextobjectid="3">
+<map version="1.10" tiledversion="1.10.2" orientation="isometric" renderorder="right-down" width="1" height="1" tilewidth="32" tileheight="16" infinite="0" nextlayerid="7" nextobjectid="21">
  <editorsettings>
   <chunksize width="30" height="30"/>
   <export target="testmap..tmx" format="tmx"/>
@@ -7,7 +7,7 @@
  <properties>
   <property name="atlas" value="novaterra_packed_textures/novaterra.atlas"/>
  </properties>
- <tileset firstgid="1" name="novaterra_tileset" tilewidth="32" tileheight="64" tilecount="235" columns="0">
+ <tileset firstgid="1" name="novaterra_tileset" tilewidth="32" tileheight="64" tilecount="242" columns="0">
   <grid orientation="orthogonal" width="1" height="1"/>
   <tile id="0">
    <properties>
@@ -1896,6 +1896,70 @@
     <property name="walkable" type="bool" value="true"/>
    </properties>
    <image width="16" height="16" source="tavern-small-props (19).png"/>
+  </tile>
+  <tile id="244">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="obfuscator" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="portal_0-0.png"/>
+   <animation>
+    <frame tileid="244" duration="840"/>
+    <frame tileid="245" duration="840"/>
+    <frame tileid="246" duration="840"/>
+    <frame tileid="247" duration="840"/>
+    <frame tileid="248" duration="840"/>
+    <frame tileid="249" duration="840"/>
+   </animation>
+  </tile>
+  <tile id="245">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="obfuscator" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="portal_0-1.png"/>
+  </tile>
+  <tile id="246">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="obfuscator" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="portal_0-2.png"/>
+  </tile>
+  <tile id="247">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="obfuscator" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="portal_0-3.png"/>
+  </tile>
+  <tile id="248">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="obfuscator" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="portal_0-4.png"/>
+  </tile>
+  <tile id="249">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="obfuscator" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="true"/>
+   </properties>
+   <image width="32" height="32" source="portal_0-5.png"/>
+  </tile>
+  <tile id="250">
+   <properties>
+    <property name="has_collisor" type="bool" value="false"/>
+    <property name="obfuscator" type="bool" value="false"/>
+    <property name="walkable" type="bool" value="false"/>
+   </properties>
+   <image width="32" height="48" source="tree_007.png"/>
   </tile>
  </tileset>
  <layer id="1" name="Floor 0" width="1" height="1">

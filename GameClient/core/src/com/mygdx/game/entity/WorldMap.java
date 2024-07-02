@@ -50,6 +50,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 public class WorldMap {
+    public static ArrayList<Rectangle> portals = new ArrayList<>();
     private static WorldMap instance = null;
     public static ArrayList<GameRegister.Layer> layers = new ArrayList<>();
     public static int tileOffsetX=0,tileOffsetY=0;
@@ -65,7 +66,7 @@ public class WorldMap {
     private Vector2 topLeft = new Vector2();
     private Vector2 bottomRight = new Vector2();
     private static Vector3 screenPos = new Vector3();
-    private Matrix4 isoTransform;
+    public static Matrix4 isoTransform;
     private static Matrix4 invIsotransform;
     // Array containing layers with whats interesting to the player but in world size for correct rendering
     ArrayList<TiledMapTileLayer> tmxLayers = new ArrayList<>();
@@ -273,6 +274,8 @@ public class WorldMap {
             }
         }
 
+        if(floorLayer.getCell((int)tPosUp.x, (int)tPosUp.y).getTile() == null) return false;
+
         if(floorLayer.getCell((int)tPosUp.x, (int)tPosUp.y).getTile().getProperties().get("walkable", Boolean.class) &&
                 floorLayer.getCell((int)tPosDown.x, (int)tPosDown.y).getTile().getProperties().get("walkable", Boolean.class) &&
                 floorLayer.getCell((int)tPosCenter.x, (int)tPosCenter.y).getTile().getProperties().get("walkable", Boolean.class) &&
@@ -304,6 +307,9 @@ public class WorldMap {
         setView(); // update world map view bounds based on game camera
 
         Entity.Character spectatee = GameClient.getInstance().getClientCharacter();
+
+        if(spectatee == null) return;
+
         float playerX = spectatee.interPos.x;
         float playerY = spectatee.interPos.y;
         Vector2 playerPos = new Vector2(playerX, playerY);

@@ -9,6 +9,7 @@ import com.badlogic.gdx.maps.objects.RectangleMapObject;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.tiles.StaticTiledMapTile;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ObjectMap;
@@ -68,6 +69,8 @@ public class GameRegister {
         kryo.register(int[].class);
         kryo.register(Layer.class);
         kryo.register(Wall.class);
+        kryo.register(Rectangle.class);
+        kryo.register(Teleport.class);
     }
 
     static public class Layer {
@@ -85,6 +88,7 @@ public class GameRegister {
         public enum Type{
             USER_ALREADY_LOGGED_IN,
             LOGOFF,
+            TELEPORT_FINISHED,
             DISCARD, // useless response
         }
         public Type type;
@@ -127,6 +131,11 @@ public class GameRegister {
         public  ArrayList<Wall> wallUpdates = new ArrayList<>();
         public ArrayList<Layer> tileLayers = new ArrayList<>();
         public int tileOffsetX, tileOffsetY;
+        public ArrayList<Rectangle> portal = new ArrayList<>();
+    }
+
+    static public class Teleport {
+        public float x, y;
     }
 
     static public class AddCharacter {
@@ -147,6 +156,7 @@ public class GameRegister {
         public String name;
         public int id, role_level;
         public float x, y, speed;
+        public boolean isTeleporting;
     }
 
     public static class ClientId {

@@ -37,6 +37,8 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.MapLayer;
+import com.badlogic.gdx.maps.MapObject;
+import com.badlogic.gdx.maps.objects.RectangleMapObject;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
@@ -46,6 +48,7 @@ import com.badlogic.gdx.maps.tiled.renderers.IsometricTiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.tiles.AnimatedTiledMapTile;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.esotericsoftware.kryo.Kryo;
@@ -139,12 +142,104 @@ public class WorldMap implements InputProcessor {
         invIsotransform.inv();
 
         TiledMapTileLayer entityLayer =  (TiledMapTileLayer) map.getLayers().get(2);
-        loadWallsAsEntities(entityLayer);
+        loadWallsAsEntities(entityLayer); // loads entity layer of floor
+        loadObjects(map.getLayers().get(3)); // loads object layer of floor
+    }
+
+    /**
+     * Loads objects from the object layer of the map, which includes portals, spawns and more.
+     *
+     * @param layer   the object layer of the floor
+     */
+    private void loadObjects(MapLayer layer) {
+        for (MapObject object : layer.getObjects()) {
+            if (object instanceof RectangleMapObject) {
+                RectangleMapObject rectangleMapObject = (RectangleMapObject) object;
+                Rectangle rectangle = rectangleMapObject.getRectangle();
+                float x = rectangle.getX();
+                float y = rectangle.getY();
+                int j = (int) Math.floor(x / (TEX_WIDTH * 0.5f));
+                int i = (int) Math.floor(y / (TEX_WIDTH * 0.5f)) - 1;
+                if(j < 0) j = 0;
+                if(i < 0) i = 0;
+                if(j > TILES_WIDTH) j = TILES_WIDTH-1;
+                if(i > TILES_HEIGHT) i  = TILES_HEIGHT-1;
+                //rectangle.setX((x / (TEX_WIDTH * 0.5f)) + 0.5f);
+                //rectangle.setY((y / (TEX_WIDTH * 0.5f)) - 1) ;
+                //rectangle.setWidth(rectangle.getWidth()*unitScale*2f);
+                //rectangle.setHeight(rectangle.getHeight()*unitScale*2f);
+                //System.out.println(j + " / "+ i);
+
+                Vector3 sPos = new Vector3(x, y, 0);
+                sPos.mul(isoTransform); // tiled coordinates are iso projected- unproject it for game world coordinates
+                Vector2 worldPos = new Vector2((sPos.x / (WorldMap.TEX_WIDTH * 0.5f))  + 0.1f,
+                                (sPos.y / (WorldMap.TEX_WIDTH * 0.5f)) + 0.25f);
+                rectangle.x = worldPos.x; rectangle.y = worldPos.y;
+                float tmp = rectangle.width*unitScale;
+                rectangle.width = rectangle.height*unitScale;
+                rectangle.height = tmp;
+
+                String actionStr = object.getProperties().get("action_type", String.class);
+                if(actionStr != null) {
+                    Action action = Action.getAction(actionStr);
+                    switch(action) {
+                        case PORTAL: // one portal per tile max
+                            Portal portal = new Portal();
+                            portal.portalId = object.getProperties().get("portal_id", Integer.class);
+                            portal.tileX = j;
+                            portal.tileY = i;
+                            portal.destX = object.getProperties().get("destination_x", Integer.class);
+                            portal.destY = TILES_HEIGHT - object.getProperties().get("destination_y", Integer.class);
+                            Vector3 dPos = new Vector3(portal.destX, portal.destY, 0);
+                            dPos.mul(isoTransform); // tiled coordinates are iso projected- unproject it for game world coordinates
+                            portal.destX = (int) dPos.x;
+                            portal.destY = (int) dPos.y;
+                            System.out.println(dPos);
+                            portal.hitBox = rectangle;
+                            EntityController.getInstance().entityWorldState[j][i].portal = portal;
+                            break;
+                        case SPAWN:  // one spawn per tile max
+                            break;
+                        default:
+                            Log.info("map", "Unknown action can't be loaded");
+                            break;
+                    }
+                }
+            }
+
+        }
+    }
+
+    /**
+     * Enum that contains the possible actions that happens in map interactions
+     */
+    public enum Action {
+        PORTAL("portal"),
+        SPAWN("spawn"),
+        UNKNOWN("unknown");
+
+        public String type;
+
+        Action(String type) {
+            this.type = type;
+        }
+
+        public static Action getAction(String str){
+            for (Action action : Action.values()) {
+                if (action.type.equals(str)) {
+                    return action;
+                }
+            }
+            //throw new Exception("No enum constant with text " + text + " found");
+            return Action.UNKNOWN;// if no action was found, return unknown
+        }
     }
 
     /**
      * Loads walls creating wall entities with wall id, tile id and position in world 2d array
      * to send to clients that treats them as entities to render in correct order
+     *
+     * @param layer   the entity layer of the floor
      */
     private void loadWallsAsEntities(TiledMapTileLayer layer) {
         int wallId = 0;
@@ -589,6 +684,10 @@ public class WorldMap implements InputProcessor {
                     if (rl == renderLayers.size()) {
                         Map<Integer, Entity> tileEntities = EntityController.getInstance().getEntitiesAtTilePos(col, row);
                         Map<Integer, Component.Character> characters = EntityController.getInstance().entityWorldState[col][row].characters;
+                        Portal portal = EntityController.getInstance().entityWorldState[col][row].portal;
+                        if(portal != null) {
+
+                        }
                         if (tileEntities.size() > 0) { // render entities of tile if any exists
                             for (Map.Entry<Integer, Entity> entry : tileEntities.entrySet()) {
                                 Integer eId = entry.getKey();
@@ -767,7 +866,7 @@ public class WorldMap implements InputProcessor {
         return cell;
     }
 
-    private Vector3 translateScreenToIso (Vector2 vec) {
+    public Vector3 translateScreenToIso (Vector2 vec) {
         screenPos.set(vec.x, vec.y, 0);
         screenPos.mul(invIsotransform);
 
@@ -994,5 +1093,15 @@ public class WorldMap implements InputProcessor {
 
     public float getUnitScale() {
         return unitScale;
+    }
+
+    /**
+     * Class that represents portals of the map
+     */
+    public class Portal {
+        public int portalId;
+        public int tileX, tileY;
+        public Rectangle hitBox;
+        public int destX, destY;
     }
 }

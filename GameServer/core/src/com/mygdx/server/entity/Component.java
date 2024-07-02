@@ -9,12 +9,17 @@ import com.badlogic.gdx.maps.MapLayer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.utils.Array;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Output;
 import com.mygdx.server.network.GameRegister;
 import com.mygdx.server.network.GameServer;
+import com.mygdx.server.network.LoginServer;
 import com.mygdx.server.ui.RogueFantasyServer;
+import com.mygdx.server.util.Common;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -69,7 +74,9 @@ public class Component {
         public Component.Attributes attr;
         public Component.Position position;
         public Vector2 lastTilePos = null;
+        public GameServer.CharacterConnection connection = null;
         Output lastState = null;
+        public boolean isTeleporting = false;
 
         /**
          * Prepares character data to be sent to clients with
@@ -99,7 +106,22 @@ public class Component {
             update.character.role_level = role_level;
             update.dir = dir;
             update.lastRequestId = lastMoveId;
+            update.character.isTeleporting = isTeleporting;
             return update;
+        }
+
+        /**
+         * Teleports character to position and updates itself on 2d array
+         * @param destination  the destination to teleport character to
+         */
+        public void teleport(Vector2 destination) {
+            isTeleporting = true;
+            this.position.x = destination.x;
+            this.position.y = destination.y;
+            // update position in 2d array
+            updatePositionIn2dArray();
+            // check for actions on current tile (actions that get triggered by walking on it)
+            triggerWalkableActions();
         }
 
         /**
@@ -109,7 +131,66 @@ public class Component {
         public void move(Vector2 movement) {
             this.position.x += movement.x;
             this.position.y += movement.y;
-            updatePositionIn2dArray(); // calls method that manages entity position in 2d array
+            // update position in 2d array
+            updatePositionIn2dArray();
+            // check for actions on current tile (actions that get triggered by walking on it)
+            triggerWalkableActions();
+        }
+
+        /**
+         * Trigger walk on actions of the map such as teleports in case player walks in on one
+         */
+        private void triggerWalkableActions() {
+            if(position.lastTilePos == null) return; // player tile not set yet
+
+            // current tile
+            Tile tileCenter = EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x][(int) position.lastTilePos.y];
+            // also checks tiles around player for collision with action objects
+            ArrayList<Tile> tiles = new ArrayList<>();
+            tiles.add(tileCenter);
+            if(position.lastTilePos.x+1 < EntityController.getInstance().entityWorldState.length)
+                tiles.add(EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x+1][(int) position.lastTilePos.y]);
+            if(position.lastTilePos.x+1 < EntityController.getInstance().entityWorldState.length &&
+                    position.lastTilePos.y+1 < EntityController.getInstance().entityWorldState[0].length)
+                tiles.add(EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x+1][(int) position.lastTilePos.y+1]);
+            if(position.lastTilePos.x-1 >= 0)
+                tiles.add(EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x-1][(int) position.lastTilePos.y]);
+            if(position.lastTilePos.x-1 >= 0 && position.lastTilePos.y-1 >= 0)
+                tiles.add(EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x-1][(int) position.lastTilePos.y-1]);
+            if(position.lastTilePos.x+1 < EntityController.getInstance().entityWorldState.length  && position.lastTilePos.y-1 >= 0)
+                tiles.add(EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x+1][(int) position.lastTilePos.y-1]);
+            if(position.lastTilePos.x-1 >= 0 && position.lastTilePos.y+1 < EntityController.getInstance().entityWorldState[0].length)
+                tiles.add(EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x-1][(int) position.lastTilePos.y+1]);
+            if(position.lastTilePos.y+1 < EntityController.getInstance().entityWorldState[0].length)
+                tiles.add(EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x][(int) position.lastTilePos.y+1]);
+            if(position.lastTilePos.y-1 >= 0)
+                tiles.add(EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x][(int) position.lastTilePos.y-1]);
+
+            Vector2 centerPos = new Vector2();
+            centerPos.x = this.position.x + this.attr.width/2f + this.attr.width/15f;
+            centerPos.y = this.position.y + this.attr.height/12f + this.attr.height/18f;
+
+//            Vector2 tPosDown = new Vector2(centerPos.x, centerPos.y-rectOffsetDown*0.25f);
+//            Vector2 tPosUp = new Vector2(centerPos.x, centerPos.y+rectOffsetUp*0.75f);
+//            Vector2 tPosLeft = new Vector2(centerPos.x-rectOffsetLeft*0.5f, centerPos.y);
+//            Vector2 tPosRight = new Vector2(centerPos.x+rectOffsetRight*0.5f, centerPos.y);
+
+            Polygon playerIsoBox = new Polygon(new float[]{
+                    centerPos.x, centerPos.y-rectOffsetDown*0.25f, // down
+                    centerPos.x-rectOffsetLeft*0.5f, centerPos.y, // left
+                    centerPos.x, centerPos.y+rectOffsetUp*0.75f, // up
+                    centerPos.x+rectOffsetRight*0.5f, centerPos.y}); // right
+
+            for(Tile tile : tiles) {
+                if (tile.portal != null) { // if there is a portal in this tile, check if it collides with it
+                    System.out.println(Common.intersects(playerIsoBox, tile.portal.hitBox));
+                    if(Common.intersects(playerIsoBox, tile.portal.hitBox)) {
+                        teleport(new Vector2(tile.portal.destX, tile.portal.destY));
+                        System.out.println(new Vector2(tile.portal.destX, tile.portal.destY));
+                        GameServer.getInstance().teleport(this);
+                    }
+                }
+            }
         }
 
         /**
@@ -307,6 +388,9 @@ public class Component {
                                 }
                                 if(EntityController.getInstance().entityWorldState[col][row].wall != null) { // add wall as wall update for client that treats it as entity
                                     state.wallUpdates.add(EntityController.getInstance().entityWorldState[col][row].wall);
+                                }
+                                if(EntityController.getInstance().entityWorldState[col][row].portal != null) { // add portal for debug
+                                    state.portal.add(EntityController.getInstance().entityWorldState[col][row].portal.hitBox);
                                 }
                             }
                         }

@@ -5,6 +5,8 @@ import static com.mygdx.game.entity.WorldMap.TEX_WIDTH;
 import static com.mygdx.game.entity.WorldMap.edgeFactor;
 import static com.mygdx.game.entity.WorldMap.unitScale;
 import static com.mygdx.game.ui.CommonUI.getPixmapCircle;
+import static com.mygdx.game.ui.GameScreen.camera;
+import static com.mygdx.game.ui.GameScreen.shapeDebug;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
@@ -17,10 +19,12 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
+import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
@@ -146,6 +150,7 @@ public abstract class Entity implements Comparable<Entity> {
         private static final float ANIM_BASE_INTERVAL = 0.25175f; // the base interval between anim frames
         private final Skin skin;
         private final Font font;
+        private Polygon collider; // this players collider
         public AtomicLong lastRequestId;
         public boolean assetsLoaded = false;
         Texture spriteSheet;
@@ -164,6 +169,10 @@ public abstract class Entity implements Comparable<Entity> {
         public CopyOnWriteArrayList<EntityInterPos> buffer = new CopyOnWriteArrayList<>();
         private Vector2 goalPos;
         private float tIntElapsed;
+        public boolean isTeleporting = false;
+        public boolean isAlive = true;
+        public boolean teleportInAnim = false;
+        public boolean teleportOutAnim = false;
 
         @Override
         public int compareTo(Entity entity) {
@@ -183,6 +192,14 @@ public abstract class Entity implements Comparable<Entity> {
                 return -1;
             else
                 return 1;
+        }
+
+        /**
+         * Returns if this character is unmovable (teleporting, dead or other state that player should not be moved)
+         * @return  true if its unmovable, false otherwise
+         */
+        public boolean isUnmovable() {
+            return teleportInAnim || teleportOutAnim || !isAlive;
         }
 
         public static class EntityInterPos {
@@ -214,6 +231,9 @@ public abstract class Entity implements Comparable<Entity> {
             walk = new ConcurrentHashMap<>();
             attack = new ConcurrentHashMap<>();
             idle = new ConcurrentHashMap<>();
+
+            setCollider();
+
 
             //stage.addActor(this);
 
@@ -333,6 +353,23 @@ public abstract class Entity implements Comparable<Entity> {
             });
         }
 
+        private void setCollider() {
+            Vector2 centerPos = new Vector2();
+            centerPos.x = this.interPos.x + spriteW/2f + spriteW/20f;
+            centerPos.y = this.interPos.y + spriteH/12f + spriteH/18f;
+
+            Vector2 tPosDown = new Vector2(centerPos.x, centerPos.y-rectOffsetDown*0.75f);
+            Vector2 tPosUp = new Vector2(centerPos.x, centerPos.y+rectOffsetUp*0.75f);
+            Vector2 tPosLeft = new Vector2(centerPos.x-rectOffsetLeft*0.5f, centerPos.y);
+            Vector2 tPosRight = new Vector2(centerPos.x+rectOffsetRight*0.5f, centerPos.y);
+
+            collider = new Polygon(new float[]{
+                    tPosDown.x, tPosDown.y,
+                    tPosLeft.x, tPosLeft.y,
+                    tPosUp.x, tPosUp.y,
+                    tPosRight.x, tPosRight.y});
+        }
+
         /**
          * Updates speed of character adjusting animation speed as well (should be used instead of changing speed var directly)
          * @param speed the new speed of the player (should be between 1.0 and 9.0)
@@ -357,6 +394,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.y = y;
             this.position.x = x;
             this.position.y = y;
+            //this.collider.setPosition(x, y);
             if(!Common.entityInterpolation) {
                 Gdx.app.postRunnable(() -> {
                     centerPos.x = this.position.x + spriteW/2f;
@@ -366,6 +404,33 @@ public abstract class Entity implements Comparable<Entity> {
                             nameLabel.getWidth(), nameLabel.getHeight());
                 });
             }
+        }
+
+        public void teleport(float x, float y) {
+            new Thread(() -> {
+                while (this.teleportInAnim) { // wait until teleport in animation to end to update to destination
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                this.interPos.x = x;
+                this.interPos.y = y;
+                this.drawPos = new Vector2(x, y);
+                this.position.x = x;
+                this.position.y = y;
+                //this.collider.setPosition(x, y);
+                this.x = x;
+                this.y = y;
+                centerPos.x = this.interPos.x + spriteW / 2f;
+                centerPos.y = this.interPos.y + spriteH / 2f;
+                nameLabel.setBounds(this.centerPos.x - nameLabel.getWidth() / 2f,
+                        this.centerPos.y + spriteH / 2f,
+                        nameLabel.getWidth(), nameLabel.getHeight());
+                this.isTeleporting = false; // finished teleporting
+                GameClient.getInstance().sendResponse(new GameRegister.Response(GameRegister.Response.Type.TELEPORT_FINISHED));
+            }).start();
         }
 
         public void move(Vector2 movement) {
@@ -389,9 +454,13 @@ public abstract class Entity implements Comparable<Entity> {
                 this.interPos.x = x;
                 this.interPos.y = y;
                 this.drawPos = new Vector2(x, y);
+                // check for walkable actions
+                //triggerWalkableActions();
             } else {
                 this.x = x;
                 this.y = y;
+                // check for walkable actions
+                //triggerWalkableActions();
             }
             centerPos.x = this.interPos.x + spriteW/2f;
             centerPos.y = this.interPos.y + spriteH/2f;
@@ -420,6 +489,19 @@ public abstract class Entity implements Comparable<Entity> {
             } else { // wasd movement already has direction in it, just normalize and scale
                 Vector2 moveVec = new Vector2(msg.x, msg.y).nor().scl(this.speed * GameRegister.clientTickrate());
                 this.move(moveVec);
+            }
+            // check for walkable actions
+            triggerWalkableActions();
+        }
+
+        private void triggerWalkableActions() {
+            // check for portal collisions
+            for(Rectangle portal : WorldMap.portals) {
+                if (Common.intersects(collider, portal)) {
+                    System.out.println("im here and collided");
+                    this.isTeleporting = true;
+                    this.teleportInAnim = true;
+                }
             }
         }
 
@@ -521,6 +603,7 @@ public abstract class Entity implements Comparable<Entity> {
 
         }
 
+        float alpha = 1f;
         @Override
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
@@ -541,36 +624,73 @@ public abstract class Entity implements Comparable<Entity> {
 
             // animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
 
+            // if its in teleport in animation, fade out player
+            if(teleportInAnim) {
+                Color c = batch.getColor();
+                batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
+                alpha -= 1f * Gdx.graphics.getDeltaTime();
+                if(alpha <= 0.15f) {
+                    teleportInAnim = false;
+                    teleportOutAnim = true;
+                    alpha = 0.15f;
+                }
+            }
+            if(teleportOutAnim) { // if its in teleport out animation, fade in player
+                Color c = batch.getColor();
+                batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
+                alpha += 1f * Gdx.graphics.getDeltaTime();
+                if(alpha >= 1f) {
+                    teleportOutAnim = false;
+                    alpha = 1f;
+                }
+            }
+
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
             batch.draw(currentFrame, this.interPos.x + spriteW/12f, this.interPos.y + spriteH/12f, currentFrame.getRegionWidth()* unitScale,
                     currentFrame.getRegionHeight()* unitScale);
 
             //System.out.println("playerW: " + currentFrame.getRegionWidth() + " / playerH: " + currentFrame.getRegionHeight());
+
+            // updates positions and dimensions
             spriteH = currentFrame.getRegionHeight()* unitScale;
             spriteW = currentFrame.getRegionWidth()* unitScale;
             centerPos = new Vector2(this.interPos.x + spriteW/2f + spriteW/20f, this.interPos.y + spriteH/2f + spriteH/20f);
-            this.drawPos.x = this.interPos.x + spriteW/2f + spriteW/20f;
+            this.drawPos.x = this.interPos.x + spriteW/2f + spriteW/15f;
             this.drawPos.y = this.interPos.y + spriteH/12f + spriteH/18f;
 
-            Vector2 tPosDown = new Vector2(drawPos.x, drawPos.y-rectOffsetDown);
-            Vector2 tPosUp = new Vector2(drawPos.x, drawPos.y+rectOffsetUp);
-            Vector2 tPosLeft = new Vector2(drawPos.x-rectOffsetLeft, drawPos.y);
-            Vector2 tPosRight = new Vector2(drawPos.x+rectOffsetRight, drawPos.y);
+            Vector2 cPos = new Vector2();
+            cPos.x = this.position.x + spriteW/2f + spriteW/15f;
+            cPos.y = this.position.y + spriteH/12f + spriteH/18f;
+
+            // updates collider
+            collider = new Polygon(new float[]{
+                    cPos.x, cPos.y-rectOffsetDown*0.25f, // down
+                    cPos.x-rectOffsetLeft*0.5f, cPos.y, // left
+                    cPos.x, cPos.y+rectOffsetUp*0.75f, // up
+                    cPos.x+rectOffsetRight*0.5f, cPos.y}); // right
 
             if(CommonUI.debugTex) {
-                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2 * unitScale, 2 * unitScale);
-                batch.draw(debugTex, tPosDown.x, tPosDown.y, 2 * unitScale, 2 * unitScale);
-                batch.draw(debugTex, tPosUp.x, tPosUp.y, 2 * unitScale, 2 * unitScale);
-                batch.draw(debugTex, tPosLeft.x, tPosLeft.y, 2 * unitScale, 2 * unitScale);
-                batch.draw(debugTex, tPosRight.x, tPosRight.y, 2 * unitScale, 2 * unitScale);
+//                Vector2 tPosDown = new Vector2(drawPos.x, drawPos.y-rectOffsetDown);
+//                Vector2 tPosUp = new Vector2(drawPos.x, drawPos.y+rectOffsetUp);
+//                Vector2 tPosLeft = new Vector2(drawPos.x-rectOffsetLeft, drawPos.y);
+//                Vector2 tPosRight = new Vector2(drawPos.x+rectOffsetRight, drawPos.y);
+//                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2 * unitScale, 2 * unitScale);
+//                batch.draw(debugTex, tPosDown.x, tPosDown.y, 2 * unitScale, 2 * unitScale);
+//                batch.draw(debugTex, tPosUp.x, tPosUp.y, 2 * unitScale, 2 * unitScale);
+//                batch.draw(debugTex, tPosLeft.x, tPosLeft.y, 2 * unitScale, 2 * unitScale);
+//                batch.draw(debugTex, tPosRight.x, tPosRight.y, 2 * unitScale, 2 * unitScale);
             }
 
-//            Vector2 tPos = toIsoTileCoordinates(position);
-//            System.out.println(tPos);
+            batch.end();
+            shapeDebug.setProjectionMatrix(camera.combined);
+            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+            shapeDebug.setColor(Color.YELLOW);
+            shapeDebug.polygon(collider.getTransformedVertices());
+            shapeDebug.end();
+            batch.begin();
 
-            // draw player tag
-
+            // renders player tag
             nameLabel.getFont().scale(tagScale, tagScale);
 
             nameLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/1.75f), this.centerPos.y + spriteH/2f + 8f,
@@ -582,6 +702,12 @@ public abstract class Entity implements Comparable<Entity> {
             nameLabel.draw(batch, 1.0f);
 
             nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
+
+            // resets alpha for correct rendering of other entities
+            if(teleportInAnim || teleportOutAnim) {
+                Color c = batch.getColor();
+                batch.setColor(c.r, c.g, c.b, 1f);//set alpha back to 1
+            }
         }
 
         // interpolates stage assets to player current position
@@ -591,9 +717,19 @@ public abstract class Entity implements Comparable<Entity> {
             if(interPos.dst(position) == 0f) return; // nothing to interpolate
             if(isClient && GameClient.getInstance().isPredictingRecon.get()) return;
 
+//            if(!isClient) System.out.println(teleportInAnim);
+            // if its teleporting update to position if its not player
+//            if(!isClient && teleportInAnim) {
+//                return;
+//            }
+            if(!isClient && isTeleporting && teleportOutAnim) {
+                updateStage(position.x, position.y, true);
+                return;
+            }
+
             float speedFactor = speed*Gdx.graphics.getDeltaTime();
             //if(!isClient)
-            speedFactor *= 0.97573f;
+            speedFactor *= 0.98573f;
 
             if(interPos.dst(position) <= speedFactor) { // updates to players position if its close enough
                 updateStage(position.x, position.y, true);
@@ -696,11 +832,11 @@ public abstract class Entity implements Comparable<Entity> {
             if(CommonUI.debugTex) {
                 batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2 * unitScale, 2 * unitScale);
                 batch.end();
-                GameScreen.shapeDebug.setProjectionMatrix(GameScreen.camera.combined);
-                GameScreen.shapeDebug.begin(ShapeRenderer.ShapeType.Line);
-                GameScreen.shapeDebug.setColor(Color.RED);
-                GameScreen.shapeDebug.rect(hitBox.x, hitBox.y, hitBox.width, hitBox.height);
-                GameScreen.shapeDebug.end();
+                shapeDebug.setProjectionMatrix(camera.combined);
+                shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+                shapeDebug.setColor(Color.RED);
+                shapeDebug.rect(hitBox.x, hitBox.y, hitBox.width, hitBox.height);
+                shapeDebug.end();
                 batch.begin();
             }
         }
