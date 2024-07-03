@@ -194,7 +194,6 @@ public class WorldMap implements InputProcessor {
                             dPos.mul(isoTransform); // tiled coordinates are iso projected- unproject it for game world coordinates
                             portal.destX = (int) dPos.x;
                             portal.destY = (int) dPos.y;
-                            System.out.println(dPos);
                             portal.hitBox = rectangle;
                             EntityController.getInstance().entityWorldState[j][i].portal = portal;
                             break;

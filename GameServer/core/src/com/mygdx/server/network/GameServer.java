@@ -130,8 +130,12 @@ public class GameServer implements CmdReceiver {
                         case LOGOFF:
                             disconnected(c);
                             break;
+                        case TELEPORT_IN_FINISHED:
+                            character.state = GameRegister.EntityState.TELEPORTING_OUT;
+                            break;
                         case TELEPORT_FINISHED:
                             character.isTeleporting = false;
+                            character.state = GameRegister.EntityState.FREE;
                             break;
                         default:
                             Log.debug("game-server", "Received unknown response type message");

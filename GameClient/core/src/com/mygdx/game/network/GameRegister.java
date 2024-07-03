@@ -61,6 +61,7 @@ public class GameRegister {
         kryo.register(Wall.class);
         kryo.register(Rectangle.class);
         kryo.register(Teleport.class);
+        kryo.register(EntityState.class);
     }
 
     static public class Layer {
@@ -78,6 +79,7 @@ public class GameRegister {
         public enum Type{
             USER_ALREADY_LOGGED_IN,
             LOGOFF,
+            TELEPORT_IN_FINISHED,
             TELEPORT_FINISHED,
             DISCARD, // useless response
         }
@@ -98,6 +100,13 @@ public class GameRegister {
     static public class Register {
         public String name;
         public String otherStuff;
+    }
+
+    // contains information about entity states
+    public enum EntityState{
+        TELEPORTING_IN,
+        TELEPORTING_OUT,
+        FREE,
     }
 
     static public class UpdateCharacter {
@@ -148,6 +157,7 @@ public class GameRegister {
         public int id, role_level;
         public float x, y, speed;
         public boolean isTeleporting;
+        public EntityState state = EntityState.FREE;
     }
 
     public static class ClientId {

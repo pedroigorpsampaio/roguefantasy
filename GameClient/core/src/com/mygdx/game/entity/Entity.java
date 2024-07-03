@@ -53,7 +53,16 @@ public abstract class Entity implements Comparable<Entity> {
     public Rectangle hitBox = new Rectangle();
     public Vector2 drawPos = new Vector2(0,0); // position to draw this entity
     public int uId;
+    public GameRegister.EntityState state; // the server current state known of this entity
     public boolean isObfuscator = false; // if this entity is obfuscator it will be rendered transparent when on top of player
+    public boolean isTeleporting = false;
+    public boolean isAlive = true;
+    public boolean teleportInAnim = false;
+    public boolean teleportOutAnim = false;
+    public float alpha = 1f;
+    protected boolean fadeIn = false;
+    protected boolean fadeOut = false;
+    protected float fadeSpeed = 2f;
 
     /**
      * Checks if point hits this entity
@@ -63,6 +72,55 @@ public abstract class Entity implements Comparable<Entity> {
      */
     public boolean rayCast(Vector2 point) {
         return hitBox.contains(point);
+    }
+
+    /**
+     * Returns if this entity is unmovable (teleporting, dead or other state that should not be moved)
+     * @return  true if its unmovable, false otherwise
+     */
+    public boolean isUnmovable() {
+        return teleportInAnim || teleportOutAnim || fadeIn || fadeOut || !isAlive;
+    }
+
+    public void fadeIn(float fadeSpeed) {
+        if(fadeIn || fadeOut) return;
+
+        alpha = 0f;
+        fadeIn = true;
+        this.fadeSpeed = fadeSpeed;
+    }
+
+    public void fadeOut(float fadeSpeed) {
+        if(fadeIn || fadeOut) return;
+
+        alpha = 1f;
+        fadeOut = true;
+        this.fadeSpeed = fadeSpeed;
+    }
+
+    public void applyEffects(SpriteBatch batch) {
+        if(this.fadeIn) {
+            Color c = batch.getColor();
+            batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
+
+            alpha += fadeSpeed * Gdx.graphics.getDeltaTime();
+            if(alpha >= 1f) {
+                this.fadeIn = false;
+                alpha = 1f;
+            }
+        }
+        if(this.fadeOut) {
+            Color c = batch.getColor();
+            batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
+            alpha -= fadeSpeed * Gdx.graphics.getDeltaTime();
+            if (alpha <= 0f) {
+                this.fadeOut = false;
+                // remove from lists
+                EntityController.getInstance().entities.remove(uId); // remove from list of entities to draw
+                GameClient.getInstance().removeEntity(uId); // remove from data list of entities
+                alpha = 0f;
+            }
+        }
     }
 
     public enum Direction {
@@ -162,17 +220,13 @@ public abstract class Entity implements Comparable<Entity> {
         public Direction direction;
         public float x, y, speed, spriteW, spriteH;
         public TypingLabel nameLabel, outlineLabel;
-        private Vector2 centerPos;
+        private Vector2 centerPos = new Vector2();
         private Vector2 startPos; // used for interpolation
         public ConcurrentSkipListMap<Long, Vector2> bufferedPos;
         private Map.Entry<Long, Vector2> oldestEntry;
         public CopyOnWriteArrayList<EntityInterPos> buffer = new CopyOnWriteArrayList<>();
         private Vector2 goalPos;
         private float tIntElapsed;
-        public boolean isTeleporting = false;
-        public boolean isAlive = true;
-        public boolean teleportInAnim = false;
-        public boolean teleportOutAnim = false;
 
         @Override
         public int compareTo(Entity entity) {
@@ -192,14 +246,6 @@ public abstract class Entity implements Comparable<Entity> {
                 return -1;
             else
                 return 1;
-        }
-
-        /**
-         * Returns if this character is unmovable (teleporting, dead or other state that player should not be moved)
-         * @return  true if its unmovable, false otherwise
-         */
-        public boolean isUnmovable() {
-            return teleportInAnim || teleportOutAnim || !isAlive;
         }
 
         public static class EntityInterPos {
@@ -407,6 +453,10 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         public void teleport(float x, float y) {
+            if(!teleportInAnim) { // server detected collision and sent it before client (can happen on low latencies)
+                isTeleporting = true;
+                teleportInAnim = true;
+            }
             new Thread(() -> {
                 while (this.teleportInAnim) { // wait until teleport in animation to end to update to destination
                     try {
@@ -415,12 +465,14 @@ public abstract class Entity implements Comparable<Entity> {
                         throw new RuntimeException(e);
                     }
                 }
+                GameClient.getInstance().sendResponse(new GameRegister.Response(GameRegister.Response.Type.TELEPORT_IN_FINISHED));
                 this.interPos.x = x;
                 this.interPos.y = y;
                 this.drawPos = new Vector2(x, y);
                 this.position.x = x;
                 this.position.y = y;
                 //this.collider.setPosition(x, y);
+                this.updateStage(x, y, true);
                 this.x = x;
                 this.y = y;
                 centerPos.x = this.interPos.x + spriteW / 2f;
@@ -428,8 +480,6 @@ public abstract class Entity implements Comparable<Entity> {
                 nameLabel.setBounds(this.centerPos.x - nameLabel.getWidth() / 2f,
                         this.centerPos.y + spriteH / 2f,
                         nameLabel.getWidth(), nameLabel.getHeight());
-                this.isTeleporting = false; // finished teleporting
-                GameClient.getInstance().sendResponse(new GameRegister.Response(GameRegister.Response.Type.TELEPORT_FINISHED));
             }).start();
         }
 
@@ -449,18 +499,14 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         // updates stage and positions
-        private void updateStage(float x, float y, boolean interpolation) {
+        public void updateStage(float x, float y, boolean interpolation) {
             if(interpolation) {
                 this.interPos.x = x;
                 this.interPos.y = y;
                 this.drawPos = new Vector2(x, y);
-                // check for walkable actions
-                //triggerWalkableActions();
             } else {
                 this.x = x;
                 this.y = y;
-                // check for walkable actions
-                //triggerWalkableActions();
             }
             centerPos.x = this.interPos.x + spriteW/2f;
             centerPos.y = this.interPos.y + spriteH/2f;
@@ -494,13 +540,17 @@ public abstract class Entity implements Comparable<Entity> {
             triggerWalkableActions();
         }
 
+        // predict walkable actions for client
         private void triggerWalkableActions() {
             // check for portal collisions
             for(Rectangle portal : WorldMap.portals) {
                 if (Common.intersects(collider, portal)) {
-                    System.out.println("im here and collided");
-                    this.isTeleporting = true;
-                    this.teleportInAnim = true;
+                    position.x = portal.x - portal.width;
+                    position.y = portal.y - portal.height/2f;
+                    if(!this.isTeleporting) {
+                        this.isTeleporting = true;
+                        this.teleportInAnim = true;
+                    }
                 }
             }
         }
@@ -603,7 +653,6 @@ public abstract class Entity implements Comparable<Entity> {
 
         }
 
-        float alpha = 1f;
         @Override
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
@@ -622,28 +671,44 @@ public abstract class Entity implements Comparable<Entity> {
                 currentAnimation = idle;
             }
 
+            if(isUnmovable()) currentAnimation = idle;
+
             // animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
 
-            // if its in teleport in animation, fade out player
-            if(teleportInAnim) {
-                Color c = batch.getColor();
-                batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
-                alpha -= 1f * Gdx.graphics.getDeltaTime();
-                if(alpha <= 0.15f) {
-                    teleportInAnim = false;
-                    teleportOutAnim = true;
-                    alpha = 0.15f;
+            // if its in teleport in animation, deal with fade animation since client never is removed from AoI
+            if(GameClient.getInstance().getClientCharacter().id == this.id) {
+                if (teleportInAnim) {
+                    Color c = batch.getColor();
+                    batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
+                    alpha -= 0.8f * Gdx.graphics.getDeltaTime();
+                    if (alpha <= 0.15f) {
+                        alpha = 0.15f;
+                        teleportInAnim = false;
+                        teleportOutAnim = true;
+                    }
+                }
+
+                if (teleportOutAnim) { // if its in teleport out animation, fade in player
+                    Color c = batch.getColor();
+                    batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
+                    alpha += 0.8f * Gdx.graphics.getDeltaTime();
+                    if (alpha >= 1.0f) { // give a lil bit of delay to discard unwanted lagged movements
+                        teleportOutAnim = false;
+                        alpha = 1f;
+                        Timer timer=new Timer();
+                        timer.scheduleTask(new Timer.Task() {
+                            @Override
+                            public void run() {
+                                isTeleporting = false; // finished teleporting - inform server
+                                GameClient.getInstance().sendResponse(new GameRegister.Response(GameRegister.Response.Type.TELEPORT_FINISHED));
+                            }
+                        },0.5f); // delay flag and server response, to be discard unwanted lagged movements
+
+                    }
                 }
             }
-            if(teleportOutAnim) { // if its in teleport out animation, fade in player
-                Color c = batch.getColor();
-                batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
-                alpha += 1f * Gdx.graphics.getDeltaTime();
-                if(alpha >= 1f) {
-                    teleportOutAnim = false;
-                    alpha = 1f;
-                }
-            }
+
+            applyEffects(batch); // apply entity effects before drawing
 
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
@@ -665,10 +730,10 @@ public abstract class Entity implements Comparable<Entity> {
 
             // updates collider
             collider = new Polygon(new float[]{
-                    cPos.x, cPos.y-rectOffsetDown*0.25f, // down
-                    cPos.x-rectOffsetLeft*0.5f, cPos.y, // left
+                    cPos.x, cPos.y-rectOffsetDown*0.15f, // down
+                    cPos.x-rectOffsetLeft*0.4f, cPos.y, // left
                     cPos.x, cPos.y+rectOffsetUp*0.75f, // up
-                    cPos.x+rectOffsetRight*0.5f, cPos.y}); // right
+                    cPos.x+rectOffsetRight*0.4f, cPos.y}); // right
 
             if(CommonUI.debugTex) {
 //                Vector2 tPosDown = new Vector2(drawPos.x, drawPos.y-rectOffsetDown);
@@ -682,13 +747,6 @@ public abstract class Entity implements Comparable<Entity> {
 //                batch.draw(debugTex, tPosRight.x, tPosRight.y, 2 * unitScale, 2 * unitScale);
             }
 
-            batch.end();
-            shapeDebug.setProjectionMatrix(camera.combined);
-            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
-            shapeDebug.setColor(Color.YELLOW);
-            shapeDebug.polygon(collider.getTransformedVertices());
-            shapeDebug.end();
-            batch.begin();
 
             // renders player tag
             nameLabel.getFont().scale(tagScale, tagScale);
@@ -698,16 +756,24 @@ public abstract class Entity implements Comparable<Entity> {
             outlineLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/1.75f)-tagScale, this.centerPos.y + spriteH/2f + 8f-tagScale,
                     nameLabel.getWidth() +tagScale, nameLabel.getHeight()+tagScale);
 
-            outlineLabel.draw(batch, 1.0f);
-            nameLabel.draw(batch, 1.0f);
+            float fontAlpha = alpha;
+            if(alpha>1.0f) fontAlpha = 1.0f;
+            outlineLabel.draw(batch, fontAlpha);
+            nameLabel.draw(batch, fontAlpha);
 
             nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
 
-            // resets alpha for correct rendering of other entities
-            if(teleportInAnim || teleportOutAnim) {
-                Color c = batch.getColor();
-                batch.setColor(c.r, c.g, c.b, 1f);//set alpha back to 1
-            }
+            batch.end();
+            shapeDebug.setProjectionMatrix(camera.combined);
+            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+            shapeDebug.setColor(Color.YELLOW);
+            shapeDebug.polygon(collider.getTransformedVertices());
+            shapeDebug.end();
+            batch.begin();
+
+            // resets batch alpha for further rendering
+            Color c = batch.getColor();
+            batch.setColor(c.r, c.g, c.b, 1f);//set alpha back to 1
         }
 
         // interpolates stage assets to player current position
@@ -717,21 +783,27 @@ public abstract class Entity implements Comparable<Entity> {
             if(interPos.dst(position) == 0f) return; // nothing to interpolate
             if(isClient && GameClient.getInstance().isPredictingRecon.get()) return;
 
-//            if(!isClient) System.out.println(teleportInAnim);
-            // if its teleporting update to position if its not player
-//            if(!isClient && teleportInAnim) {
-//                return;
-//            }
-            if(!isClient && isTeleporting && teleportOutAnim) {
+            if (teleportOutAnim) {
                 updateStage(position.x, position.y, true);
                 return;
+            }
+
+            if(!isClient) {
+                if (fadeIn)
+                    return;
+                if (fadeOut) {
+                    updateStage(position.x, position.y, true);
+                    return;
+                }
             }
 
             float speedFactor = speed*Gdx.graphics.getDeltaTime();
             //if(!isClient)
             speedFactor *= 0.98573f;
 
-            if(interPos.dst(position) <= speedFactor) { // updates to players position if its close enough
+            float dist = interPos.dst(position);
+
+            if(dist <= speedFactor || dist >= 2f) { // updates to players position if its close enough or too far away
                 updateStage(position.x, position.y, true);
                 return;
             } // if not, interpolate
@@ -827,6 +899,8 @@ public abstract class Entity implements Comparable<Entity> {
             float tileHeight = TEX_HEIGHT * unitScale;
             float halfTileHeight = tileHeight * 0.5f;
 
+            applyEffects(batch); // apply entity effects before drawing
+
             batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight*1.38f,
                     tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor, tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
             if(CommonUI.debugTex) {
@@ -839,6 +913,10 @@ public abstract class Entity implements Comparable<Entity> {
                 shapeDebug.end();
                 batch.begin();
             }
+
+            // resets batch alpha for further rendering
+            Color c = batch.getColor();
+            batch.setColor(c.r, c.g, c.b, 1f);//set alpha back to 1
         }
 
         @Override
@@ -1089,6 +1167,8 @@ public abstract class Entity implements Comparable<Entity> {
                 direction = Direction.getDirection(Math.round(dir.x), Math.round(dir.y));
             }
 
+            applyEffects(batch); // apply entity effects before drawing
+
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
 
@@ -1115,6 +1195,10 @@ public abstract class Entity implements Comparable<Entity> {
             nameLabel.draw(batch, 1.0f);
 
             nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
+
+            // resets batch alpha for further rendering
+            Color c = batch.getColor();
+            batch.setColor(c.r, c.g, c.b, 1f);//set alpha back to 1
         }
 
         // interpolates inbetween position vector

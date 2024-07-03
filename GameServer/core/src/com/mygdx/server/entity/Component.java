@@ -75,7 +75,8 @@ public class Component {
         public Component.Position position;
         public Vector2 lastTilePos = null;
         public GameServer.CharacterConnection connection = null;
-        Output lastState = null;
+        public GameRegister.EntityState state = GameRegister.EntityState.FREE;
+        private Output lastState = null;
         public boolean isTeleporting = false;
 
         /**
@@ -104,6 +105,7 @@ public class Component {
             update.character.name = tag.name;
             update.character.speed = attr.speed;
             update.character.role_level = role_level;
+            update.character.state = state;
             update.dir = dir;
             update.lastRequestId = lastMoveId;
             update.character.isTeleporting = isTeleporting;
@@ -118,6 +120,7 @@ public class Component {
             isTeleporting = true;
             this.position.x = destination.x;
             this.position.y = destination.y;
+            state = GameRegister.EntityState.TELEPORTING_IN;
             // update position in 2d array
             updatePositionIn2dArray();
             // check for actions on current tile (actions that get triggered by walking on it)
@@ -166,9 +169,9 @@ public class Component {
             if(position.lastTilePos.y-1 >= 0)
                 tiles.add(EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x][(int) position.lastTilePos.y-1]);
 
-            Vector2 centerPos = new Vector2();
-            centerPos.x = this.position.x + this.attr.width/2f + this.attr.width/15f;
-            centerPos.y = this.position.y + this.attr.height/12f + this.attr.height/18f;
+            Vector2 cPos = new Vector2();
+            cPos.x = this.position.x + this.attr.width/2f + this.attr.width/15f;
+            cPos.y = this.position.y + this.attr.height/12f + this.attr.height/18f;
 
 //            Vector2 tPosDown = new Vector2(centerPos.x, centerPos.y-rectOffsetDown*0.25f);
 //            Vector2 tPosUp = new Vector2(centerPos.x, centerPos.y+rectOffsetUp*0.75f);
@@ -176,18 +179,16 @@ public class Component {
 //            Vector2 tPosRight = new Vector2(centerPos.x+rectOffsetRight*0.5f, centerPos.y);
 
             Polygon playerIsoBox = new Polygon(new float[]{
-                    centerPos.x, centerPos.y-rectOffsetDown*0.25f, // down
-                    centerPos.x-rectOffsetLeft*0.5f, centerPos.y, // left
-                    centerPos.x, centerPos.y+rectOffsetUp*0.75f, // up
-                    centerPos.x+rectOffsetRight*0.5f, centerPos.y}); // right
+                    cPos.x, cPos.y-rectOffsetDown*0.15f, // down
+                    cPos.x-rectOffsetLeft*0.4f, cPos.y, // left
+                    cPos.x, cPos.y+rectOffsetUp*0.75f, // up
+                    cPos.x+rectOffsetRight*0.4f, cPos.y}); // right
 
             for(Tile tile : tiles) {
                 if (tile.portal != null) { // if there is a portal in this tile, check if it collides with it
-                    System.out.println(Common.intersects(playerIsoBox, tile.portal.hitBox));
                     if(Common.intersects(playerIsoBox, tile.portal.hitBox)) {
-                        teleport(new Vector2(tile.portal.destX, tile.portal.destY));
-                        System.out.println(new Vector2(tile.portal.destX, tile.portal.destY));
-                        GameServer.getInstance().teleport(this);
+                        teleport(new Vector2(tile.portal.destX, tile.portal.destY)); // teleports in world
+                        GameServer.getInstance().teleport(this); // sends teleport msg to connection
                     }
                 }
             }
@@ -409,6 +410,8 @@ public class Component {
             this.lastMoveId = 0;
             this.lastTilePos = null;
             this.lastState = null;
+            this.state = GameRegister.EntityState.FREE;
+            this.isTeleporting = false;
         }
 
         public boolean compareStates(GameRegister.UpdateState state) {

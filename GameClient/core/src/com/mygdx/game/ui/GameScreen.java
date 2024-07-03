@@ -285,6 +285,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         // if player is unmovable return
         if(player.isUnmovable()) return;
+        if(player.isTeleporting) {
+            return;
+        }
 
         GameRegister.MoveCharacter msg = new GameRegister.MoveCharacter();
         msg.x = movement.x;

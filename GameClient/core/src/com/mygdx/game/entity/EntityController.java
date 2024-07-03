@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.utils.Timer;
 import com.mygdx.game.network.GameClient;
 
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Class that deals with world entities
@@ -28,7 +30,7 @@ public class EntityController {
 
     public ConcurrentSkipListMap<Integer, Entity> entities; // list (thread-safe) containing entities to be drawn
     private int lastUid;
-    public ArrayList<Integer> lastAoIEntities;  // list of last entities UiDs received in last state
+    public CopyOnWriteArrayList<Integer> lastAoIEntities;  // list of last entities UiDs received in last state
 
     public static EntityController getInstance() {
         if(instance == null)
@@ -39,7 +41,7 @@ public class EntityController {
     private EntityController() {
         //entities = new ConcurrentSkipListSet<>(new EntityIsoSorter());
         entities = new ConcurrentSkipListMap<>();
-        lastAoIEntities = new ArrayList<>();
+        lastAoIEntities = new CopyOnWriteArrayList<>();
         lastUid = 0; // starts unique ids at 0
     }
 
@@ -128,12 +130,13 @@ public class EntityController {
                 Entity entity = itr.next().getValue();
                 if(entity.uId == GameClient.getInstance().getClientUid()) continue; // no point in removing client entity from drawing list of entities
                 if(!lastAoIEntities.contains(entity.uId)) { // remove entity from lists if has not been in last AoI state update
-                    itr.remove(); // remove from list of entities to draw
-                    GameClient.getInstance().removeEntity(entity.uId); // remove from data list of entities
+                    if(!entity.fadeOut)
+                        entity.fadeOut(5f); // fades out and let it handle the removing when alpha is low enough
                 }
             }
         }
     }
+
 
     /**
      * Sorter that sorts based on isometric world

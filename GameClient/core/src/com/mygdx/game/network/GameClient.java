@@ -297,6 +297,7 @@ public class GameClient extends DispatchServer {
 
         public void updateState(GameRegister.UpdateState state) {
             //System.out.println("creatures:" + state.creatureUpdates.size() + " / chars: " + state.characterUpdates.size());
+            boolean teleportingClient = false;
 
             if(state.tileLayers != null) {
                 WorldMap.layers = state.tileLayers;
@@ -316,6 +317,9 @@ public class GameClient extends DispatchServer {
                     updateCharacter(charUpdate);
                     Entity.Character character = characters.get(charUpdate.character.id);
                     EntityController.getInstance().lastAoIEntities.add(character.uId);
+                    if(charUpdate.character.id == instance.clientCharId
+                        && charUpdate.character.isTeleporting)
+                        teleportingClient = true;
                 }
             }
             if(state.creatureUpdates != null) { // there are game creature updates
@@ -328,21 +332,24 @@ public class GameClient extends DispatchServer {
             if(state.portal != null) // list of visible portals
                 WorldMap.portals = state.portal;
 
-            EntityController.getInstance().removeOutOfAoIEntities(); // removes entities not in AoI
-
             // sets flag to inform that first update was processed
             if(!instance.firstStateProcessed)
                 instance.firstStateProcessed = true;
 
             // clears list of entities received in the last state (only if player is not teleporting atm)
-            if(instance.getClientCharacter() != null && !instance.getClientCharacter().isTeleporting)
+            if(instance.getClientCharacter() != null && !instance.getClientCharacter().isTeleporting
+            && !teleportingClient && !instance.getClientCharacter().teleportInAnim &&
+                    !instance.getClientCharacter().teleportOutAnim) {
+                EntityController.getInstance().removeOutOfAoIEntities(); // removes entities not in AoI
                 EntityController.getInstance().lastAoIEntities.clear();
+            }
         }
 
         private void updateWall(GameRegister.Wall wallUpdate) {
             Entity.Wall wall = null;
             if(!walls.containsKey(wallUpdate.wallId)) {
                 wall = Entity.Wall.toWall(wallUpdate);
+                wall.fadeIn(10f);
                 walls.put(wallUpdate.wallId, wall);
                 EntityController.getInstance().entities.put(wall.uId, wall); // put on list of entities (which will manage if its visible or not)
             }
@@ -356,6 +363,7 @@ public class GameClient extends DispatchServer {
             Entity.Creature creature = null;
             if(!creatures.containsKey(creatureUpdate.spawnId)) { // if creature spawn is not in client list, create and add it
                 creature = Entity.Creature.toCreature(creatureUpdate);
+                creature.fadeIn(2.5f);
                 creatures.put(creatureUpdate.spawnId, creature);
                 EntityController.getInstance().entities.put(creature.uId, creature); // put on list of entities (which will manage if its visible or not)
             } else { // if its already on list, get it to update it
@@ -390,6 +398,7 @@ public class GameClient extends DispatchServer {
 
             if(!characters.containsKey(msg.character.id)) { // if character is not in client list, create and add it
                 character = Entity.Character.toCharacter(msg.character);
+                character.fadeIn(2.5f);
                 characters.put(msg.character.id, character);
                 //System.out.println("second add to draw list: " + character.uId + " / " + character.name + " / " + character.drawPos);
                 EntityController.getInstance().entities.put(character.uId, character); // put on list of entities (which will manage if its visible or not)
@@ -401,30 +410,23 @@ public class GameClient extends DispatchServer {
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
             }
 
-            // if its teleporting and not client, set teleport flags and proceeds with the teleportation
-            if(msg.character.id != instance.clientCharId) {
-                if (msg.character.isTeleporting) {
-                    character.isTeleporting = true;
-                    character.teleportInAnim = true;
-                    GameRegister.Teleport tp = new GameRegister.Teleport();
-                    tp.x = msg.character.x;
-                    tp.y = msg.character.y;
-                    teleportCharacter(character, tp);
-                } else {
-                    character.teleportInAnim = false;
-                    character.isTeleporting = false;
-                }
-            }
+            character.state = msg.character.state;
 
-            // if character is unmovable return (position will be updated again when is movable again)
-            if(character.isUnmovable()) return;
+            //if(GameClient.getInstance().clientCharId != msg.character.id) {
 
             // updates direction if its other player
-            if(GameClient.getInstance().clientCharId != msg.character.id)
+            if(GameClient.getInstance().clientCharId != msg.character.id) {
                 character.direction = Entity.Direction.getDirection(MathUtils.round(msg.dir.x), MathUtils.round(msg.dir.y));
+            }
 
             // updates attributes
             character.updateSpeed(msg.character.speed);
+
+            // if its client, discard movements while teleporting (disposable late prediction packets)
+            if(GameClient.getInstance().clientCharId == msg.character.id && character.isTeleporting) return;
+
+            // if character is unmovable return (position will be updated again when is movable again)
+            if(character.isUnmovable()) return;
 
             // if there is no change in pos, ignore movement
             if(character.x - msg.character.x == 0 && character.y - msg.character.y == 0) return;

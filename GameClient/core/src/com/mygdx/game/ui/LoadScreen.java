@@ -261,7 +261,9 @@ public class LoadScreen implements Screen {
             } else if(screen.equals("game")) {
                 GameClient gameClient = GameClient.getInstance(); // gets gameclient instance
                 GameScreen gameScreen = new GameScreen(manager, gameClient);
-                gameClient.connect(decryptedToken); // connects gameclient with server
+                new Thread(() -> {
+                    gameClient.connect(decryptedToken); // connects gameclient with server
+                }).start();
                 while(gameClient.getClientCharacter() == null);
                 game.setScreen(gameScreen);
             }
