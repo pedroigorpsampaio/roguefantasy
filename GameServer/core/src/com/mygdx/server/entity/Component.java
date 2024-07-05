@@ -390,8 +390,11 @@ public class Component {
                                 if(EntityController.getInstance().entityWorldState[col][row].wall != null) { // add wall as wall update for client that treats it as entity
                                     state.wallUpdates.add(EntityController.getInstance().entityWorldState[col][row].wall);
                                 }
-                                if(EntityController.getInstance().entityWorldState[col][row].portal != null) { // add portal for debug
+                                if(EntityController.getInstance().entityWorldState[col][row].portal != null) { // add portal
                                     state.portal.add(EntityController.getInstance().entityWorldState[col][row].portal.hitBox);
+                                }
+                                if(EntityController.getInstance().entityWorldState[col][row].tree != null) { // add tree
+                                    state.trees.add(EntityController.getInstance().entityWorldState[col][row].tree);
                                 }
                             }
                         }
@@ -565,7 +568,7 @@ public class Component {
     }
 
     public static class Spawn {
-        public long id; // spawn id
+        public int id; // spawn id
         public Position position; // spawn position
         public float respawnTime; // time between respawns in seconds
 

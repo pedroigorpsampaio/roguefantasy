@@ -10,6 +10,7 @@ import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Timer;
 import com.mygdx.game.network.GameClient;
+import com.mygdx.game.ui.GameScreen;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -55,6 +56,7 @@ public class EntityController {
         if(GameClient.getInstance().getClientCharacter() == null) return; // client player not loaded
 
         boolean isPlayerOfuscated = false;
+        boolean foundHoverEntity = false;
 
         // creates a sorted list version of entities and iterates it to draw in correct order
         synchronized (entities) {
@@ -63,22 +65,33 @@ public class EntityController {
 
                 if(GameClient.getInstance().getClientCharacter() == null) break;
 
-                // check if its a entity that can obfuscate player and change transparency accordingly
-                Vector2 drawPos = GameClient.getInstance().getClientCharacter().drawPos;
-                Vector2 drawPosLeft = new Vector2(drawPos.x-rectOffsetLeft*0.75f, drawPos.y);
-                Vector2 drawPosRight = new Vector2(drawPos.x+rectOffsetRight*0.75f, drawPos.y);
-                boolean hit =  e.rayCast(drawPos) ||  e.rayCast(drawPosLeft) ||  e.rayCast(drawPosRight);
-                boolean obfuscatesPlayer = hit && e.isObfuscator ;
+                boolean obfuscateHit = false;
 
-                if (obfuscatesPlayer) {
-                    Color c = batch.getColor();
-                    batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
-                    isPlayerOfuscated = true;
+                if(e.isObfuscator) {
+                    // check if its a entity that can obfuscate player and change transparency accordingly
+                    Vector2 drawPos = GameClient.getInstance().getClientCharacter().drawPos;
+                    Vector2 drawPosLeft = new Vector2(drawPos.x - rectOffsetLeft * 0.75f, drawPos.y);
+                    Vector2 drawPosRight = new Vector2(drawPos.x + rectOffsetRight * 0.75f, drawPos.y);
+                    obfuscateHit = e.rayCast(drawPos) || e.rayCast(drawPosLeft) || e.rayCast(drawPosRight);
+
+                    if (obfuscateHit) {
+                        Color c = batch.getColor();
+                        batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
+                        isPlayerOfuscated = true;
+                    }
+                }
+
+                if(e.isInteractive) {
+                    boolean mouseHit = e.rayCast(GameScreen.unprojectedMouse);
+                    if(mouseHit) {
+                        foundHoverEntity = true;
+                        WorldMap.hoverEntity = e;
+                    }
                 }
 
                 e.render(batch);
 
-                if(obfuscatesPlayer) {
+                if(obfuscateHit) {
                     Color c = batch.getColor();
                     batch.setColor(c.r, c.g, c.b, 1f);//set alpha back to 1
                     alpha -= 1f * Gdx.graphics.getDeltaTime();
@@ -89,6 +102,8 @@ public class EntityController {
         }
         if(!isPlayerOfuscated)
             alpha = 1.0f;
+        if(!foundHoverEntity)
+            WorldMap.hoverEntity = null;
     }
 
     /**

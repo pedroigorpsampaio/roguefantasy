@@ -26,8 +26,9 @@ class Tile {
     Map<Integer, Component.Character> characters; // map of characters of this tile
     GameRegister.Wall wall; //  if there is a wall on this tile (walls are treated as entities to render them in order client-side)
     WorldMap.Portal portal; // if there is a portal on this tile, will act accordingly
+    GameRegister.Tree tree; // if there is a tree on this tile
 
-    public Tile() {entities = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>(); wall = null; portal = null;}
+    public Tile() {entities = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>(); wall = null; portal = null; tree = null;}
 }
 
 public class EntityController {

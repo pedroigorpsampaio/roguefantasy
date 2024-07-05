@@ -56,6 +56,7 @@ public class WorldMap {
     public static int tileOffsetX=0,tileOffsetY=0;
     private TiledMap map;
     private SpriteBatch batch;
+    public static Entity hoverEntity = null; // current entity mouse is hovering on
     public static float WORLD_WIDTH, WORLD_HEIGHT;
     public static int TILES_WIDTH = 1000, TILES_HEIGHT = 1000, TEX_WIDTH = 32, TEX_HEIGHT = 16; // in agreement with server map
     public final static float edgeFactor = 1.0605f; // min value that prevents tiles from edge bleeding with linear filter in texture
@@ -246,6 +247,38 @@ public class WorldMap {
             Iterator<Map.Entry<Integer, Entity.Wall>> iterator = GameClient.getInstance().getWalls().entrySet().iterator();
             while (iterator.hasNext()) {
                 Map.Entry<Integer, Entity.Wall> entry = iterator.next();
+                if(entry.getValue().tileX == (int)tPosDown.x &&
+                        entry.getValue().tileY == (int)tPosDown.y) {
+                    if(!entry.getValue().isWalkable)
+                        return false;
+                }
+                if(entry.getValue().tileX == (int)tPosUp.x &&
+                        entry.getValue().tileY == (int)tPosUp.y) {
+                    if(!entry.getValue().isWalkable)
+                        return false;
+                }
+                if(entry.getValue().tileX == (int)tPosCenter.x &&
+                        entry.getValue().tileY == (int)tPosCenter.y) {
+                    if(!entry.getValue().isWalkable)
+                        return false;
+                }
+                if(entry.getValue().tileX == (int)tPosLeft.x &&
+                        entry.getValue().tileY == (int)tPosLeft.y) {
+                    if(!entry.getValue().isWalkable)
+                        return false;
+                }
+                if(entry.getValue().tileX == (int)tPosRight.x &&
+                        entry.getValue().tileY == (int)tPosRight.y) {
+                    if(!entry.getValue().isWalkable)
+                        return false;
+                }
+            }
+        }
+        // check if there is a tree on tile
+        synchronized (GameClient.getInstance().getTrees()) {
+            Iterator<Map.Entry<Integer, Entity.Tree>> iterator = GameClient.getInstance().getTrees().entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<Integer, Entity.Tree> entry = iterator.next();
                 if(entry.getValue().tileX == (int)tPosDown.x &&
                         entry.getValue().tileY == (int)tPosDown.y) {
                     if(!entry.getValue().isWalkable)

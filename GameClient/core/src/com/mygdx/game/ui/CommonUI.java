@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
 
 // Common UI methods that help different UI modules
 public class CommonUI {
-    public final static boolean debugTex = false;
+    public static boolean enableDebugTex = false;
 
     // creates a dialog from the parameters provided
     public static Dialog createDialog(Stage stage, Skin skin, I18NBundle langBundle,

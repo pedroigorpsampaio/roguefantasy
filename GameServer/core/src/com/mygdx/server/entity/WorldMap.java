@@ -38,6 +38,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.MapLayer;
 import com.badlogic.gdx.maps.MapObject;
+import com.badlogic.gdx.maps.objects.PolygonMapObject;
 import com.badlogic.gdx.maps.objects.RectangleMapObject;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
@@ -48,6 +49,7 @@ import com.badlogic.gdx.maps.tiled.renderers.IsometricTiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.tiles.AnimatedTiledMapTile;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
@@ -71,14 +73,15 @@ import dev.dominion.ecs.api.Entity;
  * control the 2D array containing world map logic
  */
 public class WorldMap implements InputProcessor {
-    private final OrthographicCamera cam;
-    private final Kryo kryo;
-    private final ByteArrayOutputStream bos;
+    private OrthographicCamera cam;
+    private Kryo kryo;
+    private ByteArrayOutputStream bos;
+    private static WorldMap instance = null;
     private Random rand;
     private TiledMapTileLayer layerCut;
-    private final Matrix4 isoTransform;
-    private final Matrix4 invIsotransform;
-    private final float unitScale;
+    private Matrix4 isoTransform;
+    private Matrix4 invIsotransform;
+    private float unitScale;
     private IsometricTiledMapRenderer renderer;
     public static float WORLD_WIDTH, WORLD_HEIGHT;
     public static int TILES_WIDTH, TILES_HEIGHT, TEX_WIDTH, TEX_HEIGHT;
@@ -91,8 +94,11 @@ public class WorldMap implements InputProcessor {
     private Component.Character spectatee; // the spectatee to watch for debug from server view
     private ArrayList<TiledMapTileLayer> cutLayers; // the spliced map layers containing only in view tiles to player
 
-    // constructor loads map from file and prepares the vars for controlling world state
-    public WorldMap(String fileName, SpriteBatch batch) {
+    private WorldMap() {
+
+    }
+    // loads map from file and prepares the vars for controlling world state
+    public void init(String fileName, SpriteBatch batch) {
         Log.info("game-server", "Loading world map...");
         map = new TmxMapLoader().load(fileName);
         this.batch = batch;
@@ -142,8 +148,14 @@ public class WorldMap implements InputProcessor {
         invIsotransform.inv();
 
         TiledMapTileLayer entityLayer =  (TiledMapTileLayer) map.getLayers().get(2);
-        loadWallsAsEntities(entityLayer); // loads entity layer of floor
+        loadEntityLayer(entityLayer); // loads entity layer of floor
         loadObjects(map.getLayers().get(3)); // loads object layer of floor
+    }
+
+    public static WorldMap getInstance() {
+        if(instance == null)
+            instance = new WorldMap();
+        return instance;
     }
 
     /**
@@ -235,25 +247,52 @@ public class WorldMap implements InputProcessor {
     }
 
     /**
-     * Loads walls creating wall entities with wall id, tile id and position in world 2d array
-     * to send to clients that treats them as entities to render in correct order
+     * Loads entity layer of map containing walls, trees and other map entities into world 2d array
+     * to send to clients that treats them as usual entities to render in correct order
      *
      * @param layer   the entity layer of the floor
      */
-    private void loadWallsAsEntities(TiledMapTileLayer layer) {
-        int wallId = 0;
+    private void loadEntityLayer(TiledMapTileLayer layer) {
+        int wallSpawnId = 0, treeSpawnId = 0;
         if (layer.getProperties().get("entity_layer", Boolean.class)) {
             for(int i = 0; i < layer.getHeight(); i++) {
                 for (int j = 0; j < layer.getWidth(); j++) {
                     final TiledMapTileLayer.Cell cell = layer.getCell(j, i);
 
-                    if(cell != null) {
-                        GameRegister.Wall wall = new GameRegister.Wall();
-                        wall.wallId = wallId;
-                        wall.tileId = cell.getTile().getId();
-                        wall.tileX = j; wall.tileY = i;
-                        EntityController.getInstance().entityWorldState[j][i].wall = wall;
-                        wallId++;
+                    if(cell != null && cell.getTile() != null) {
+                        String type = cell.getTile().getProperties().get("type", String.class);
+                        switch(type) {
+                            case "tree":
+                                GameRegister.Tree tree = new GameRegister.Tree();
+                                tree.health = 100f; // initial health
+                                tree.tileId = cell.getTile().getId();
+                                tree.treeId = cell.getTile().getProperties().get("tree_id", Integer.class);
+                                tree.tileX = j; tree.tileY = i;
+                                tree.spawnId = treeSpawnId;
+                                for(MapObject object : cell.getTile().getObjects()) {
+                                    if (object instanceof PolygonMapObject) {
+                                        Polygon polygon = ((PolygonMapObject)object).getPolygon();
+                                        // adjusting tiled tree template
+                                        polygon.setPosition(.32f,.01f);
+                                        polygon.setOrigin(0, 0);
+                                        polygon.setScale(unitScale*1.02f, unitScale*1.05f);
+                                        // set hitbox vertices to send to players
+                                        tree.hitBox = polygon.getTransformedVertices();
+                                    }
+                                }
+                                EntityController.getInstance().entityWorldState[j][i].tree = tree;
+                                treeSpawnId++;
+                                break;
+                            default:
+                                GameRegister.Wall wall = new GameRegister.Wall();
+                                wall.wallId = wallSpawnId;
+                                wall.tileId = cell.getTile().getId();
+                                wall.tileX = j; wall.tileY = i;
+                                EntityController.getInstance().entityWorldState[j][i].wall = wall;
+                                wallSpawnId++;
+                                break;
+                        }
+
                     }
                 }
             }
@@ -402,33 +441,33 @@ public class WorldMap implements InputProcessor {
             return false;
 
         TiledMapTileLayer wallLayer =  (TiledMapTileLayer) map.getLayers().get(2); // gets wall layer
-        final TiledMapTileLayer.Cell cell = wallLayer.getCell((int)tPos.x, (int)tPos.y); // gets cells to check if it has unwalkable wall
-        final TiledMapTileLayer.Cell cellUp = wallLayer.getCell((int)tPosDown.x, (int)tPosDown.y); // gets cell to check if it has unwalkable wall
-        final TiledMapTileLayer.Cell cellDown = wallLayer.getCell((int)tPosUp.x, (int)tPosUp.y); // gets cell to check if it has unwalkable wall
-        final TiledMapTileLayer.Cell cellLeft = wallLayer.getCell((int)tPosLeft.x, (int)tPosLeft.y); // gets cell to check if it has unwalkable wall
-        final TiledMapTileLayer.Cell cellRight = wallLayer.getCell((int)tPosRight.x, (int)tPosRight.y); // gets cell to check if it has unwalkable wall
+        final TiledMapTileLayer.Cell cell = wallLayer.getCell((int)tPos.x, (int)tPos.y); // gets cells to check if it has unwalkable map entity
+        final TiledMapTileLayer.Cell cellUp = wallLayer.getCell((int)tPosDown.x, (int)tPosDown.y); // gets cell to check if it has unwalkable map entity
+        final TiledMapTileLayer.Cell cellDown = wallLayer.getCell((int)tPosUp.x, (int)tPosUp.y); // gets cell to check if it has unwalkable map entity
+        final TiledMapTileLayer.Cell cellLeft = wallLayer.getCell((int)tPosLeft.x, (int)tPosLeft.y); // gets cell to check if it has unwalkable map entity
+        final TiledMapTileLayer.Cell cellRight = wallLayer.getCell((int)tPosRight.x, (int)tPosRight.y); // gets cell to check if it has unwalkable map entity
 
-        if(cell != null && cell.getTile() != null) { // there is a wall here
+        if(cell != null && cell.getTile() != null) { // there is a map entity here
             if(!cell.getTile().getProperties().get("walkable", Boolean.class)) { // check if its walkable
                 return false;
             }
         }
-        if(cellUp != null && cellUp.getTile() != null) { // there is a wall here
+        if(cellUp != null && cellUp.getTile() != null) { // there is a map entity here
             if(!cellUp.getTile().getProperties().get("walkable", Boolean.class)) { // check if its walkable
                 return false;
             }
         }
-        if(cellDown != null && cellDown.getTile() != null) { // there is a wall here
+        if(cellDown != null && cellDown.getTile() != null) { // there is a map entity here
             if(!cellDown.getTile().getProperties().get("walkable", Boolean.class)) { // check if its walkable
                 return false;
             }
         }
-        if(cellLeft != null && cellLeft.getTile() != null) { // there is a wall here
+        if(cellLeft != null && cellLeft.getTile() != null) { // there is a map entity here
             if(!cellLeft.getTile().getProperties().get("walkable", Boolean.class)) { // check if its walkable
                 return false;
             }
         }
-        if(cellRight != null && cellRight.getTile() != null) { // there is a wall here
+        if(cellRight != null && cellRight.getTile() != null) { // there is a map entity here
             if(!cellRight.getTile().getProperties().get("walkable", Boolean.class)) { // check if its walkable
                 return false;
             }

@@ -22,6 +22,7 @@ import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.utils.Timer;
@@ -50,10 +51,13 @@ public abstract class Entity implements Comparable<Entity> {
     protected Texture debugTex; // for debug
     public static float tagScale = unitScale * 0.66f;
     static float rectOffsetUp = 0.2f, rectOffsetDown = 0.2f, rectOffsetLeft = 0.4f, rectOffsetRight = 0.4f;
-    public Rectangle hitBox = new Rectangle();
+    public Polygon hitBox = new Polygon();
     public Vector2 drawPos = new Vector2(0,0); // position to draw this entity
-    public int uId;
+    public int uId; // this entity unique id
+    public int contextId; // the id of this id in context, based on what type of entity it is
+    public Type type; // the type of this entity, specifying its child class
     public GameRegister.EntityState state; // the server current state known of this entity
+    public boolean isInteractive = false; // if this entity is interactive
     public boolean isObfuscator = false; // if this entity is obfuscator it will be rendered transparent when on top of player
     public boolean isTeleporting = false;
     public boolean isAlive = true;
@@ -72,6 +76,9 @@ public abstract class Entity implements Comparable<Entity> {
      */
     public boolean rayCast(Vector2 point) {
         return hitBox.contains(point);
+    }
+    public boolean rayCast(Vector3 point) {
+        return hitBox.contains(point.x, point.y);
     }
 
     /**
@@ -121,6 +128,14 @@ public abstract class Entity implements Comparable<Entity> {
                 alpha = 0f;
             }
         }
+    }
+
+    public enum Type {
+        CREATURE,
+        NPC,
+        WALL,
+        TREE,
+        CHARACTER
     }
 
     public enum Direction {
@@ -213,6 +228,7 @@ public abstract class Entity implements Comparable<Entity> {
         public boolean assetsLoaded = false;
         Texture spriteSheet;
         Map<Direction, Animation<TextureRegion>> walk, idle, attack; // animations
+        public Entity target = null; // the current character target - selected entity
         float animTime; // A variable for tracking elapsed time for the animation
         public String name;
         public int id, role_level, outfitId;
@@ -262,6 +278,9 @@ public abstract class Entity implements Comparable<Entity> {
             this.x = x; this.y = y; this.speed = speed; lastRequestId = new AtomicLong(0);
             this.direction = Direction.SOUTH;
             this.bufferedPos = new ConcurrentSkipListMap<>();
+            this.contextId = this.id;
+            this.type = Type.CHARACTER;
+            this.isInteractive = true;
             //this.bufferedPos.putIfAbsent(System.currentTimeMillis(), new Vector2(this.x, this.y));
             startPos = new Vector2(this.x, this.y);
             skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
@@ -735,18 +754,17 @@ public abstract class Entity implements Comparable<Entity> {
                     cPos.x, cPos.y+rectOffsetUp*0.75f, // up
                     cPos.x+rectOffsetRight*0.4f, cPos.y}); // right
 
-            if(CommonUI.debugTex) {
-//                Vector2 tPosDown = new Vector2(drawPos.x, drawPos.y-rectOffsetDown);
-//                Vector2 tPosUp = new Vector2(drawPos.x, drawPos.y+rectOffsetUp);
-//                Vector2 tPosLeft = new Vector2(drawPos.x-rectOffsetLeft, drawPos.y);
-//                Vector2 tPosRight = new Vector2(drawPos.x+rectOffsetRight, drawPos.y);
-//                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2 * unitScale, 2 * unitScale);
-//                batch.draw(debugTex, tPosDown.x, tPosDown.y, 2 * unitScale, 2 * unitScale);
-//                batch.draw(debugTex, tPosUp.x, tPosUp.y, 2 * unitScale, 2 * unitScale);
-//                batch.draw(debugTex, tPosLeft.x, tPosLeft.y, 2 * unitScale, 2 * unitScale);
-//                batch.draw(debugTex, tPosRight.x, tPosRight.y, 2 * unitScale, 2 * unitScale);
-            }
-
+//            if(CommonUI.enableDebugTex) {
+////                Vector2 tPosDown = new Vector2(drawPos.x, drawPos.y-rectOffsetDown);
+////                Vector2 tPosUp = new Vector2(drawPos.x, drawPos.y+rectOffsetUp);
+////                Vector2 tPosLeft = new Vector2(drawPos.x-rectOffsetLeft, drawPos.y);
+////                Vector2 tPosRight = new Vector2(drawPos.x+rectOffsetRight, drawPos.y);
+////                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2 * unitScale, 2 * unitScale);
+////                batch.draw(debugTex, tPosDown.x, tPosDown.y, 2 * unitScale, 2 * unitScale);
+////                batch.draw(debugTex, tPosUp.x, tPosUp.y, 2 * unitScale, 2 * unitScale);
+////                batch.draw(debugTex, tPosLeft.x, tPosLeft.y, 2 * unitScale, 2 * unitScale);
+////                batch.draw(debugTex, tPosRight.x, tPosRight.y, 2 * unitScale, 2 * unitScale);
+//            }
 
             // renders player tag
             nameLabel.getFont().scale(tagScale, tagScale);
@@ -763,13 +781,23 @@ public abstract class Entity implements Comparable<Entity> {
 
             nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
 
-            batch.end();
-            shapeDebug.setProjectionMatrix(camera.combined);
-            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
-            shapeDebug.setColor(Color.YELLOW);
-            shapeDebug.polygon(collider.getTransformedVertices());
-            shapeDebug.end();
-            batch.begin();
+            if(CommonUI.enableDebugTex) {
+                Polygon tileCollider = new Polygon(new float[]{
+                        drawPos.x, drawPos.y - rectOffsetDown, // down
+                        drawPos.x - rectOffsetLeft, drawPos.y, // left
+                        drawPos.x, drawPos.y + rectOffsetUp, // up
+                        drawPos.x + rectOffsetRight, drawPos.y}); // right
+
+                batch.end();
+                shapeDebug.setProjectionMatrix(camera.combined);
+                shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+                shapeDebug.setColor(Color.YELLOW);
+                shapeDebug.polygon(collider.getTransformedVertices());
+                shapeDebug.setColor(Color.RED);
+                shapeDebug.polygon(tileCollider.getTransformedVertices());
+                shapeDebug.end();
+                batch.begin();
+            }
 
             // resets batch alpha for further rendering
             Color c = batch.getColor();
@@ -863,6 +891,8 @@ public abstract class Entity implements Comparable<Entity> {
             this.tileId = tileId;
             this.isWalkable = tile.getProperties().get("walkable", Boolean.class);
             this.isObfuscator = tile.getProperties().get("obfuscator", Boolean.class);
+            this.contextId = this.wallId;
+            this.type = Type.WALL;
 
             float tileWidth = TEX_WIDTH * unitScale;
             float tileHeight = TEX_HEIGHT * unitScale;
@@ -872,10 +902,19 @@ public abstract class Entity implements Comparable<Entity> {
             this.drawPos.y = (tileY * halfTileHeight) - (tileX * halfTileHeight) + tileHeight; // adjust to match origin to tile origin
             this.uId = EntityController.getInstance().generateUid();
 
-            this.hitBox.x = this.drawPos.x + halfTileWidth*0.5f;
-            this.hitBox.y = this.drawPos.y + halfTileHeight*0.8f;
-            this.hitBox.width = tile.getTextureRegion().getRegionWidth()* unitScale * 0.5f;
-            this.hitBox.height = tile.getTextureRegion().getRegionHeight()* unitScale * 0.6f;
+            hitBox = new Polygon(new float[] {
+                    0, 0,
+                    tile.getTextureRegion().getRegionWidth()* unitScale * 0.5f, 0,
+                    tile.getTextureRegion().getRegionWidth()* unitScale * 0.5f, tile.getTextureRegion().getRegionHeight()* unitScale * 0.6f,
+                    0, tile.getTextureRegion().getRegionHeight()* unitScale * 0.6f });
+
+            hitBox.setPosition(this.drawPos.x + halfTileWidth*0.5f, this.drawPos.y + halfTileHeight*0.8f);
+//
+//            this.hitBox.x = this.drawPos.x + halfTileWidth*0.5f;
+//            this.hitBox.y = this.drawPos.y + halfTileHeight*0.8f;
+//            this.hitBox.width = tile.getTextureRegion().getRegionWidth()* unitScale * 0.5f;
+//            this.hitBox.height = tile.getTextureRegion().getRegionHeight()* unitScale * 0.6f;
+
 
             Gdx.app.postRunnable(() -> {
                 debugCircle = getPixmapCircle(40, Color.BROWN,true);
@@ -903,13 +942,109 @@ public abstract class Entity implements Comparable<Entity> {
 
             batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight*1.38f,
                     tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor, tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
-            if(CommonUI.debugTex) {
-                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2 * unitScale, 2 * unitScale);
+            if(CommonUI.enableDebugTex) {
                 batch.end();
                 shapeDebug.setProjectionMatrix(camera.combined);
                 shapeDebug.begin(ShapeRenderer.ShapeType.Line);
                 shapeDebug.setColor(Color.RED);
-                shapeDebug.rect(hitBox.x, hitBox.y, hitBox.width, hitBox.height);
+                shapeDebug.polygon(hitBox.getTransformedVertices());
+                //shapeDebug.rect(hitBox.x, hitBox.y, hitBox.width, hitBox.height);
+                shapeDebug.end();
+                batch.begin();
+            }
+
+            // resets batch alpha for further rendering
+            Color c = batch.getColor();
+            batch.setColor(c.r, c.g, c.b, 1f);//set alpha back to 1
+        }
+
+        @Override
+        public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
+
+        }
+
+        @Override
+        public int compareTo(Entity entity) {
+            Vector2 e1Iso = this.drawPos;
+            Vector2 e2Iso = entity.drawPos;
+            float e1Depth = e1Iso.y;
+            float e2Depth = e2Iso.y;
+
+            if(e1Depth > e2Depth)
+                return -1;
+            else
+                return 1;
+        }
+    }
+
+    public static class Tree extends Entity {
+        public final int spawnId;
+        private final int treeId;
+        public int tileX, tileY;
+        public TiledMapTile tile;
+        public int tileId;
+        public float health;
+        public boolean isWalkable;
+        private boolean assetsLoaded;
+
+        public Tree(int treeId, int spawnId, int tileId, TiledMapTile tile, float health, int tileX, int tileY, Polygon hitBox) {
+            this.tile = tile;
+            this.tileX = tileX;
+            this.tileY = tileY;
+            this.treeId = treeId;
+            this.tileId = tileId;
+            this.spawnId = spawnId;
+            this.health = health;
+            this.isWalkable = tile.getProperties().get("walkable", Boolean.class);
+            this.isObfuscator = tile.getProperties().get("obfuscator", Boolean.class);
+            this.contextId = this.spawnId;
+            this.type = Type.TREE;
+            this.isInteractive = true;
+            this.uId = EntityController.getInstance().generateUid();
+            this.hitBox = hitBox;
+
+            float tileWidth = TEX_WIDTH * unitScale;
+            float tileHeight = TEX_HEIGHT * unitScale;
+            float halfTileWidth = tileWidth * 0.5f;
+            float halfTileHeight = tileHeight * 0.5f;
+            this.drawPos.x =  (tileX * halfTileWidth) + (tileY * halfTileWidth);
+            this.drawPos.y = (tileY * halfTileHeight) - (tileX * halfTileHeight) + tileHeight; // adjust to match origin to tile origin
+            this.hitBox.setPosition(drawPos.x, drawPos.y - halfTileHeight*1.38f);
+            //this.hitBox.setPosition(0,0);
+
+            Gdx.app.postRunnable(() -> {
+                debugCircle = getPixmapCircle(40, Color.BROWN,true);
+                debugTex=new Texture(debugCircle);
+                debugTex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+                assetsLoaded = true;
+            });
+        }
+
+        public static Tree toTree(GameRegister.Tree treeUpdate) {
+            return new Tree(treeUpdate.treeId, treeUpdate.spawnId, treeUpdate.tileId,  WorldMap.getInstance().getTileFromId(treeUpdate.tileId),
+                                treeUpdate.health, treeUpdate.tileX, treeUpdate.tileY, new Polygon(treeUpdate.hitBox));
+        }
+
+        @Override
+        public void render(SpriteBatch batch) {
+            // if assets are not loaded, return
+            if(assetsLoaded == false) return;
+            if(tile == null) return;
+
+            float tileHeight = TEX_HEIGHT * unitScale;
+            float halfTileHeight = tileHeight * 0.5f;
+
+            applyEffects(batch); // apply entity effects before drawing
+
+            batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight*1.38f,
+                    tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor, tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
+            if(CommonUI.enableDebugTex) {
+                batch.end();
+                shapeDebug.setProjectionMatrix(camera.combined);
+                shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+                shapeDebug.setColor(Color.PINK);
+                shapeDebug.polygon(hitBox.getTransformedVertices());
+                //shapeDebug.rect(drawPos.x, drawPos.y, 1f, 45f/32f);
                 shapeDebug.end();
                 batch.begin();
             }
@@ -952,7 +1087,7 @@ public abstract class Entity implements Comparable<Entity> {
         float animTime; // A variable for tracking elapsed time for the animation
         public String name;
         public int creatureId;
-        public long spawnId;
+        public int spawnId;
         public Vector2 position, interPos, lastVelocity, startPos;
         public float x, y, speed, attackSpeed, range, spriteW, spriteH;
         public State state;
@@ -960,7 +1095,7 @@ public abstract class Entity implements Comparable<Entity> {
         public int targetId;
         private Vector2 centerPos;
 
-        public Creature(String name, int creatureId, long spawnId, float x, float y, float speed, float attackSpeed,
+        public Creature(String name, int creatureId, int spawnId, float x, float y, float speed, float attackSpeed,
                         float range, float lastVelocityX, float lastVelocityY, String stateName, int targetId) {
             this.name = name; this.entityName = name;
             this.creatureId = creatureId; this.spawnId = spawnId;
@@ -977,6 +1112,9 @@ public abstract class Entity implements Comparable<Entity> {
             this.speed = speed;
             this.attackSpeed = attackSpeed;
             this.range = range;
+            this.contextId = this.spawnId;
+            this.type = Type.CREATURE;
+            this.isInteractive = true;
             direction = Direction.SOUTHWEST;
             skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             font = skin.get("emojiFont", Font.class); // gets typist font with icons
@@ -1180,7 +1318,7 @@ public abstract class Entity implements Comparable<Entity> {
             spriteH = currentFrame.getRegionHeight()* unitScale;
             spriteW = currentFrame.getRegionWidth()* unitScale;
 
-            if(CommonUI.debugTex)
+            if(CommonUI.enableDebugTex)
                 batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
 
             // draw creature tag

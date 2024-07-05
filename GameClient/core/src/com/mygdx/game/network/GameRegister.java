@@ -1,5 +1,6 @@
 package com.mygdx.game.network;
 
+import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.esotericsoftware.kryo.Kryo;
@@ -57,11 +58,13 @@ public class GameRegister {
         kryo.register(short[].class);
         kryo.register(int[][].class);
         kryo.register(int[].class);
+        kryo.register(float[].class);
         kryo.register(Layer.class);
         kryo.register(Wall.class);
         kryo.register(Rectangle.class);
         kryo.register(Teleport.class);
         kryo.register(EntityState.class);
+        kryo.register(Tree.class);
     }
 
     static public class Layer {
@@ -116,7 +119,7 @@ public class GameRegister {
     }
 
     static public class UpdateCreature {
-        public long spawnId;
+        public int spawnId;
         public int creatureId;
         public float x, y, speed, attackSpeed, lastVelocityX, lastVelocityY, range;
         public int targetId; // in case is following a player
@@ -131,6 +134,7 @@ public class GameRegister {
         public ArrayList<Layer> tileLayers = new ArrayList<>();
         public int tileOffsetX, tileOffsetY;
         public ArrayList<Rectangle> portal = new ArrayList<>();
+        public ArrayList<Tree> trees = new ArrayList<>();
     }
 
     static public class Teleport {
@@ -168,5 +172,12 @@ public class GameRegister {
         public int wallId;
         public int tileId;
         public int tileX, tileY;
+    }
+
+    public static class Tree {
+        public int treeId, spawnId, tileId;
+        public float health;
+        public int tileX, tileY;
+        public float[] hitBox;
     }
 }

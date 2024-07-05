@@ -255,7 +255,7 @@ public class GameClient extends DispatchServer {
     public Map<Integer, Entity.Character> getOnlineCharacters() {
         return serverController.characters;
     }
-    public Map<Long, Entity.Creature> getCreatures() {
+    public Map<Integer, Entity.Creature> getCreatures() {
         return serverController.creatures;
     }
 
@@ -274,15 +274,29 @@ public class GameClient extends DispatchServer {
         serverController.removeEntity(uId);
     }
 
+    /**
+     * Gets the specified tree by its entity unique Id
+     * @param uId   the unique Id of the tree entity
+     * @return  the tree associated to the provided entity unique Id or null if no tree was found with this uId
+     */
+    public Entity.Tree getTree(int uId) {
+        return serverController.getTree(uId);
+    }
+
     public Map<Integer, Entity.Wall> getWalls() {
         return serverController.walls;
     }
 
+    public Map<Integer, Entity.Tree> getTrees() {
+        return serverController.trees;
+    }
+
     static class ServerController {
 
-        Map<Integer, Entity.Character> characters = new ConcurrentHashMap<>();
-        Map<Long, Entity.Creature> creatures = new ConcurrentHashMap<>();
-        Map<Integer, Entity.Wall> walls = new ConcurrentHashMap<>();
+        Map<Integer, Entity.Character> characters = new ConcurrentHashMap<>(); // aoi characters
+        Map<Integer, Entity.Creature> creatures = new ConcurrentHashMap<>(); // aoi creatures
+        Map<Integer, Entity.Wall> walls = new ConcurrentHashMap<>();    // aoi walls
+        Map<Integer, Entity.Tree> trees = new ConcurrentHashMap<>();    // aoi trees
 
         public void addCharacter (Entity.Character character) {
 //            characters.put(character.id, character);
@@ -310,6 +324,13 @@ public class GameClient extends DispatchServer {
                     updateWall(wallUpdate);
                     Entity.Wall wall = walls.get(wallUpdate.wallId);
                     EntityController.getInstance().lastAoIEntities.add(wall.uId);
+                }
+            }
+            if(state.trees != null) { // there are tree updates
+                for(GameRegister.Tree treeUpdate : state.trees){
+                    updateTree(treeUpdate);
+                    Entity.Tree tree = trees.get(treeUpdate.spawnId);
+                    EntityController.getInstance().lastAoIEntities.add(tree.uId);
                 }
             }
             if(state.characterUpdates != null) { // there are character updates
@@ -352,6 +373,19 @@ public class GameClient extends DispatchServer {
                 wall.fadeIn(10f);
                 walls.put(wallUpdate.wallId, wall);
                 EntityController.getInstance().entities.put(wall.uId, wall); // put on list of entities (which will manage if its visible or not)
+            }
+        }
+
+        private void updateTree(GameRegister.Tree treeUpdate) {
+            Entity.Tree tree = null;
+            if(!trees.containsKey(treeUpdate.spawnId)) { // if its not on AoI map, add it
+                tree = Entity.Tree.toTree(treeUpdate);
+                tree.fadeIn(10f);
+                trees.put(treeUpdate.spawnId, tree);
+                EntityController.getInstance().entities.put(tree.uId, tree); // put on list of entities (which will manage if its visible or not)
+            } else { // if it is, update its attributes
+                tree = trees.get(treeUpdate.spawnId);
+                tree.health = treeUpdate.health;
             }
         }
 
@@ -515,7 +549,21 @@ public class GameClient extends DispatchServer {
             characters.clear();
             creatures.clear();
             walls.clear();
+            trees.clear();
             EntityController.getInstance().entities.clear();
+        }
+
+        public Entity.Tree getTree(int uId) {
+            synchronized (trees) {
+                Iterator<Map.Entry<Integer, Entity.Tree>> iterator = trees.entrySet().iterator();
+                while (iterator.hasNext()) {
+                    Map.Entry<Integer, Entity.Tree> entry = iterator.next();
+                    if(entry.getValue().uId == uId) {
+                        return entry.getValue();
+                    }
+                }
+            }
+            return null;
         }
 
         // iterates through data maps containing the different types of entities to remove one by its unique id
@@ -531,11 +579,22 @@ public class GameClient extends DispatchServer {
                     }
                 }
             }
+            // look in trees map
+            synchronized (trees) {
+                Iterator<Map.Entry<Integer, Entity.Tree>> iterator = trees.entrySet().iterator();
+                while (iterator.hasNext()) {
+                    Map.Entry<Integer, Entity.Tree> entry = iterator.next();
+                    if(entry.getValue().uId == uId) {
+                        iterator.remove();
+                        return;
+                    }
+                }
+            }
             // look uId in creatures map
             synchronized (creatures) {
-                Iterator<Map.Entry<Long, Entity.Creature>> iterator = creatures.entrySet().iterator();
+                Iterator<Map.Entry<Integer, Entity.Creature>> iterator = creatures.entrySet().iterator();
                 while (iterator.hasNext()) {
-                    Map.Entry<Long, Entity.Creature> entry = iterator.next();
+                    Map.Entry<Integer, Entity.Creature> entry = iterator.next();
                     if(entry.getValue().uId == uId) {
                         iterator.remove();
                         return;

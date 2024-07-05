@@ -188,7 +188,8 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		// cmd dispatcher
 		dispatcher = new CommandDispatcher(this, loginServer, gameServer);
 		// load map
-		world = new WorldMap("world/novaterra.tmx", batch);
+		world = WorldMap.getInstance();
+		world.init("world/novaterra.tmx", batch);
 		// starts all servers
 		startServer(ServerChannel.ALL);
 	}

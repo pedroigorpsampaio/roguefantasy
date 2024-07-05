@@ -63,6 +63,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Label fpsLabel;
     private Label pingLabel;
     private Label ramLabel;
+    private Label bCallsLabel;
+    private Label mouseOnLabel;
     private static AssetManager manager;
     private Music bgm;
     private RogueFantasy game;
@@ -89,7 +91,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public static ShapeRenderer shapeDebug;
     private float aimZoom;
     private static boolean isInputHappening = false;
-    private Vector3 unprojectedMouse = new Vector3();
+    public static Vector3 unprojectedMouse = new Vector3();
     private Vector3 screenMouse = new Vector3();
     private Vector2 joystickDir = new Vector2(); // the current joystick direction (for android)
 
@@ -161,13 +163,23 @@ public class GameScreen implements Screen, PropertyChangeListener {
         pingLabel.setAlignment(Align.left);
         pingLabel.setX(fpsLabel.getX()+fpsLabel.getWidth()+22);
 
-        ramLabel = new Label("RAM: "+Common.getRamUsage(), skin, "fontMedium", Color.WHITE);
+        ramLabel = new Label("RAM: 00MB"+Common.getRamUsage(), skin, "fontMedium", Color.WHITE);
         ramLabel.setAlignment(Align.left);
         ramLabel.setX(pingLabel.getX()+pingLabel.getWidth()+22);
+
+        bCallsLabel = new Label("batch calls: 0", skin, "fontMedium", Color.WHITE);
+        bCallsLabel.setAlignment(Align.left);
+        bCallsLabel.setX(ramLabel.getX()+ramLabel.getWidth()+22);
+
+        mouseOnLabel = new Label("Entity: none", skin, "fontMedium", Color.WHITE);
+        mouseOnLabel.setAlignment(Align.left);
+        mouseOnLabel.setX(bCallsLabel.getX()+bCallsLabel.getWidth()+22);
 
         stage.addActor(fpsLabel);
         stage.addActor(pingLabel);
         stage.addActor(ramLabel);
+        stage.addActor(bCallsLabel);
+        stage.addActor(mouseOnLabel);
 
         // updates camera zoom based on current device screen
 //        float uiZoomFactor = 720f / Gdx.graphics.getHeight();
@@ -217,6 +229,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
                 if(keycode == Input.Keys.L && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT))
                     gameClient.logoff();
+
+                if(keycode == Input.Keys.D && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
+                    CommonUI.enableDebugTex = !CommonUI.enableDebugTex;
+                }
 
                 if(movement.x > 1) movement.x = 1; if(movement.y > 1) movement.y = 1;
                 if(movement.x < -1) movement.x = -1; if(movement.y < -1) movement.y = -1;
@@ -347,15 +363,17 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 !Gdx.input.isKeyPressed(Input.Keys.D) && !Gdx.input.isKeyPressed(Input.Keys.RIGHT) && !Gdx.input.isTouched(0))
             movement.x = 0;
 
+        // current mouse position in world
+        vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
+        screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
+        unprojectedMouse = camera.unproject(vec3);
+
         // check if there is touch velocity
         if(Gdx.input.isTouched(0)){
             if(Gdx.app.getType() == Application.ApplicationType.Android) { // use joystick movement if its on android
                 movement.x = joystickDir.x;
                 movement.y = joystickDir.y;
             } else if (Gdx.app.getType() == Application.ApplicationType.Desktop) {    // if its on pc move accordingly
-                vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
-                screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
-                unprojectedMouse = camera.unproject(vec3);
                 touchPos = new Vector2(unprojectedMouse.x - gameClient.getClientCharacter().spriteW/2f,  // compensate to use center of char sprite as anchor
                         unprojectedMouse.y - gameClient.getClientCharacter().spriteH/2f);
                 movement.xEnd = touchPos.x; movement.yEnd = touchPos.y;
@@ -468,11 +486,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
         batch.end();
         batch.setBlendFunction(srcFunc, dstFunc);
 
-        if(WorldMap.portals != null && CommonUI.debugTex) {
+        if(WorldMap.portals != null && CommonUI.enableDebugTex) {
             shapeDebug.setProjectionMatrix(camera.combined);
             shapeDebug.begin(ShapeRenderer.ShapeType.Line);
             shapeDebug.setColor(Color.BLUE);
-
+            //shapeDebug.circle(unprojectedMouse.x, unprojectedMouse.y, 1);
             for(Rectangle portal : WorldMap.portals) {
                 shapeDebug.rect(portal.x, portal.y, portal.width, portal.height);
             }
@@ -520,6 +538,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
         fpsLabel.setText("fps: " + Gdx.graphics.getFramesPerSecond());
         pingLabel.setText("ping: " + gameClient.getAvgLatency());
         ramLabel.setText("RAM: " + Common.getRamUsage() + " MB");
+        bCallsLabel.setText("batch calls: " + calls);
+        if(WorldMap.hoverEntity == null)
+            mouseOnLabel.setText("Entity: none");
+        else
+            mouseOnLabel.setText("Entity: " +GameClient.getInstance().getTree(WorldMap.hoverEntity.uId).spawnId + " ("+WorldMap.hoverEntity.type.toString()+")");
 
         // draws stage
         stage.act(Math.min(delta, 1 / 60f));

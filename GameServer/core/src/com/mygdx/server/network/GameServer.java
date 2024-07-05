@@ -253,7 +253,7 @@ public class GameServer implements CmdReceiver {
 
             public void disconnected (Connection c) {
                 CharacterConnection connection = (CharacterConnection)c;
-                if (connection.character != null) {
+                if (connection.character != null && connection.character.tag != null) {
                     synchronized (loggedIn) {
                         loggedIn.remove(connection.character.tag.id); // remove from logged in list
                     }
