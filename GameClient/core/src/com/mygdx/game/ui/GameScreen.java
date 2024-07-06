@@ -3,6 +3,7 @@ package com.mygdx.game.ui;
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
@@ -15,6 +16,7 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.input.GestureDetector;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
@@ -39,10 +41,13 @@ import com.mygdx.game.entity.WorldMap;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.util.Common;
+import com.sun.java.swing.action.ApplyAction;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.Random;
+
+import jdk.internal.org.jline.utils.Log;
 
 /**
  * Implements the game screen
@@ -54,6 +59,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private final OrthographicCamera uiCam;
     private final int resW, resH;
     private final EntityController entityController;
+    private final GestureDetector gestureDetector;
+    private final InputMultiplexer inputMultiplexer;
     private FitViewport uiViewport;
     private Font font;
     private Timer updateTimer;
@@ -152,7 +159,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
         //skin.add("fontMedium", fontMedium, BitmapFont.class);
 
         stage = new Stage(new StretchViewport(1280, 720));
-        Gdx.input.setInputProcessor(stage);
+        gestureDetector = new GestureDetector(20, 0.4f,
+                                    0.2f, Integer.MAX_VALUE, new GameGestureListener());
+        inputMultiplexer = new InputMultiplexer(gestureDetector, stage);
+        Gdx.input.setInputProcessor(inputMultiplexer);
+        //Gdx.input.setInputProcessor(stage);
         font = skin.get("emojiFont", Font.class); // gets typist font with icons
 
         fpsLabel = new Label("fps: 1441", skin, "fontMedium", Color.WHITE);
@@ -192,7 +203,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         stage.addListener(new InputListener(){
             @Override
             public boolean keyDown(InputEvent event, int keycode) {
-                if(Gdx.input.isTouched(0)) return false; // ignore if there is clicking/touching
+                if( Gdx.input.isButtonPressed(Input.Buttons.LEFT)) return false; // ignore if there is clicking/touching
 
                 if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) movement.y += 1;
                 else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) movement.y += 1;
@@ -213,7 +224,38 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
             @Override
             public boolean keyUp(InputEvent event, int keycode) {
-                if(Gdx.input.isTouched(0)) return false; // ignore if there is clicking/touching
+                /**
+                 * NON-MOVEMENT INTERACTIONS
+                 */
+                if(keycode == Input.Keys.ESCAPE)
+                    GameClient.getInstance().getClientCharacter().target = null;
+
+                if(keycode == Input.Keys.TAB && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {// tab targeting
+                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().target, false);
+                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                }
+
+                if(keycode == Input.Keys.TAB && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {// tab targeting in reverse
+                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().target, true);
+                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                }
+
+                if(keycode == Input.Keys.SPACE) {// closest interactive entity targeting
+                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity();
+                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                }
+
+                if(keycode == Input.Keys.L && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT))
+                    gameClient.logoff();
+
+                if(keycode == Input.Keys.D && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
+                    CommonUI.enableDebugTex = !CommonUI.enableDebugTex;
+                }
+
+                /**
+                 * MOVEMENT INTERACTIONS
+                 */
+                if( Gdx.input.isButtonPressed(Input.Buttons.LEFT)) return false; // ignore if there is clicking/touching
 
                 if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) movement.y -= 1;
                 else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) movement.y -= 1;
@@ -226,13 +268,6 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
                 if (keycode == Input.Keys.D && !Gdx.input.isKeyPressed(Input.Keys.RIGHT)) movement.x -= 1;
                 else if (keycode == Input.Keys.RIGHT && !Gdx.input.isKeyPressed(Input.Keys.D)) movement.x -= 1;
-
-                if(keycode == Input.Keys.L && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT))
-                    gameClient.logoff();
-
-                if(keycode == Input.Keys.D && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
-                    CommonUI.enableDebugTex = !CommonUI.enableDebugTex;
-                }
 
                 if(movement.x > 1) movement.x = 1; if(movement.y > 1) movement.y = 1;
                 if(movement.x < -1) movement.x = -1; if(movement.y < -1) movement.y = -1;
@@ -248,26 +283,33 @@ public class GameScreen implements Screen, PropertyChangeListener {
             }
 
         });
-
         stage.addListener(new InputListener() {
             @Override
             public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
-                if(!Gdx.input.isTouched(1) && Gdx.app.getType() == Application.ApplicationType.Android) {
-                    screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
-                    joystick.setInitialX(screenMouse.x);
-                    joystick.setInitialY(screenMouse.y);
-                    joystick.setActive(true);
+                if(Gdx.app.getType() == Application.ApplicationType.Desktop) {
+                    // if its first touch and there is a interactive entity, select it
+                    if(Gdx.input.justTouched() && button == 1) { // RMButton
+                        //if(WorldMap.hoverEntity != null)
+                        GameClient.getInstance().getClientCharacter().target = WorldMap.hoverEntity;
+                    }
                 }
                 return true;
             }
 
             @Override
             public void touchUp(InputEvent event, float x, float y, int pointer, int button) {
-                if(!Gdx.input.isTouched(0) && Gdx.app.getType() == Application.ApplicationType.Android) {
-                    joystick.setActive(false);
-                    joystickDir.x = 0;
-                    joystickDir.y = 0;
-                    joystick.reset();
+                if( Gdx.app.getType() == Application.ApplicationType.Android) {
+                    if (!Gdx.input.isTouched(0)) {
+                        joystick.setActive(false);
+                        joystickDir.x = 0;
+                        joystickDir.y = 0;
+                        joystick.reset();
+                    }
+                    if(pointer == 1) { // joystick is active and a second touch happened
+                        vec3 = new Vector3(Gdx.input.getX(1),Gdx.input.getY(1),0); //  use second touch for interactions instead, first touch is movement
+                        screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(1), Gdx.input.getY(1), 0f));
+                        unprojectedMouse = camera.unproject(vec3);
+                    }
                 }
             }
         });
@@ -364,9 +406,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
             movement.x = 0;
 
         // current mouse position in world
-        vec3 = new Vector3(Gdx.input.getX(),Gdx.input.getY(),0);
-        screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
-        unprojectedMouse = camera.unproject(vec3);
+        if(Gdx.app.getType() == Application.ApplicationType.Desktop) { // if on android gesture listener will deal with interactions
+            vec3 = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
+            screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
+            unprojectedMouse = camera.unproject(vec3);
+        }
 
         // check if there is touch velocity
         if(Gdx.input.isTouched(0)){
@@ -374,13 +418,16 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 movement.x = joystickDir.x;
                 movement.y = joystickDir.y;
             } else if (Gdx.app.getType() == Application.ApplicationType.Desktop) {    // if its on pc move accordingly
-                touchPos = new Vector2(unprojectedMouse.x - gameClient.getClientCharacter().spriteW/2f,  // compensate to use center of char sprite as anchor
-                        unprojectedMouse.y - gameClient.getClientCharacter().spriteH/2f);
-                movement.xEnd = touchPos.x; movement.yEnd = touchPos.y;
-                movement.hasEndPoint = true;
+                if(Gdx.input.isButtonPressed(Input.Buttons.LEFT)) { // only left mouse button walks
+                    touchPos = new Vector2(unprojectedMouse.x - gameClient.getClientCharacter().spriteW / 2f,  // compensate to use center of char sprite as anchor
+                            unprojectedMouse.y - gameClient.getClientCharacter().spriteH / 2f);
+                    movement.xEnd = touchPos.x;
+                    movement.yEnd = touchPos.y;
+                    movement.hasEndPoint = true;
+                }
             }
-        } else { // if no click/touch is made, there is no end point goal of movement for pc
-            if (Gdx.app.getType() == Application.ApplicationType.Desktop) {
+        } else {
+            if (Gdx.app.getType() == Application.ApplicationType.Desktop) { // if no click is made, there is no end point goal of movement for pc
                 movement.xEnd = 0;
                 movement.yEnd = 0;
                 movement.hasEndPoint = false;
@@ -541,8 +588,14 @@ public class GameScreen implements Screen, PropertyChangeListener {
         bCallsLabel.setText("batch calls: " + calls);
         if(WorldMap.hoverEntity == null)
             mouseOnLabel.setText("Entity: none");
-        else
-            mouseOnLabel.setText("Entity: " +GameClient.getInstance().getTree(WorldMap.hoverEntity.uId).spawnId + " ("+WorldMap.hoverEntity.type.toString()+")");
+        else {
+            Entity.Tree tree =  GameClient.getInstance().getTree(WorldMap.hoverEntity.uId);
+            if(tree != null) //{
+                mouseOnLabel.setText("Entity: " + GameClient.getInstance().getTree(WorldMap.hoverEntity.uId).spawnId + " (" + WorldMap.hoverEntity.type.toString() + ")");
+//            } else {
+//                mouseOnLabel.setText("Entity: none");
+//            }
+        }
 
         // draws stage
         stage.act(Math.min(delta, 1 / 60f));
@@ -616,4 +669,78 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public static boolean isInputHappening() {
         return isInputHappening;
     }
+
+    /**
+     * Game screen's gesture listener
+     */
+    public class GameGestureListener implements GestureDetector.GestureListener {
+        @Override
+        public boolean touchDown(float x, float y, int pointer, int button) {
+            return false;
+        }
+
+        @Override
+        public boolean tap(float x, float y, int count, int button) {
+            if (Gdx.app.getType() == Application.ApplicationType.Android) { // in android, check if there is second touch
+                if(!joystick.isActive()) { // if joystick is not active, use first touch for interaction
+                    vec3 = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
+                    screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
+                    unprojectedMouse = camera.unproject(vec3);
+                }
+                else if(Gdx.input.isTouched(1)) { // if joystick is active and there is second touch
+                    vec3 = new Vector3(Gdx.input.getX(1),Gdx.input.getY(1),0); //  use second touch for interactions instead, first touch is movement
+                    screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(1), Gdx.input.getY(1), 0f));
+                    unprojectedMouse = camera.unproject(vec3);
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public boolean longPress(float x, float y) {
+            if(!Gdx.input.isTouched(1) && Gdx.app.getType() == Application.ApplicationType.Android) {
+                screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
+                joystick.setInitialX(screenMouse.x);
+                joystick.setInitialY(screenMouse.y);
+                joystick.setActive(true);
+            }
+            return false;
+        }
+
+        @Override
+        public boolean fling(float velocityX, float velocityY, int button) {
+            return false;
+        }
+
+        @Override
+        public boolean pan(float x, float y, float deltaX, float deltaY) {
+            if(!Gdx.input.isTouched(1) && Gdx.app.getType() == Application.ApplicationType.Android
+                && !joystick.isActive()) { // on pan we want only to activate it on first pan, to not change initial position on each callback
+                screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
+                joystick.setInitialX(screenMouse.x);
+                joystick.setInitialY(screenMouse.y);
+                joystick.setActive(true);
+            }
+            return false;
+        }
+
+        @Override
+        public boolean panStop(float x, float y, int pointer, int button) {
+            return false;
+        }
+
+        @Override
+        public boolean zoom (float originalDistance, float currentDistance){
+            return false;
+        }
+
+        @Override
+        public boolean pinch (Vector2 initialFirstPointer, Vector2 initialSecondPointer, Vector2 firstPointer, Vector2 secondPointer){
+            return false;
+        }
+        @Override
+        public void pinchStop () {
+        }
+    }
+
 }

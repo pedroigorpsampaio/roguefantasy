@@ -53,6 +53,7 @@ public abstract class Entity implements Comparable<Entity> {
     static float rectOffsetUp = 0.2f, rectOffsetDown = 0.2f, rectOffsetLeft = 0.4f, rectOffsetRight = 0.4f;
     public Polygon hitBox = new Polygon();
     public Vector2 drawPos = new Vector2(0,0); // position to draw this entity
+    public Vector2 finalDrawPos = new Vector2(0,0); // final position to draw this entity (for y-ordering, sometimes drawPos differs from final draw pos)
     public int uId; // this entity unique id
     public int contextId; // the id of this id in context, based on what type of entity it is
     public Type type; // the type of this entity, specifying its child class
@@ -105,6 +106,10 @@ public abstract class Entity implements Comparable<Entity> {
         this.fadeSpeed = fadeSpeed;
     }
 
+    /**
+     * Applies effects to this entity and deals with the aftermath of effects
+     * @param batch the batch to apply effects
+     */
     public void applyEffects(SpriteBatch batch) {
         if(this.fadeIn) {
             Color c = batch.getColor();
@@ -122,11 +127,25 @@ public abstract class Entity implements Comparable<Entity> {
             alpha -= fadeSpeed * Gdx.graphics.getDeltaTime();
             if (alpha <= 0f) {
                 this.fadeOut = false;
-                // remove from lists
-                EntityController.getInstance().entities.remove(uId); // remove from list of entities to draw
-                GameClient.getInstance().removeEntity(uId); // remove from data list of entities
+                remove(); // after fade out, remove entity from world
                 alpha = 0f;
             }
+        }
+    }
+
+    /**
+     * Removes this entity from the world, meaning
+     * removing it from visible entities list, player AoI map and
+     * from target/hover vars if its current client target
+     */
+    public void remove() {
+        // remove from lists
+        EntityController.getInstance().entities.remove(uId); // remove from list of entities to draw
+        GameClient.getInstance().removeEntity(uId); // remove from data list of entities
+        if(GameClient.getInstance().getClientCharacter().target != null && // if this entity is target, remove it from target and hover vars
+                GameClient.getInstance().getClientCharacter().target.uId == uId) {
+            WorldMap.hoverEntity = null;
+            GameClient.getInstance().getClientCharacter().target = null;
         }
     }
 
@@ -216,6 +235,12 @@ public abstract class Entity implements Comparable<Entity> {
      * @param worldCamera   the world camera reference for necessary projections to screen position
      */
     public abstract void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) ;
+
+    /**
+     * This method is called when entity is target of client player to render UI for target selected
+     * @param batch the batch to draw UI of target selected
+     */
+    public abstract void renderTargetUI(SpriteBatch batch);
 
     public static class Character extends Entity {
         // Constant rows and columns of the sprite sheet
@@ -673,6 +698,13 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         @Override
+        public void renderTargetUI(SpriteBatch batch) {
+            if(this.id != GameClient.getInstance().getClientCharacter().id) { // if its other character, render selected ui
+
+            }
+        }
+
+        @Override
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
@@ -728,10 +760,11 @@ public abstract class Entity implements Comparable<Entity> {
             }
 
             applyEffects(batch); // apply entity effects before drawing
-
+            this.finalDrawPos.x = this.interPos.x + spriteW/12f;
+            this.finalDrawPos.y = this.interPos.y + spriteH/12f;
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
-            batch.draw(currentFrame, this.interPos.x + spriteW/12f, this.interPos.y + spriteH/12f, currentFrame.getRegionWidth()* unitScale,
+            batch.draw(currentFrame, this.finalDrawPos.x, this.finalDrawPos.y, currentFrame.getRegionWidth()* unitScale,
                     currentFrame.getRegionHeight()* unitScale);
 
             //System.out.println("playerW: " + currentFrame.getRegionWidth() + " / playerH: " + currentFrame.getRegionHeight());
@@ -753,18 +786,6 @@ public abstract class Entity implements Comparable<Entity> {
                     cPos.x-rectOffsetLeft*0.4f, cPos.y, // left
                     cPos.x, cPos.y+rectOffsetUp*0.75f, // up
                     cPos.x+rectOffsetRight*0.4f, cPos.y}); // right
-
-//            if(CommonUI.enableDebugTex) {
-////                Vector2 tPosDown = new Vector2(drawPos.x, drawPos.y-rectOffsetDown);
-////                Vector2 tPosUp = new Vector2(drawPos.x, drawPos.y+rectOffsetUp);
-////                Vector2 tPosLeft = new Vector2(drawPos.x-rectOffsetLeft, drawPos.y);
-////                Vector2 tPosRight = new Vector2(drawPos.x+rectOffsetRight, drawPos.y);
-////                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2 * unitScale, 2 * unitScale);
-////                batch.draw(debugTex, tPosDown.x, tPosDown.y, 2 * unitScale, 2 * unitScale);
-////                batch.draw(debugTex, tPosUp.x, tPosUp.y, 2 * unitScale, 2 * unitScale);
-////                batch.draw(debugTex, tPosLeft.x, tPosLeft.y, 2 * unitScale, 2 * unitScale);
-////                batch.draw(debugTex, tPosRight.x, tPosRight.y, 2 * unitScale, 2 * unitScale);
-//            }
 
             // renders player tag
             nameLabel.getFont().scale(tagScale, tagScale);
@@ -940,8 +961,11 @@ public abstract class Entity implements Comparable<Entity> {
 
             applyEffects(batch); // apply entity effects before drawing
 
-            batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight*1.38f,
-                    tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor, tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
+            this.finalDrawPos.x = this.drawPos.x;
+            this.finalDrawPos.y = this.drawPos.y - halfTileHeight*1.38f;
+            batch.draw(tile.getTextureRegion(), this.finalDrawPos.x, this.finalDrawPos.y,
+                    tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor,
+                    tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
             if(CommonUI.enableDebugTex) {
                 batch.end();
                 shapeDebug.setProjectionMatrix(camera.combined);
@@ -961,6 +985,11 @@ public abstract class Entity implements Comparable<Entity> {
         @Override
         public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
 
+        }
+
+        @Override
+        public void renderTargetUI(SpriteBatch batch) {
+            // walls are not selectable
         }
 
         @Override
@@ -1036,8 +1065,11 @@ public abstract class Entity implements Comparable<Entity> {
 
             applyEffects(batch); // apply entity effects before drawing
 
-            batch.draw(tile.getTextureRegion(), this.drawPos.x, this.drawPos.y - halfTileHeight*1.38f,
-                    tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor, tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
+            this.finalDrawPos.x = this.drawPos.x;
+            this.finalDrawPos.y = this.drawPos.y - halfTileHeight*1.38f;
+            batch.draw(tile.getTextureRegion(), this.finalDrawPos.x, this.finalDrawPos.y,
+                    tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor,
+                    tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
             if(CommonUI.enableDebugTex) {
                 batch.end();
                 shapeDebug.setProjectionMatrix(camera.combined);
@@ -1056,7 +1088,24 @@ public abstract class Entity implements Comparable<Entity> {
 
         @Override
         public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
+        }
 
+        @Override
+        public void renderTargetUI(SpriteBatch batch) {
+            float tileHeight = TEX_HEIGHT * unitScale;
+            float halfTileHeight = tileHeight * 0.5f;
+            float targetScale = 0.75f;
+            batch.end();
+            Gdx.gl.glLineWidth(4);
+            shapeDebug.setProjectionMatrix(camera.combined);
+            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+            shapeDebug.setColor(Color.RED);
+            shapeDebug.ellipse(drawPos.x+TEX_WIDTH*unitScale*0.17f, drawPos.y - halfTileHeight*1.5f,
+                    TEX_WIDTH* unitScale*targetScale, TEX_HEIGHT*unitScale*targetScale, 120);
+            //shapeDebug.rect(drawPos.x, drawPos.y, 1f, 45f/32f);
+            shapeDebug.end();
+            Gdx.gl.glLineWidth(1);
+            batch.begin();
         }
 
         @Override
@@ -1310,6 +1359,7 @@ public abstract class Entity implements Comparable<Entity> {
             // Get current frame of animation for the current stateTime
             TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
 
+            this.finalDrawPos = this.interPos;
             batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()* unitScale,
                     currentFrame.getRegionHeight()* unitScale);//, 60, 60,
             //                120, 120, 1f, 1f, 0);
@@ -1414,6 +1464,11 @@ public abstract class Entity implements Comparable<Entity> {
         @Override
         public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
 
+
+        }
+
+        @Override
+        public void renderTargetUI(SpriteBatch batch) {
 
         }
 

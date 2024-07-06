@@ -3,6 +3,7 @@ package com.mygdx.game.entity;
 import static com.mygdx.game.entity.Entity.rectOffsetLeft;
 import static com.mygdx.game.entity.Entity.rectOffsetRight;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -83,12 +84,16 @@ public class EntityController {
 
                 if(e.isInteractive) {
                     boolean mouseHit = e.rayCast(GameScreen.unprojectedMouse);
-                    if(mouseHit) {
+                    if(mouseHit) { // hover on an entity
                         foundHoverEntity = true;
                         WorldMap.hoverEntity = e;
                     }
                 }
 
+                // if entity is target of client player, render selected target UI
+                if(GameClient.getInstance().getClientCharacter().target != null &&
+                        GameClient.getInstance().getClientCharacter().target.uId == e.uId)
+                    e.renderTargetUI(batch);
                 e.render(batch);
 
                 if(obfuscateHit) {
@@ -104,6 +109,100 @@ public class EntityController {
             alpha = 1.0f;
         if(!foundHoverEntity)
             WorldMap.hoverEntity = null;
+        if(Gdx.app.getType() == Application.ApplicationType.Android) // on android touch is only option, so hover = touch
+            GameClient.getInstance().getClientCharacter().target = WorldMap.hoverEntity;
+    }
+
+    /**
+     * Given current client target, searches for next one based on entity proximity
+     * *This method ignores client entity as you cannot target yourself
+     * @param currentTarget the current target of client
+     * @param reverse   if it should search in reverse
+     * @return  the next entity found
+     */
+    public Entity getNextTargetEntity(Entity currentTarget, boolean reverse) {
+        boolean surpassedCurrTarget = false;
+        Entity lastEntity = null;
+        synchronized (entities) {
+            SortedSet<Map.Entry<Integer, Entity>> sortedEntities = entitiesByClientProximity(entities);
+            for (Map.Entry<Integer, Entity> entry : sortedEntities) {
+                Entity e = entry.getValue();
+
+                if(e.uId == GameClient.getInstance().getClientUid()) // ignores client entity
+                    continue;
+
+                if(e.isInteractive) {
+                    if(!reverse) {
+                        if (currentTarget == null || surpassedCurrTarget)
+                            return e;
+                        else if (e.uId == currentTarget.uId)
+                            surpassedCurrTarget = true;
+                    } else {
+                        if (currentTarget == null) {
+                            return e;
+                        }
+
+                        if (e.uId == currentTarget.uId) {
+                            if(lastEntity != null)
+                                return lastEntity;
+                        }
+                        lastEntity = e;
+                    }
+                }
+            }
+            if(!reverse) {
+                // interactive entity not found after current target, look before
+                for (Map.Entry<Integer, Entity> entry : sortedEntities) {
+                    Entity e = entry.getValue();
+
+                    if (e.uId == GameClient.getInstance().getClientUid()) // ignores client entity
+                        continue;
+
+                    if (currentTarget == null) {
+                        return e;
+                    }
+                    // if found a interactive entity before return it or
+                    if (e.isInteractive || e.uId == currentTarget.uId) {  // if it has reach again the current target, return it as there are no other targets nearby
+                        return e;
+                    }
+                }
+            } else {
+                Entity e = null;
+                for (Map.Entry<Integer, Entity> entry : sortedEntities) { // gets last entity (in reverse, hasn't found looking backwards until the beginning)
+                    if(entry.getValue().isInteractive) { // get last interactive entity
+                        e = entry.getValue();
+                    }
+                }
+                if (currentTarget == null) {
+                    return e;
+                }
+                if (e != null && e.uId != GameClient.getInstance().getClientUid()
+                        && e.uId != currentTarget.uId) // if its not client and not current target, we found a new one
+                    return e;
+            }
+        }
+        return null; // returns null if no interactive entity was found
+    }
+
+    /**
+     * Gets the closest interactive entity of clients entity, if any
+     * @return  the closest interactive entity from player entity
+     */
+    public Entity getNextTargetEntity() {
+        synchronized (entities) {
+            SortedSet<Map.Entry<Integer, Entity>> sortedEntities = entitiesByClientProximity(entities);
+            for (Map.Entry<Integer, Entity> entry : sortedEntities) {
+                Entity e = entry.getValue();
+
+                if(e.uId == GameClient.getInstance().getClientUid()) // ignores client entity
+                    continue;
+
+                if(e.isInteractive) {
+                    return e;
+                }
+            }
+        }
+        return null; // returns null if no interactive entity was found
     }
 
     /**
@@ -177,6 +276,24 @@ public class EntityController {
                 new Comparator<Map.Entry<K,V>>() {
                     @Override public int compare(Map.Entry<K,V> e1, Map.Entry<K,V> e2) {
                         int res = e1.getValue().compareTo(e2.getValue());
+                        return res != 0 ? res : 1; // Special fix to preserve items with equal values
+                    }
+                }
+        );
+        sortedEntries.addAll(map.entrySet());
+        return sortedEntries;
+    }
+
+    static <K,V extends Comparable<? super V>> SortedSet<Map.Entry<K,V>> entitiesByClientProximity(Map<K,V> map) {
+        SortedSet<Map.Entry<K,V>> sortedEntries = new TreeSet<Map.Entry<K,V>>(
+                new Comparator<Map.Entry<K,V>>() {
+                    @Override public int compare(Map.Entry<K,V> e1, Map.Entry<K,V> e2) {
+                        Entity e1Entity = (Entity) e1.getValue();
+                        Entity e2Entity = (Entity) e2.getValue();
+
+                        float e1Dist = e1Entity.finalDrawPos.dst(GameClient.getInstance().getClientCharacter().finalDrawPos);
+                        float e2Dist = e2Entity.finalDrawPos.dst(GameClient.getInstance().getClientCharacter().finalDrawPos);
+                        int res = e1Dist > e2Dist ? 1 : -1;
                         return res != 0 ? res : 1; // Special fix to preserve items with equal values
                     }
                 }
