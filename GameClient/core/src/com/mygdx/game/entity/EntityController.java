@@ -82,11 +82,13 @@ public class EntityController {
                     }
                 }
 
-                if(e.isInteractive) {
-                    boolean mouseHit = e.rayCast(GameScreen.unprojectedMouse);
-                    if(mouseHit) { // hover on an entity
-                        foundHoverEntity = true;
-                        WorldMap.hoverEntity = e;
+                if(e.contextId != GameClient.getInstance().getClientCharacter().id) { // only considers other entities and not client character
+                    if(e.isInteractive && !GameScreen.onStageActor) {// Only acts on world if it did not hit any UI actor
+                        boolean mouseHit = e.rayCast(GameScreen.unprojectedMouse);
+                        if(mouseHit) { // hover on an entity
+                            foundHoverEntity = true;
+                            WorldMap.hoverEntity = e;
+                        }
                     }
                 }
 
@@ -109,8 +111,6 @@ public class EntityController {
             alpha = 1.0f;
         if(!foundHoverEntity)
             WorldMap.hoverEntity = null;
-        if(Gdx.app.getType() == Application.ApplicationType.Android) // on android touch is only option, so hover = touch
-            GameClient.getInstance().getClientCharacter().target = WorldMap.hoverEntity;
     }
 
     /**
@@ -131,7 +131,7 @@ public class EntityController {
                 if(e.uId == GameClient.getInstance().getClientUid()) // ignores client entity
                     continue;
 
-                if(e.isInteractive) {
+                if(e.isTargetAble) {
                     if(!reverse) {
                         if (currentTarget == null || surpassedCurrTarget)
                             return e;
@@ -162,14 +162,14 @@ public class EntityController {
                         return e;
                     }
                     // if found a interactive entity before return it or
-                    if (e.isInteractive || e.uId == currentTarget.uId) {  // if it has reach again the current target, return it as there are no other targets nearby
+                    if (e.isTargetAble || e.uId == currentTarget.uId) {  // if it has reach again the current target, return it as there are no other targets nearby
                         return e;
                     }
                 }
             } else {
                 Entity e = null;
                 for (Map.Entry<Integer, Entity> entry : sortedEntities) { // gets last entity (in reverse, hasn't found looking backwards until the beginning)
-                    if(entry.getValue().isInteractive) { // get last interactive entity
+                    if(entry.getValue().isTargetAble) { // get last interactive entity
                         e = entry.getValue();
                     }
                 }
@@ -197,7 +197,13 @@ public class EntityController {
                 if(e.uId == GameClient.getInstance().getClientUid()) // ignores client entity
                     continue;
 
-                if(e.isInteractive) {
+                boolean selectable;
+                if(Gdx.app.getType() == Application.ApplicationType.Desktop) // discard non target-able entities from closest targeting with space
+                    selectable = e.isTargetAble;
+                else // on android include interactive entities to help interactions with UI interaction with closest entities button
+                    selectable = e.isInteractive;
+
+                if(selectable) {
                     return e;
                 }
             }

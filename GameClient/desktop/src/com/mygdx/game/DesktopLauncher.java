@@ -31,6 +31,7 @@ public class DesktopLauncher {
 //			settings.wrapY = Texture.TextureWrap.ClampToEdge;
 //			settings.bleedIterations = 256;
 			TexturePacker.process(settings, "assets/world/novaterra_raw_textures", "assets/world/novaterra_packed_textures", "novaterra.atlas");
+			TexturePacker.process(settings, "assets/ui", "assets/ui/packed_textures", "ui.atlas");
 		}
 		Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
 		//config.setForegroundFPS(60);

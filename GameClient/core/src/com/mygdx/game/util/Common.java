@@ -37,6 +37,7 @@ public class Common {
         Polygon rPoly = new Polygon(new float[] { 0, 0, r.width, 0, r.width,
                 r.height, 0, r.height });
         rPoly.setPosition(r.x, r.y);
+        if(p == null || rPoly == null || p.getTransformedVertices() == null || rPoly.getTransformedVertices() == null) return false;
         if (Intersector.overlapConvexPolygons(rPoly, p))
             return true;
         return false;

@@ -9,11 +9,15 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Cursor;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.input.GestureDetector;
@@ -25,9 +29,17 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.Touchable;
+import com.badlogic.gdx.scenes.scene2d.ui.Button;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.Stack;
+import com.badlogic.gdx.scenes.scene2d.ui.Touchpad;
+import com.badlogic.gdx.scenes.scene2d.utils.ActorGestureListener;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.scenes.scene2d.utils.Layout;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.Timer;
@@ -41,13 +53,11 @@ import com.mygdx.game.entity.WorldMap;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.util.Common;
-import com.sun.java.swing.action.ApplyAction;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.util.HashMap;
 import java.util.Random;
-
-import jdk.internal.org.jline.utils.Log;
 
 /**
  * Implements the game screen
@@ -61,6 +71,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private final EntityController entityController;
     private final GestureDetector gestureDetector;
     private final InputMultiplexer inputMultiplexer;
+    private final Touchpad touchPad;
+    private final TextureAtlas uiAtlas;
+    private final Image closestEntityImg;
+    private Button selectTargetBtn, nextTargetBtn, lastTargetBtn;
     private FitViewport uiViewport;
     private Font font;
     private Timer updateTimer;
@@ -97,6 +111,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     ShapeRenderer uiDebug;
     public static ShapeRenderer shapeDebug;
     private float aimZoom;
+    public static boolean onStageActor = false;
     private static boolean isInputHappening = false;
     public static Vector3 unprojectedMouse = new Vector3();
     private Vector3 screenMouse = new Vector3();
@@ -140,6 +155,21 @@ public class GameScreen implements Screen, PropertyChangeListener {
         TiledMap map = manager.get("world/novaterra.tmx");
         world = WorldMap.getInstance();
         world.init(map, batch, camera);
+        
+        // ui atlas
+        uiAtlas = manager.get("ui/packed_textures/ui.atlas");
+
+        TextureAtlas.AtlasRegion region = uiAtlas.findRegion("RectangleBox_96x96");
+        TextureRegionDrawable up = new TextureRegionDrawable(new TextureRegion(new Sprite(region)));
+        selectTargetBtn = new Button(up, up.tint(Color.GRAY));
+        // ui buttons
+        region = uiAtlas.findRegion("tile041");
+        up = new TextureRegionDrawable(new TextureRegion(new Sprite(region)));
+        nextTargetBtn = new Button(up, up.tint(Color.GRAY));
+
+        region = uiAtlas.findRegion("tile040");
+        up = new TextureRegionDrawable(new TextureRegion(new Sprite(region)));
+        lastTargetBtn = new Button(up, up.tint(Color.GRAY));
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
@@ -162,6 +192,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         gestureDetector = new GestureDetector(20, 0.4f,
                                     0.2f, Integer.MAX_VALUE, new GameGestureListener());
         inputMultiplexer = new InputMultiplexer(gestureDetector, stage);
+
         Gdx.input.setInputProcessor(inputMultiplexer);
         //Gdx.input.setInputProcessor(stage);
         font = skin.get("emojiFont", Font.class); // gets typist font with icons
@@ -178,7 +209,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         ramLabel.setAlignment(Align.left);
         ramLabel.setX(pingLabel.getX()+pingLabel.getWidth()+22);
 
-        bCallsLabel = new Label("batch calls: 0", skin, "fontMedium", Color.WHITE);
+        bCallsLabel = new Label("batch calls: 110", skin, "fontMedium", Color.WHITE);
         bCallsLabel.setAlignment(Align.left);
         bCallsLabel.setX(ramLabel.getX()+ramLabel.getWidth()+22);
 
@@ -186,11 +217,50 @@ public class GameScreen implements Screen, PropertyChangeListener {
         mouseOnLabel.setAlignment(Align.left);
         mouseOnLabel.setX(bCallsLabel.getX()+bCallsLabel.getWidth()+22);
 
+        Stack targetStack = new Stack();
+        //selectTargetBtn.setX(Gdx.graphics.getWidth() - selectTargetBtn.getWidth() * 2f);
+        //selectTargetBtn.setY(selectTargetBtn.getHeight() * 0.1f);
+
+        closestEntityImg = new Image();
+        //closestEntityImg.setX(Gdx.graphics.getWidth() - selectTargetBtn.getWidth() * 2f);
+        //closestEntityImg.setY(selectTargetBtn.getHeight() * 0.1f);
+        closestEntityImg.setTouchable(Touchable.disabled);
+        closestEntityImg.setScale(targetStack.getScaleX()*0.8f,targetStack.getScaleY()*0.8f);
+        closestEntityImg.setOrigin(targetStack.getWidth()/2f,targetStack.getHeight()/2f);
+
+
+        targetStack.add(selectTargetBtn);
+        targetStack.add(closestEntityImg);
+        targetStack.setTransform(true);
+        targetStack.setX(stage.getWidth() - targetStack.getWidth()*1.5f);
+        targetStack.setY(targetStack.getHeight() * 0.1f);
+        targetStack.setScale(0.8f);
+
+        lastTargetBtn.setTransform(true);
+        lastTargetBtn.setScale(4f, 4f);
+        lastTargetBtn.setX(targetStack.getX() - lastTargetBtn.getWidth()*4.5f);
+        lastTargetBtn.setY(targetStack.getHeight() * 0.25f);
+
+        nextTargetBtn.setTransform(true);
+        nextTargetBtn.setScale(4f, 4f);
+        nextTargetBtn.setX(targetStack.getX() + targetStack.getWidth()*targetStack.getScaleX() + nextTargetBtn.getWidth());
+        nextTargetBtn.setY(targetStack.getHeight() * 0.25f);
+
+        touchPad = new Touchpad(1f, skin);
+
         stage.addActor(fpsLabel);
         stage.addActor(pingLabel);
         stage.addActor(ramLabel);
         stage.addActor(bCallsLabel);
         stage.addActor(mouseOnLabel);
+        /**
+         * Android UI only
+         */
+        if(Gdx.app.getType() == Application.ApplicationType.Android) {
+            stage.addActor(lastTargetBtn);
+            stage.addActor(nextTargetBtn);
+            stage.addActor(targetStack);
+        }
 
         // updates camera zoom based on current device screen
 //        float uiZoomFactor = 720f / Gdx.graphics.getHeight();
@@ -203,7 +273,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         stage.addListener(new InputListener(){
             @Override
             public boolean keyDown(InputEvent event, int keycode) {
-                if( Gdx.input.isButtonPressed(Input.Buttons.LEFT)) return false; // ignore if there is clicking/touching
+                if( Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor) return false; // ignore if there is clicking/touching
 
                 if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) movement.y += 1;
                 else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) movement.y += 1;
@@ -255,7 +325,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 /**
                  * MOVEMENT INTERACTIONS
                  */
-                if( Gdx.input.isButtonPressed(Input.Buttons.LEFT)) return false; // ignore if there is clicking/touching
+                if( Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor) return false; // ignore if there is clicking/touching in world
 
                 if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) movement.y -= 1;
                 else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) movement.y -= 1;
@@ -288,7 +358,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
             public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
                 if(Gdx.app.getType() == Application.ApplicationType.Desktop) {
                     // if its first touch and there is a interactive entity, select it
-                    if(Gdx.input.justTouched() && button == 1) { // RMButton
+                    if(Gdx.input.justTouched() && button == 1 && !onStageActor) { // Only acts on world if it did not hit any UI actor)
                         //if(WorldMap.hoverEntity != null)
                         GameClient.getInstance().getClientCharacter().target = WorldMap.hoverEntity;
                     }
@@ -299,16 +369,24 @@ public class GameScreen implements Screen, PropertyChangeListener {
             @Override
             public void touchUp(InputEvent event, float x, float y, int pointer, int button) {
                 if( Gdx.app.getType() == Application.ApplicationType.Android) {
+                    if(pointer == 1) { // joystick is active and a second touch happened
+                        vec3 = new Vector3(Gdx.input.getX(1),Gdx.input.getY(1),0); //  use second touch for interactions instead, first touch is movement
+                        screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(1), Gdx.input.getY(1), 0f));
+                        unprojectedMouse = camera.unproject(vec3);
+                    }
+                    // if its first touch and there is a interactive entity, select it
+                    if(!onStageActor) { // Only acts on world if it did not hit any UI actor)
+                        //if(WorldMap.hoverEntity != null)
+                        if(pointer == 1)
+                            GameClient.getInstance().getClientCharacter().target = WorldMap.hoverEntity;
+                        else if(!joystick.isActive())
+                            GameClient.getInstance().getClientCharacter().target = WorldMap.hoverEntity;
+                    }
                     if (!Gdx.input.isTouched(0)) {
                         joystick.setActive(false);
                         joystickDir.x = 0;
                         joystickDir.y = 0;
                         joystick.reset();
-                    }
-                    if(pointer == 1) { // joystick is active and a second touch happened
-                        vec3 = new Vector3(Gdx.input.getX(1),Gdx.input.getY(1),0); //  use second touch for interactions instead, first touch is movement
-                        screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(1), Gdx.input.getY(1), 0f));
-                        unprojectedMouse = camera.unproject(vec3);
                     }
                 }
             }
@@ -319,6 +397,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // if its not listening to game server responses, start listening to it
         if(!gameClient.isListening(this))
             gameClient.addListener(this);
+
+        new GameController(); // binds game controller interactions
 
         // starts update timer that control user inputs and server communication
         updateTimer=new Timer();
@@ -397,6 +477,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public void update() {
         if(gameClient.getClientCharacter() == null) return; // character not loaded yet!
 
+        // update whether mouse is on actor of stage
+        screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
+        if (Gdx.app.getType() == Application.ApplicationType.Desktop) // gets hit with actor on mouse position
+            onStageActor = isActorHit(screenMouse.x, screenMouse.y);
+
         // correct velocity
         if(!Gdx.input.isKeyPressed(Input.Keys.W) && !Gdx.input.isKeyPressed(Input.Keys.UP) &&
                 !Gdx.input.isKeyPressed(Input.Keys.S) && !Gdx.input.isKeyPressed(Input.Keys.DOWN) && !Gdx.input.isTouched(0))
@@ -408,17 +493,16 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // current mouse position in world
         if(Gdx.app.getType() == Application.ApplicationType.Desktop) { // if on android gesture listener will deal with interactions
             vec3 = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
-            screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
             unprojectedMouse = camera.unproject(vec3);
         }
 
         // check if there is touch velocity
         if(Gdx.input.isTouched(0)){
-            if(Gdx.app.getType() == Application.ApplicationType.Android) { // use joystick movement if its on android
+            if (Gdx.app.getType() == Application.ApplicationType.Android) { // use joystick movement if its on android
                 movement.x = joystickDir.x;
                 movement.y = joystickDir.y;
             } else if (Gdx.app.getType() == Application.ApplicationType.Desktop) {    // if its on pc move accordingly
-                if(Gdx.input.isButtonPressed(Input.Buttons.LEFT)) { // only left mouse button walks
+                if (Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor) { // only left mouse button walks and if not on ui stage actor
                     touchPos = new Vector2(unprojectedMouse.x - gameClient.getClientCharacter().spriteW / 2f,  // compensate to use center of char sprite as anchor
                             unprojectedMouse.y - gameClient.getClientCharacter().spriteH / 2f);
                     movement.xEnd = touchPos.x;
@@ -440,6 +524,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
         } else {
             isInputHappening = false;
         }
+    }
+
+    private boolean isActorHit(float x, float y) {
+        if(stage.hit(x, y, false) == null)
+            return false;
+        else
+            return true;
     }
 
     private void updateCamera() {
@@ -494,6 +585,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
     @Override
     public void render(float delta) {
         if(gameClient.getClientCharacter() == null) return;
+
+        // updates cursor if on desktop
+        if(Gdx.app.getType() == Application.ApplicationType.Desktop)
+            updateCursor();
 
         updateCamera(); // updates camera
         batch.setProjectionMatrix(camera.combined); // sets camera for projection
@@ -562,20 +657,35 @@ public class GameScreen implements Screen, PropertyChangeListener {
 //            viewport.getCamera().getPosition().add(
 //                    joystick.getStickDistPercentageX() * delta * IMV * 10,
 //                    joystick.getStickDistPercentageY() * delta * IMV * 10, 0f);
-            // CENTER TO MOUSE POSITION SOMEHOW
-            uiDebug.begin(ShapeRenderer.ShapeType.Line);
-            uiDebug.setProjectionMatrix(stage.getViewport().getCamera().combined);
-            uiDebug.setColor(Color.YELLOW);
-            float screenRadius = joystick.getRadius()*2f;
-            uiDebug.circle(joystick.getInitialX(), joystick.getInitialY(), screenRadius, 50);
-            uiDebug.end();
-            uiDebug.begin(ShapeRenderer.ShapeType.Filled);
-            uiDebug.setColor(Color.WHITE);
-            uiDebug.circle(joystick.getInitialX() + (joystick.getStickDistPercentageX() * screenRadius),
-                    joystick.getInitialY() + (joystick.getStickDistPercentageY() * screenRadius), screenRadius/3, 50);
-//            uiDebug.setColor(Color.CYAN);
-//            uiDebug.circle(joystick.getInitialX() + joystick.getX(), joystick.getInitialY() + joystick.getY(), screenRadius/5, 50);
-            uiDebug.end();
+
+            batch.begin();
+            batch.setProjectionMatrix(stage.getViewport().getCamera().combined);
+            float screenRadius = joystick.getRadius()*3f;
+            Color c = new Color(batch.getColor());
+            batch.setColor(0.5f, 0.6f, 0.42f, 0.52f); //set color and transparency
+            touchPad.getStyle().background.draw(batch, joystick.getInitialX() - screenRadius/2f,
+                    joystick.getInitialY() - screenRadius/2f, screenRadius, screenRadius);
+            batch.setColor(0.5f, 0.5f, 0.44f, 0.77f); //set color
+            touchPad.getStyle().knob.draw(batch, joystick.getInitialX() - screenRadius/4f
+                            + (joystick.getStickDistPercentageX() * screenRadius/2f),
+                    joystick.getInitialY() - screenRadius/4f
+                            + (joystick.getStickDistPercentageY() * screenRadius/2f),
+                    screenRadius/2f, screenRadius/2f);
+            batch.setColor(c); // reset batch color
+            batch.end();
+//            uiDebug.begin(ShapeRenderer.ShapeType.Line);
+//            uiDebug.setProjectionMatrix(stage.getViewport().getCamera().combined);
+//            uiDebug.setColor(Color.YELLOW);
+//            float screenRadius = joystick.getRadius()*2f;
+//            uiDebug.circle(joystick.getInitialX(), joystick.getInitialY(), screenRadius, 50);
+//            uiDebug.end();
+//            uiDebug.begin(ShapeRenderer.ShapeType.Filled);
+//            uiDebug.setColor(Color.WHITE);
+//            uiDebug.circle(joystick.getInitialX() + (joystick.getStickDistPercentageX() * screenRadius),
+//                    joystick.getInitialY() + (joystick.getStickDistPercentageY() * screenRadius), screenRadius/3, 50);
+////            uiDebug.setColor(Color.CYAN);
+////            uiDebug.circle(joystick.getInitialX() + joystick.getX(), joystick.getInitialY() + joystick.getY(), screenRadius/5, 50);
+//            uiDebug.end();
             //System.out.println(joystickDir);
         }
 
@@ -589,17 +699,61 @@ public class GameScreen implements Screen, PropertyChangeListener {
         if(WorldMap.hoverEntity == null)
             mouseOnLabel.setText("Entity: none");
         else {
-            Entity.Tree tree =  GameClient.getInstance().getTree(WorldMap.hoverEntity.uId);
-            if(tree != null) //{
-                mouseOnLabel.setText("Entity: " + GameClient.getInstance().getTree(WorldMap.hoverEntity.uId).spawnId + " (" + WorldMap.hoverEntity.type.toString() + ")");
+            if(WorldMap.hoverEntity.type == Entity.Type.TREE) {
+                Entity.Tree tree = GameClient.getInstance().getTree(WorldMap.hoverEntity.uId);
+                if (tree != null) //{
+                    mouseOnLabel.setText("Entity: " + GameClient.getInstance().getTree(WorldMap.hoverEntity.uId).spawnId + " (" + WorldMap.hoverEntity.type.toString() + ")");
 //            } else {
 //                mouseOnLabel.setText("Entity: none");
 //            }
+            } else {
+                mouseOnLabel.setText("Entity: " + WorldMap.hoverEntity.uId + " (" + WorldMap.hoverEntity.type.toString() + ")");
+            }
+        }
+
+        // interactive button target drawing - only for android ui target
+        if(Gdx.app.getType() == Application.ApplicationType.Android) {
+            Entity uiTargetEntity = EntityController.getInstance().getNextTargetEntity();
+            if (uiTargetEntity != null) {
+                TextureRegion closestEntityFrame = uiTargetEntity.getCurrentFrame();
+                if (closestEntityFrame != null) { // draw the closest interactive entity in UI (for android)
+                    //selectTargetBtn.add
+                    closestEntityImg.setDrawable(new TextureRegionDrawable(closestEntityFrame));
+                }
+            } else {
+                closestEntityImg.setDrawable(null);
+            }
         }
 
         // draws stage
         stage.act(Math.min(delta, 1 / 60f));
         stage.draw();
+    }
+
+    /**
+     * Updates cursor based on current hovered entity
+     */
+    private void updateCursor() {
+        if(WorldMap.hoverEntity == null) {
+            Gdx.graphics.setCursor(CommonUI.cursorBank.get("Cursor Default"));
+            return;
+        }
+
+        switch(WorldMap.hoverEntity.type) {
+            case TREE:
+                Gdx.graphics.setCursor(CommonUI.cursorBank.get("Cursor Chop Green"));
+                break;
+            case PORTAL:
+                Gdx.graphics.setCursor(CommonUI.cursorBank.get("Cursor Magic Use Green"));
+                break;
+            case CREATURE:
+            case CHARACTER:
+                Gdx.graphics.setCursor(CommonUI.cursorBank.get("Cursor Attack Green"));
+                break;
+            default:
+                Gdx.graphics.setCursor(CommonUI.cursorBank.get("Cursor Default"));
+                break;
+        }
     }
 
     @Override
@@ -676,20 +830,30 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public class GameGestureListener implements GestureDetector.GestureListener {
         @Override
         public boolean touchDown(float x, float y, int pointer, int button) {
+            if (Gdx.app.getType() == Application.ApplicationType.Android) { // gets if an actor is hit on touchdown
+                screenMouse = stage.getViewport().getCamera().unproject(new Vector3(x, y, 0f));
+                onStageActor = isActorHit(screenMouse.x, screenMouse.y);
+
+                if(!onStageActor) {
+                    vec3 = new Vector3(x, y,0); //  use second touch for interactions instead, first touch is movement
+                    screenMouse = stage.getViewport().getCamera().unproject(new Vector3(x, y, 0f));
+                    unprojectedMouse = camera.unproject(vec3);
+                }
+            }
             return false;
         }
 
         @Override
         public boolean tap(float x, float y, int count, int button) {
+            if(onStageActor) return false; // Only acts with joystick if it did not hit any UI actor
+
             if (Gdx.app.getType() == Application.ApplicationType.Android) { // in android, check if there is second touch
                 if(!joystick.isActive()) { // if joystick is not active, use first touch for interaction
                     vec3 = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
-                    screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
                     unprojectedMouse = camera.unproject(vec3);
                 }
                 else if(Gdx.input.isTouched(1)) { // if joystick is active and there is second touch
                     vec3 = new Vector3(Gdx.input.getX(1),Gdx.input.getY(1),0); //  use second touch for interactions instead, first touch is movement
-                    screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(1), Gdx.input.getY(1), 0f));
                     unprojectedMouse = camera.unproject(vec3);
                 }
             }
@@ -698,6 +862,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         @Override
         public boolean longPress(float x, float y) {
+            if(onStageActor) return false; // Only acts with joystick if it did not hit any UI actor
+
             if(!Gdx.input.isTouched(1) && Gdx.app.getType() == Application.ApplicationType.Android) {
                 screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
                 joystick.setInitialX(screenMouse.x);
@@ -714,6 +880,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         @Override
         public boolean pan(float x, float y, float deltaX, float deltaY) {
+            if(onStageActor) return false; // Only acts with joystick if it did not hit any UI actor
+
             if(!Gdx.input.isTouched(1) && Gdx.app.getType() == Application.ApplicationType.Android
                 && !joystick.isActive()) { // on pan we want only to activate it on first pan, to not change initial position on each callback
                 screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
@@ -740,6 +908,55 @@ public class GameScreen implements Screen, PropertyChangeListener {
         }
         @Override
         public void pinchStop () {
+        }
+    }
+
+    /**
+     * Controls UI interactions of game screen
+     */
+    class GameController {
+        // constructor adds listeners to the actors
+        public GameController() {
+            /**
+             * ANDROID ONLY UI CONTROLS
+             */
+            selectTargetBtn.addCaptureListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    onStageActor = true;
+                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity();
+                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                    event.stop();
+                    event.handle();
+                    event.cancel();
+                }
+            });
+            lastTargetBtn.addCaptureListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    onStageActor = true;
+                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().target, true);
+                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                    event.stop();
+                    event.handle();
+                    event.cancel();
+                }
+            });
+            nextTargetBtn.addCaptureListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    onStageActor = true;
+                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().target, false);
+                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                    event.stop();
+                    event.handle();
+                    event.cancel();
+                }
+            });
+
+            /**
+             * ALL UI CONTROLS
+             */
         }
     }
 

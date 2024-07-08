@@ -14,9 +14,13 @@ import com.badlogic.gdx.assets.loaders.I18NBundleLoader;
 import com.badlogic.gdx.assets.loaders.resolvers.InternalFileHandleResolver;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Cursor;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGeneratorLoader;
 import com.badlogic.gdx.graphics.g2d.freetype.FreetypeFontLoader;
@@ -48,6 +52,7 @@ import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Encoder;
 
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Random;
 
@@ -176,9 +181,38 @@ public class LoadScreen implements Screen {
                 VisUI.load(skin); //load VisUI
         }
 
+        manager.load("ui/packed_textures/ui.atlas", TextureAtlas.class);
+        // blocks until ui atlas is fully loaded
+        manager.finishLoading();
+
         // loads assets based on the next screen
         if(screen.equals("menu")) {
             //manager.load("eldamar.mp3", Music.class);
+            TextureAtlas uiAtlas = manager.get("ui/packed_textures/ui.atlas", TextureAtlas.class);
+            // builds cursor bank (only once, menu shares it with game screen)
+            CommonUI.cursorBank = new HashMap<>();
+            TextureAtlas.AtlasRegion region = uiAtlas.findRegion("Cursor Default");
+            TextureRegion texRegion = new TextureRegion(new Sprite(region));
+            Cursor c = Gdx.graphics.newCursor(CommonUI.pixmapFromTextureRegion(texRegion), 0, 0);
+            CommonUI.cursorBank.put("Cursor Default", c);
+            Gdx.graphics.setCursor(CommonUI.cursorBank.get("Cursor Default"));
+
+            region = uiAtlas.findRegion("Cursor Chop Green");
+            CommonUI.cursorBank.put("Cursor Chop Green",
+                    Gdx.graphics.newCursor(CommonUI.pixmapFromTextureRegion(new TextureRegion(new Sprite(region))), 0, 0));
+
+            region = uiAtlas.findRegion("Cursor Attack Green");
+            CommonUI.cursorBank.put("Cursor Attack Green",
+                    Gdx.graphics.newCursor(CommonUI.pixmapFromTextureRegion(new TextureRegion(new Sprite(region))), 0, 0));
+
+            region = uiAtlas.findRegion("Cursor Cannot Use");
+            CommonUI.cursorBank.put("Cursor Cannot Use",
+                    Gdx.graphics.newCursor(CommonUI.pixmapFromTextureRegion(new TextureRegion(new Sprite(region))), 0, 0));
+
+            region = uiAtlas.findRegion("Cursor Magic Use Green");
+            CommonUI.cursorBank.put("Cursor Magic Use Green",
+                    Gdx.graphics.newCursor(CommonUI.pixmapFromTextureRegion(new TextureRegion(new Sprite(region))), 0, 0));
+
             // load music
             manager.load("bgm/menu/menu_0.mp3", Music.class);
             manager.load("bgm/menu/menu_1.mp3", Music.class);
@@ -233,6 +267,8 @@ public class LoadScreen implements Screen {
 //        par.textureMinFilter = Texture.TextureFilter.MipMapLinearNearest;
 //        par.textureMagFilter = Texture.TextureFilter.Linear;
 //        par.generateMipMaps = true;
+
+        // load map
         manager.load("world/novaterra.tmx", TiledMap.class, params);
 
         stage.addActor(bg);

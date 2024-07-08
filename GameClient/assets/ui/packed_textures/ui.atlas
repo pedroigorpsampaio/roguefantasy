@@ -1,0 +1,111 @@
+
+ui.png
+size: 256, 128
+format: RGBA8888
+filter: MipMap, MipMap
+repeat: none
+Cursor Attack Green
+  rotate: false
+  xy: 100, 84
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Cannot Use
+  rotate: false
+  xy: 100, 50
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Chop Green
+  rotate: false
+  xy: 134, 84
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Default
+  rotate: false
+  xy: 134, 50
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Magic Use Blue
+  rotate: false
+  xy: 168, 84
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Magic Use Green
+  rotate: false
+  xy: 168, 50
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Magic Use Red
+  rotate: false
+  xy: 202, 84
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Magic Use Violet
+  rotate: false
+  xy: 202, 50
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Move Down
+  rotate: false
+  xy: 100, 16
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Move Up
+  rotate: false
+  xy: 134, 16
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Pickaxe Green
+  rotate: false
+  xy: 168, 16
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+Cursor Scythe Green
+  rotate: false
+  xy: 202, 16
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+RectangleBox_96x96
+  rotate: false
+  xy: 2, 20
+  size: 96, 96
+  orig: 96, 96
+  offset: 0, 0
+  index: -1
+tile040
+  rotate: false
+  xy: 236, 100
+  size: 16, 16
+  orig: 16, 16
+  offset: 0, 0
+  index: -1
+tile041
+  rotate: false
+  xy: 2, 2
+  size: 15, 16
+  orig: 15, 16
+  offset: 0, 0
+  index: -1

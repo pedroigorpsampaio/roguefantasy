@@ -2,7 +2,10 @@ package com.mygdx.game.ui;
 
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Cursor;
 import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.TextureData;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
@@ -16,12 +19,14 @@ import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 
 import java.lang.management.ManagementFactory;
+import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 // Common UI methods that help different UI modules
 public class CommonUI {
     public static boolean enableDebugTex = false;
+    public static HashMap<String, Cursor> cursorBank;
 
     // creates a dialog from the parameters provided
     public static Dialog createDialog(Stage stage, Skin skin, I18NBundle langBundle,
@@ -122,6 +127,27 @@ public class CommonUI {
         Timer.schedule(dialogTimeOutTimer, timeOutSeconds);
     }
 
+    public static Pixmap pixmapFromTextureRegion(TextureRegion textureRegion) {
+        TextureData textureData = textureRegion.getTexture().getTextureData();
+        if (!textureData.isPrepared()) {
+            textureData.prepare();
+        }
+        Pixmap pixmap = new Pixmap(
+                textureRegion.getRegionWidth(),
+                textureRegion.getRegionHeight(),
+                textureData.getFormat()
+        );
+        pixmap.drawPixmap(
+                textureData.consumePixmap(), // The other Pixmap
+                0, // The target x-coordinate (top left corner)
+                0, // The target y-coordinate (top left corner)
+                textureRegion.getRegionX(), // The source x-coordinate (top left corner)
+                textureRegion.getRegionY(), // The source y-coordinate (top left corner)
+                textureRegion.getRegionWidth(), // The width of the area from the other Pixmap in pixels
+                textureRegion.getRegionHeight() // The height of the area from the other Pixmap in pixels
+        );
+        return pixmap;
+    }
 
     public static String insert(String text, String insert, int period) {
         Pattern p = Pattern.compile("(.{" + period + "})", Pattern.DOTALL);

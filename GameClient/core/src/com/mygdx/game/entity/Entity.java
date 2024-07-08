@@ -31,7 +31,6 @@ import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.ui.CommonUI;
-import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
 
 import java.util.Iterator;
@@ -59,6 +58,7 @@ public abstract class Entity implements Comparable<Entity> {
     public Type type; // the type of this entity, specifying its child class
     public GameRegister.EntityState state; // the server current state known of this entity
     public boolean isInteractive = false; // if this entity is interactive
+    public boolean isTargetAble = false; // if this entity is target-able
     public boolean isObfuscator = false; // if this entity is obfuscator it will be rendered transparent when on top of player
     public boolean isTeleporting = false;
     public boolean isAlive = true;
@@ -68,6 +68,7 @@ public abstract class Entity implements Comparable<Entity> {
     protected boolean fadeIn = false;
     protected boolean fadeOut = false;
     protected float fadeSpeed = 2f;
+    protected TextureRegion currentFrame = null;
 
     /**
      * Checks if point hits this entity
@@ -149,10 +150,15 @@ public abstract class Entity implements Comparable<Entity> {
         }
     }
 
+    public TextureRegion getCurrentFrame() {
+        return currentFrame;
+    }
+
     public enum Type {
         CREATURE,
         NPC,
         WALL,
+        PORTAL,
         TREE,
         CHARACTER
     }
@@ -248,7 +254,7 @@ public abstract class Entity implements Comparable<Entity> {
         private static final float ANIM_BASE_INTERVAL = 0.25175f; // the base interval between anim frames
         private final Skin skin;
         private final Font font;
-        private Polygon collider; // this players collider
+        private Polygon collider = new Polygon(); // this players collider
         public AtomicLong lastRequestId;
         public boolean assetsLoaded = false;
         Texture spriteSheet;
@@ -306,6 +312,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.contextId = this.id;
             this.type = Type.CHARACTER;
             this.isInteractive = true;
+            this.isTargetAble = true;
             //this.bufferedPos.putIfAbsent(System.currentTimeMillis(), new Vector2(this.x, this.y));
             startPos = new Vector2(this.x, this.y);
             skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
@@ -321,9 +328,6 @@ public abstract class Entity implements Comparable<Entity> {
             walk = new ConcurrentHashMap<>();
             attack = new ConcurrentHashMap<>();
             idle = new ConcurrentHashMap<>();
-
-            setCollider();
-
 
             //stage.addActor(this);
 
@@ -357,6 +361,7 @@ public abstract class Entity implements Comparable<Entity> {
                     switch(i) { // switch rows to add each animation correctly
                         case 0:
                             idle.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
+
                             break;
                         case 1:
                             walk.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
@@ -441,23 +446,6 @@ public abstract class Entity implements Comparable<Entity> {
                         nameLabel.getWidth(), nameLabel.getHeight());
                 assetsLoaded = true;
             });
-        }
-
-        private void setCollider() {
-            Vector2 centerPos = new Vector2();
-            centerPos.x = this.interPos.x + spriteW/2f + spriteW/20f;
-            centerPos.y = this.interPos.y + spriteH/12f + spriteH/18f;
-
-            Vector2 tPosDown = new Vector2(centerPos.x, centerPos.y-rectOffsetDown*0.75f);
-            Vector2 tPosUp = new Vector2(centerPos.x, centerPos.y+rectOffsetUp*0.75f);
-            Vector2 tPosLeft = new Vector2(centerPos.x-rectOffsetLeft*0.5f, centerPos.y);
-            Vector2 tPosRight = new Vector2(centerPos.x+rectOffsetRight*0.5f, centerPos.y);
-
-            collider = new Polygon(new float[]{
-                    tPosDown.x, tPosDown.y,
-                    tPosLeft.x, tPosLeft.y,
-                    tPosUp.x, tPosUp.y,
-                    tPosRight.x, tPosRight.y});
         }
 
         /**
@@ -700,7 +688,20 @@ public abstract class Entity implements Comparable<Entity> {
         @Override
         public void renderTargetUI(SpriteBatch batch) {
             if(this.id != GameClient.getInstance().getClientCharacter().id) { // if its other character, render selected ui
-
+                float tileHeight = TEX_HEIGHT * unitScale;
+                float halfTileHeight = tileHeight * 0.5f;
+                float targetScale = 0.75f;
+                batch.end();
+                Gdx.gl.glLineWidth(4);
+                shapeDebug.setProjectionMatrix(camera.combined);
+                shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+                shapeDebug.setColor(Color.RED);
+                shapeDebug.ellipse(finalDrawPos.x+TEX_WIDTH*unitScale*0.11f, finalDrawPos.y - halfTileHeight*0.22f,
+                        TEX_WIDTH* unitScale*targetScale, TEX_HEIGHT*unitScale*targetScale, 120);
+                //shapeDebug.rect(drawPos.x, drawPos.y, 1f, 45f/32f);
+                shapeDebug.end();
+                Gdx.gl.glLineWidth(1);
+                batch.begin();
             }
         }
 
@@ -763,7 +764,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.finalDrawPos.x = this.interPos.x + spriteW/12f;
             this.finalDrawPos.y = this.interPos.y + spriteH/12f;
             // Get current frame of animation for the current stateTime
-            TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
+            currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
             batch.draw(currentFrame, this.finalDrawPos.x, this.finalDrawPos.y, currentFrame.getRegionWidth()* unitScale,
                     currentFrame.getRegionHeight()* unitScale);
 
@@ -786,6 +787,16 @@ public abstract class Entity implements Comparable<Entity> {
                     cPos.x-rectOffsetLeft*0.4f, cPos.y, // left
                     cPos.x, cPos.y+rectOffsetUp*0.75f, // up
                     cPos.x+rectOffsetRight*0.4f, cPos.y}); // right
+
+            cPos.x = this.interPos.x + spriteW/2f + spriteW/15f;
+            cPos.y = this.interPos.y + spriteH/12f + spriteH/18f;
+
+            // updates hitbox (for mouse/touch interactions)
+            hitBox = new Polygon(new float[]{
+                    cPos.x-spriteW*0.23f, cPos.y, // down-left
+                    cPos.x-spriteW*0.23f, cPos.y+spriteH*0.71f, // up-left
+                    cPos.x+spriteW*0.23f, cPos.y+spriteH*0.71f, // up-right
+                    cPos.x+spriteW*0.23f, cPos.y}); // down-right
 
             // renders player tag
             nameLabel.getFont().scale(tagScale, tagScale);
@@ -814,6 +825,8 @@ public abstract class Entity implements Comparable<Entity> {
                 shapeDebug.begin(ShapeRenderer.ShapeType.Line);
                 shapeDebug.setColor(Color.YELLOW);
                 shapeDebug.polygon(collider.getTransformedVertices());
+                shapeDebug.setColor(Color.PINK);
+                shapeDebug.polygon(hitBox.getTransformedVertices());
                 shapeDebug.setColor(Color.RED);
                 shapeDebug.polygon(tileCollider.getTransformedVertices());
                 shapeDebug.end();
@@ -930,6 +943,19 @@ public abstract class Entity implements Comparable<Entity> {
                     0, tile.getTextureRegion().getRegionHeight()* unitScale * 0.6f });
 
             hitBox.setPosition(this.drawPos.x + halfTileWidth*0.5f, this.drawPos.y + halfTileHeight*0.8f);
+
+            if(tile.getProperties().get("type", String.class).equals("portal")) {
+                this.type = Type.PORTAL;
+                this.isInteractive = true;
+
+                hitBox = new Polygon(new float[] {
+                        0, 0,
+                        tile.getTextureRegion().getRegionWidth()* unitScale * 0.5f, 0,
+                        tile.getTextureRegion().getRegionWidth()* unitScale * 0.5f, tile.getTextureRegion().getRegionHeight()* unitScale,
+                        0, tile.getTextureRegion().getRegionHeight()* unitScale });
+
+                hitBox.setPosition(this.drawPos.x+ halfTileWidth*0.6f, this.drawPos.y - halfTileHeight*1.2f);
+            }
 //
 //            this.hitBox.x = this.drawPos.x + halfTileWidth*0.5f;
 //            this.hitBox.y = this.drawPos.y + halfTileHeight*0.8f;
@@ -963,6 +989,7 @@ public abstract class Entity implements Comparable<Entity> {
 
             this.finalDrawPos.x = this.drawPos.x;
             this.finalDrawPos.y = this.drawPos.y - halfTileHeight*1.38f;
+            this.currentFrame = tile.getTextureRegion();
             batch.draw(tile.getTextureRegion(), this.finalDrawPos.x, this.finalDrawPos.y,
                     tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor,
                     tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
@@ -1029,6 +1056,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.contextId = this.spawnId;
             this.type = Type.TREE;
             this.isInteractive = true;
+            this.isTargetAble = true;
             this.uId = EntityController.getInstance().generateUid();
             this.hitBox = hitBox;
 
@@ -1067,6 +1095,7 @@ public abstract class Entity implements Comparable<Entity> {
 
             this.finalDrawPos.x = this.drawPos.x;
             this.finalDrawPos.y = this.drawPos.y - halfTileHeight*1.38f;
+            this.currentFrame = tile.getTextureRegion();
             batch.draw(tile.getTextureRegion(), this.finalDrawPos.x, this.finalDrawPos.y,
                     tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor,
                     tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
@@ -1100,7 +1129,7 @@ public abstract class Entity implements Comparable<Entity> {
             shapeDebug.setProjectionMatrix(camera.combined);
             shapeDebug.begin(ShapeRenderer.ShapeType.Line);
             shapeDebug.setColor(Color.RED);
-            shapeDebug.ellipse(drawPos.x+TEX_WIDTH*unitScale*0.17f, drawPos.y - halfTileHeight*1.5f,
+            shapeDebug.ellipse(finalDrawPos.x+TEX_WIDTH*unitScale*0.155f, finalDrawPos.y - halfTileHeight*0.26f,
                     TEX_WIDTH* unitScale*targetScale, TEX_HEIGHT*unitScale*targetScale, 120);
             //shapeDebug.rect(drawPos.x, drawPos.y, 1f, 45f/32f);
             shapeDebug.end();
@@ -1164,6 +1193,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.contextId = this.spawnId;
             this.type = Type.CREATURE;
             this.isInteractive = true;
+            this.isTargetAble = true;
             direction = Direction.SOUTHWEST;
             skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             font = skin.get("emojiFont", Font.class); // gets typist font with icons
@@ -1357,7 +1387,7 @@ public abstract class Entity implements Comparable<Entity> {
             applyEffects(batch); // apply entity effects before drawing
 
             // Get current frame of animation for the current stateTime
-            TextureRegion currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
+            currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
 
             this.finalDrawPos = this.interPos;
             batch.draw(currentFrame, this.interPos.x, this.interPos.y, currentFrame.getRegionWidth()* unitScale,
@@ -1368,8 +1398,26 @@ public abstract class Entity implements Comparable<Entity> {
             spriteH = currentFrame.getRegionHeight()* unitScale;
             spriteW = currentFrame.getRegionWidth()* unitScale;
 
-            if(CommonUI.enableDebugTex)
-                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
+            // updates hitbox (for mouse/touch interactions) TODO - CREATURES SHOULD USE PREDEFINED HITBOXES! USE TILED!
+            hitBox = new Polygon(new float[]{
+                    finalDrawPos.x+spriteW*0.23f, finalDrawPos.y+ spriteH*0.32f, // down-left
+                    finalDrawPos.x+spriteW*0.23f, finalDrawPos.y+spriteH*0.71f, // up-left
+                    finalDrawPos.x+spriteW*0.75f, finalDrawPos.y+spriteH*0.71f, // up-right
+                    finalDrawPos.x+spriteW*0.75f, finalDrawPos.y+ spriteH*0.32f}); // down-right
+
+//            if(CommonUI.enableDebugTex)
+//                batch.draw(debugTex, this.drawPos.x, this.drawPos.y, 2* unitScale, 2* unitScale);
+
+            if(CommonUI.enableDebugTex) {
+                batch.end();
+                shapeDebug.setProjectionMatrix(camera.combined);
+                shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+                shapeDebug.setColor(Color.PINK);
+                shapeDebug.polygon(hitBox.getTransformedVertices());
+                //shapeDebug.rect(drawPos.x, drawPos.y, 1f, 45f/32f);
+                shapeDebug.end();
+                batch.begin();
+            }
 
             // draw creature tag
             nameLabel.getFont().scale(tagScale, tagScale);
@@ -1469,7 +1517,20 @@ public abstract class Entity implements Comparable<Entity> {
 
         @Override
         public void renderTargetUI(SpriteBatch batch) {
-
+            float tileHeight = TEX_HEIGHT * unitScale;
+            float halfTileHeight = tileHeight * 0.5f;
+            float targetScale = 0.8f;
+            batch.end();
+            Gdx.gl.glLineWidth(4);
+            shapeDebug.setProjectionMatrix(camera.combined);
+            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+            shapeDebug.setColor(Color.RED);
+            shapeDebug.ellipse(finalDrawPos.x+TEX_WIDTH*unitScale*0.6f, finalDrawPos.y + halfTileHeight*2.25f,
+                    TEX_WIDTH* unitScale*targetScale, TEX_HEIGHT*unitScale*targetScale, 120);
+            //shapeDebug.rect(drawPos.x, drawPos.y, 1f, 45f/32f);
+            shapeDebug.end();
+            Gdx.gl.glLineWidth(1);
+            batch.begin();
         }
 
         @Override
