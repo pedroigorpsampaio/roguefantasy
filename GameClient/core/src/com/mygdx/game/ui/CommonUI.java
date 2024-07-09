@@ -6,6 +6,8 @@ import com.badlogic.gdx.graphics.Cursor;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.TextureData;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.glutils.ImmediateModeRenderer;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
@@ -154,4 +156,41 @@ public class CommonUI {
         Matcher m = p.matcher(text);
         return m.replaceAll("$1" + insert);
     }
+
+    public static class Arc extends ShapeRenderer {
+
+        private final ImmediateModeRenderer renderer;
+        private Color color = new Color(1, 1, 1, 1);
+
+        public Arc() {
+            renderer = super.getRenderer();
+        }
+
+        public void setColor(Color color) {
+            this.color = color;
+        }
+
+        public void arc(float x, float y, float radius, float start, float degrees) {
+            int segments = 30;
+
+            if (segments <= 0) throw new IllegalArgumentException("segments must be > 0.");
+            float colorBits = color.toFloatBits();
+            float theta = (2 * MathUtils.PI * (degrees / 360.0f)) / segments;
+            float cos = MathUtils.cos(theta);
+            float sin = MathUtils.sin(theta);
+            float cx = radius * MathUtils.cos(start * MathUtils.degreesToRadians);
+            float cy = radius * MathUtils.sin(start * MathUtils.degreesToRadians);
+
+            for (int i = 0; i < segments; i++) {
+                renderer.color(colorBits);
+                renderer.vertex(x + cx, y + cy, 0);
+                float temp = cx;
+                cx = cos * cx - sin * cy;
+                cy = sin * temp + cos * cy;
+                renderer.color(colorBits);
+                renderer.vertex(x + cx, y + cy, 0);
+            }
+        }
+    }
+
 }

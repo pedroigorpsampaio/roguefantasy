@@ -83,6 +83,10 @@ public class WorldMap {
 
     }
 
+    public TiledMap getMap() {
+        return map;
+    }
+
     public void init(TiledMap map, SpriteBatch batch, OrthographicCamera camera) {
         Log.info("game-server", "Loading world map...");
         this.map = map; // map loaded in load screen

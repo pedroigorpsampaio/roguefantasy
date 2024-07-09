@@ -330,8 +330,8 @@ public class GameServer implements CmdReceiver {
         //Component.Character charComp = c.character.get(Component.Character.class);
         character.dir = new Vector2(0, -1); // start looking south
         character.tag = new Component.Tag(character.tag.id, character.tag.name);
-        character.attr = new Component.Attributes(character.attr.width, character.attr.height, character.attr.speed,
-                                                    character.attr.attackSpeed, character.attr.range);
+        character.attr = new Component.Attributes(character.attr.width, character.attr.height, character.attr.maxHealth, character.attr.health,
+                                                      character.attr.speed, character.attr.attackSpeed, character.attr.range);
         character.position = new Component.Position(character.position.x, character.position.y);
         character.connection = c;
         character.updatePositionIn2dArray();
@@ -407,6 +407,8 @@ public class GameServer implements CmdReceiver {
             output.writeInt(character.role_level);
             output.writeFloat(character.position.x);
             output.writeFloat(character.position.y);
+            output.writeFloat(character.attr.maxHealth);
+            output.writeFloat(character.attr.health);
             output.writeFloat(character.attr.speed);
             output.writeFloat(character.attr.width);
             output.writeFloat(character.attr.height);
@@ -458,6 +460,8 @@ public class GameServer implements CmdReceiver {
             character.role_level = input.readInt();
             character.position.x = input.readFloat();
             character.position.y = input.readFloat();
+            character.attr.maxHealth = input.readFloat();
+            character.attr.health = input.readFloat();
             character.attr.speed = input.readFloat();
             character.attr.width = input.readFloat();
             character.attr.height = input.readFloat();
@@ -619,7 +623,7 @@ public class GameServer implements CmdReceiver {
             character.tag = new Component.Tag(conn.charData.id, conn.charData.character);
             character.position = new Component.Position(26, 4);
             character.attr = new Component.Attributes(32f*RogueFantasyServer.world.getUnitScale(), 48f*RogueFantasyServer.world.getUnitScale(),
-                                250f*RogueFantasyServer.world.getUnitScale(),50f,
+                                100f, 100f, 250f*RogueFantasyServer.world.getUnitScale(),50f,
                                 10f*RogueFantasyServer.world.getUnitScale());
             Log.debug("login-server", character.tag.name+" is NOT registered, new token generated! "+character.token);
             registeredTokens.add(character); // adds character to registered list with new token

@@ -385,7 +385,9 @@ public class GameClient extends DispatchServer {
                 EntityController.getInstance().entities.put(tree.uId, tree); // put on list of entities (which will manage if its visible or not)
             } else { // if it is, update its attributes
                 tree = trees.get(treeUpdate.spawnId);
-                tree.health = treeUpdate.health;
+                //tree.health = treeUpdate.health;
+                tree.maxHealth = treeUpdate.maxHealth;
+                tree.name = treeUpdate.name;
             }
         }
 
@@ -404,6 +406,9 @@ public class GameClient extends DispatchServer {
                 creature = creatures.get(creatureUpdate.spawnId);
                 //EntityController.getInstance().removeEntity(creature.uId); // remove to reorder list correctly
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
+
+                //creature.health = creatureUpdate.health;
+                creature.maxHealth = creatureUpdate.maxHealth;
             }
 
             Entity.Character target = characters.get(creatureUpdate.targetId);
@@ -442,6 +447,9 @@ public class GameClient extends DispatchServer {
                 character = characters.get(msg.character.id);
                 //EntityController.getInstance().removeEntity(creature.uId); // remove to reorder list correctly
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
+
+                //character.health = msg.character.health;
+                character.maxHealth = msg.character.maxHealth;
             }
 
             character.state = msg.character.state;

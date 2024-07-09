@@ -298,21 +298,21 @@ public class GameScreen implements Screen, PropertyChangeListener {
                  * NON-MOVEMENT INTERACTIONS
                  */
                 if(keycode == Input.Keys.ESCAPE)
-                    GameClient.getInstance().getClientCharacter().target = null;
+                    GameClient.getInstance().getClientCharacter().setTarget(null);
 
                 if(keycode == Input.Keys.TAB && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {// tab targeting
-                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().target, false);
-                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), false);
+                    GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
                 }
 
                 if(keycode == Input.Keys.TAB && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {// tab targeting in reverse
-                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().target, true);
-                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), true);
+                    GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
                 }
 
                 if(keycode == Input.Keys.SPACE) {// closest interactive entity targeting
                     Entity nextTarget = EntityController.getInstance().getNextTargetEntity();
-                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                    GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
                 }
 
                 if(keycode == Input.Keys.L && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT))
@@ -360,7 +360,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     // if its first touch and there is a interactive entity, select it
                     if(Gdx.input.justTouched() && button == 1 && !onStageActor) { // Only acts on world if it did not hit any UI actor)
                         //if(WorldMap.hoverEntity != null)
-                        GameClient.getInstance().getClientCharacter().target = WorldMap.hoverEntity;
+                        if(GameClient.getInstance().getClientCharacter().getTarget() != null
+                         && GameClient.getInstance().getClientCharacter().getTarget() == WorldMap.hoverEntity)
+                            GameClient.getInstance().getClientCharacter().getTarget().takeDamage(); // for debug atm
+
+                        GameClient.getInstance().getClientCharacter().setTarget(WorldMap.hoverEntity);
                     }
                 }
                 return true;
@@ -378,9 +382,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     if(!onStageActor) { // Only acts on world if it did not hit any UI actor)
                         //if(WorldMap.hoverEntity != null)
                         if(pointer == 1)
-                            GameClient.getInstance().getClientCharacter().target = WorldMap.hoverEntity;
+                            GameClient.getInstance().getClientCharacter().setTarget(WorldMap.hoverEntity);
                         else if(!joystick.isActive())
-                            GameClient.getInstance().getClientCharacter().target = WorldMap.hoverEntity;
+                            GameClient.getInstance().getClientCharacter().setTarget(WorldMap.hoverEntity);
                     }
                     if (!Gdx.input.isTouched(0)) {
                         joystick.setActive(false);
@@ -925,7 +929,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 public void clicked(InputEvent event, float x, float y) {
                     onStageActor = true;
                     Entity nextTarget = EntityController.getInstance().getNextTargetEntity();
-                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                    GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
                     event.stop();
                     event.handle();
                     event.cancel();
@@ -935,8 +939,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
                     onStageActor = true;
-                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().target, true);
-                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), true);
+                    GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
                     event.stop();
                     event.handle();
                     event.cancel();
@@ -946,8 +950,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
                     onStageActor = true;
-                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().target, false);
-                    GameClient.getInstance().getClientCharacter().target = nextTarget;
+                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), false);
+                    GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
                     event.stop();
                     event.handle();
                     event.cancel();

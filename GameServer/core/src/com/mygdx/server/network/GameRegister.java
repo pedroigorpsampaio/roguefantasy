@@ -134,6 +134,7 @@ public class GameRegister {
         public int spawnId;
         public int creatureId;
         public float x, y, speed, attackSpeed, lastVelocityX, lastVelocityY, range;
+        public float health, maxHealth;
         public int targetId; // in case is following a player
         public long timestamp; // the last timestamp request processed that resulted in this x,y
         public String name, state;
@@ -171,6 +172,7 @@ public class GameRegister {
         public String name;
         public int id, role_level;
         public float x, y, speed;
+        public float health, maxHealth;
         public boolean isTeleporting;
         public EntityState state = EntityState.FREE;
     }
@@ -186,8 +188,9 @@ public class GameRegister {
     }
 
     public static class Tree {
+        public String name;
         public int treeId, spawnId, tileId;
-        public float health;
+        public float health, maxHealth;
         public int tileX, tileY;
         public float[] hitBox;
     }

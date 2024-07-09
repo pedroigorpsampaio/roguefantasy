@@ -1,89 +1,89 @@
 
 ui.png
-size: 256, 128
+size: 512, 128
 format: RGBA8888
 filter: MipMap, MipMap
 repeat: none
 Cursor Attack Green
   rotate: false
-  xy: 100, 84
+  xy: 158, 56
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Cannot Use
   rotate: false
-  xy: 100, 50
+  xy: 192, 56
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Chop Green
   rotate: false
-  xy: 134, 84
+  xy: 158, 22
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Default
   rotate: false
-  xy: 134, 50
+  xy: 192, 22
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Blue
   rotate: false
-  xy: 168, 84
+  xy: 230, 84
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Green
   rotate: false
-  xy: 168, 50
+  xy: 264, 84
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Red
   rotate: false
-  xy: 202, 84
+  xy: 298, 84
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Violet
   rotate: false
-  xy: 202, 50
+  xy: 332, 84
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Move Down
   rotate: false
-  xy: 100, 16
+  xy: 366, 84
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Move Up
   rotate: false
-  xy: 134, 16
+  xy: 400, 84
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Pickaxe Green
   rotate: false
-  xy: 168, 16
+  xy: 434, 84
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Scythe Green
   rotate: false
-  xy: 202, 16
+  xy: 468, 84
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
@@ -95,16 +95,37 @@ RectangleBox_96x96
   orig: 96, 96
   offset: 0, 0
   index: -1
+UiBg
+  rotate: false
+  xy: 100, 31
+  size: 56, 57
+  orig: 56, 57
+  offset: 0, 0
+  index: -1
+healthBar
+  rotate: false
+  xy: 100, 90
+  size: 120, 8
+  orig: 120, 8
+  offset: 0, 0
+  index: -1
+healthBarBg
+  rotate: false
+  xy: 100, 100
+  size: 128, 16
+  orig: 128, 16
+  offset: 0, 0
+  index: -1
 tile040
   rotate: false
-  xy: 236, 100
+  xy: 2, 2
   size: 16, 16
   orig: 16, 16
   offset: 0, 0
   index: -1
 tile041
   rotate: false
-  xy: 2, 2
+  xy: 20, 2
   size: 15, 16
   orig: 15, 16
   offset: 0, 0

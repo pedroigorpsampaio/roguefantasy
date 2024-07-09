@@ -103,6 +103,8 @@ public class Component {
             update.character.x = position.x;
             update.character.y = position.y;
             update.character.name = tag.name;
+            update.character.health = attr.health;
+            update.character.maxHealth = attr.maxHealth;
             update.character.speed = attr.speed;
             update.character.role_level = role_level;
             update.character.state = state;
@@ -561,9 +563,10 @@ public class Component {
 
     public static class Attributes {
         public float width, height, speed, attackSpeed, range;
-        public Attributes(float width, float height, float speed, float attackSpeed, float range) {
+        public float health, maxHealth;
+        public Attributes(float width, float height, float maxHealth, float health, float speed, float attackSpeed, float range) {
             this.width = width; this.height = height; this.attackSpeed = attackSpeed;
-            this.speed = speed; this.range = range;
+            this.speed = speed; this.range = range; this.health = health; this.maxHealth = maxHealth;
         }
     }
 

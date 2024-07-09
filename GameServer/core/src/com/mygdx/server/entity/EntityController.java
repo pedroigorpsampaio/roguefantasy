@@ -61,6 +61,7 @@ public class EntityController {
 //                new Component.Position(26, 4),
 //                new Component.Velocity(0, 0),
 //                new Component.Attributes(64f*RogueFantasyServer.world.getUnitScale(), 64f*RogueFantasyServer.world.getUnitScale(),
+//                        100f, 100f,
 //                        100f*RogueFantasyServer.world.getUnitScale(), 50f,
 //                        14f*RogueFantasyServer.world.getUnitScale()),
 //                new Component.Spawn(0, new Component.Position(0, 0), 15)
@@ -146,6 +147,8 @@ public class EntityController {
         creatureUpdate.spawnId = entity.get(Component.Spawn.class).id;
         creatureUpdate.x = entity.get(Component.Position.class).x;
         creatureUpdate.y = entity.get(Component.Position.class).y;
+        creatureUpdate.health = entity.get(Component.Attributes.class).health;
+        creatureUpdate.maxHealth = entity.get(Component.Attributes.class).maxHealth;
         creatureUpdate.speed = entity.get(Component.Attributes.class).speed;
         creatureUpdate.attackSpeed = entity.get(Component.Attributes.class).attackSpeed;
         creatureUpdate.range = entity.get(Component.Attributes.class).range;

@@ -11,11 +11,12 @@ import static com.mygdx.game.ui.GameScreen.shapeDebug;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
@@ -24,9 +25,17 @@ import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.Touchable;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.ProgressBar;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
+import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.Font;
+import com.github.tommyettinger.textra.Layout;
+import com.github.tommyettinger.textra.Line;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
@@ -43,12 +52,16 @@ import java.util.concurrent.atomic.AtomicLong;
 public abstract class Entity implements Comparable<Entity> {
     public static AssetManager assetManager; // screen asset manager
     public static Stage stage; // screen stage
+    private final TextureAtlas uiAtlas;
+    protected final Image uiBg, healthBar, healthBarBg;
+    protected Skin skin;
+    protected Font font;
     public String entityName = "";
     public boolean isClient = false;
     private ShapeRenderer shapeRenderer; // for debug
     protected Pixmap debugCircle; // for debug
     protected Texture debugTex; // for debug
-    public static float tagScale = unitScale * 0.66f;
+    public static float tagScale = unitScale * 0.4f;
     static float rectOffsetUp = 0.2f, rectOffsetDown = 0.2f, rectOffsetLeft = 0.4f, rectOffsetRight = 0.4f;
     public Polygon hitBox = new Polygon();
     public Vector2 drawPos = new Vector2(0,0); // position to draw this entity
@@ -68,7 +81,21 @@ public abstract class Entity implements Comparable<Entity> {
     protected boolean fadeIn = false;
     protected boolean fadeOut = false;
     protected float fadeSpeed = 2f;
+    protected float animSizeFactor = 1f; // for yo yo size animation
+    protected float animDir = 1; // for yo yo movement animation
     protected TextureRegion currentFrame = null;
+
+    public Entity() {
+        /**
+         * Load assets common to entities
+         */
+        uiAtlas = assetManager.get("ui/packed_textures/ui.atlas");
+        skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
+        font = skin.get("emojiFont", Font.class); // gets typist font with icons
+        uiBg = new Image(uiAtlas.findRegion("UiBg"));
+        healthBarBg = new Image(uiAtlas.findRegion("healthBarBg"));
+        healthBar = new Image(uiAtlas.findRegion("healthBar"));
+    }
 
     /**
      * Checks if point hits this entity
@@ -89,6 +116,11 @@ public abstract class Entity implements Comparable<Entity> {
      */
     public boolean isUnmovable() {
         return teleportInAnim || teleportOutAnim || fadeIn || fadeOut || !isAlive;
+    }
+
+    public void resetYoYoAnim () {
+        animSizeFactor = 1f;
+        animDir = 1;
     }
 
     public void fadeIn(float fadeSpeed) {
@@ -153,6 +185,11 @@ public abstract class Entity implements Comparable<Entity> {
     public TextureRegion getCurrentFrame() {
         return currentFrame;
     }
+
+    /**
+     * For DEBUG ONLY!
+     */
+    public abstract void takeDamage();
 
     public enum Type {
         CREATURE,
@@ -236,14 +273,14 @@ public abstract class Entity implements Comparable<Entity> {
     public abstract void render(SpriteBatch batch) ;
 
     /**
-     * Entities that belongs to the world can draw UI on UI camera if needed by implementing this method
-     * @param batch     the batch to draw UI
-     * @param worldCamera   the world camera reference for necessary projections to screen position
+     * Entities that belongs to the world can draw UI on top of itself using this method
+     *
+     * @param batch the batch to draw UI
      */
-    public abstract void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) ;
+    public abstract void renderUI(SpriteBatch batch) ;
 
     /**
-     * This method is called when entity is target of client player to render UI for target selected
+     * This method is called when entity is target of client player to render target selected circle
      * @param batch the batch to draw UI of target selected
      */
     public abstract void renderTargetUI(SpriteBatch batch);
@@ -252,20 +289,19 @@ public abstract class Entity implements Comparable<Entity> {
         // Constant rows and columns of the sprite sheet
         private static final int FRAME_COLS = 6, FRAME_ROWS = 24;
         private static final float ANIM_BASE_INTERVAL = 0.25175f; // the base interval between anim frames
-        private final Skin skin;
-        private final Font font;
         private Polygon collider = new Polygon(); // this players collider
         public AtomicLong lastRequestId;
         public boolean assetsLoaded = false;
         Texture spriteSheet;
         Map<Direction, Animation<TextureRegion>> walk, idle, attack; // animations
-        public Entity target = null; // the current character target - selected entity
+        private Entity target = null; // the current character target - selected entity
         float animTime; // A variable for tracking elapsed time for the animation
         public String name;
         public int id, role_level, outfitId;
         public Vector2 position, interPos;
         public Direction direction;
         public float x, y, speed, spriteW, spriteH;
+        public float health, maxHealth;
         public TypingLabel nameLabel, outlineLabel;
         private Vector2 centerPos = new Vector2();
         private Vector2 startPos; // used for interpolation
@@ -295,18 +331,33 @@ public abstract class Entity implements Comparable<Entity> {
                 return 1;
         }
 
+        public Entity getTarget() {
+            return target;
+        }
+
+        public void setTarget(Entity e) {
+            if(target != null && e != null && e.uId == target.uId) return; // same target as before, do nothing
+
+            if(e != null) e.resetYoYoAnim(); // if a entity is selected, reset its yo yo target animation
+
+            this.target = e; // set target to an entity or null representing client has no target atm
+        }
+
         public static class EntityInterPos {
             public long timestamp;
             public Vector2 position;
         }
 
-        public Character(String name, int id, int role_level, float x, float y, float speed) {
+        public Character(String name, int id, int role_level, float x, float y, float maxHealth, float health, float speed) {
+            super();
             this.name = name; this.id = id; this.role_level = role_level; this.outfitId = 0;
             this.entityName = name;
             this.uId = EntityController.getInstance().generateUid();
             this.position = new Vector2(x, y); this.interPos = new Vector2(x, y);
             this.drawPos = new Vector2(x, y);
             this.x = x; this.y = y; this.speed = speed; lastRequestId = new AtomicLong(0);
+            this.maxHealth = maxHealth;
+            this.health = health;
             this.direction = Direction.SOUTH;
             this.bufferedPos = new ConcurrentSkipListMap<>();
             this.contextId = this.id;
@@ -315,8 +366,6 @@ public abstract class Entity implements Comparable<Entity> {
             this.isTargetAble = true;
             //this.bufferedPos.putIfAbsent(System.currentTimeMillis(), new Vector2(this.x, this.y));
             startPos = new Vector2(this.x, this.y);
-            skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
-            font = skin.get("emojiFont", Font.class); // gets typist font with icons
             if(role_level == 0)
                 nameLabel = new TypingLabel("{SIZE=69%}{COLOR=GOLD}"+this.name+"[%]", font);
             else if(role_level == 4)
@@ -658,7 +707,7 @@ public abstract class Entity implements Comparable<Entity> {
 
                 if(WorldMap.isWithinWorldBounds(futurePos) &&
                         WorldMap.getInstance().isWalkable(futurePos) &&
-                            isWithinOneTile) { // found a new movement to make searching clockwise
+                        isWithinOneTile) { // found a new movement to make searching clockwise
                     newMove.x = moveVec.x;
                     newMove.y = moveVec.y;
                     break;
@@ -681,7 +730,7 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         @Override
-        public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
+        public void renderUI(SpriteBatch batch) {
 
         }
 
@@ -703,6 +752,13 @@ public abstract class Entity implements Comparable<Entity> {
                 Gdx.gl.glLineWidth(1);
                 batch.begin();
             }
+        }
+
+        @Override
+        public void takeDamage() {
+            health-=5f;
+            if(health<0)
+                health = maxHealth;
         }
 
         @Override
@@ -889,7 +945,8 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         public static Character toCharacter(GameRegister.Character charData) {
-            return new Character(charData.name, charData.id, charData.role_level, charData.x, charData.y, charData.speed);
+            return new Character(charData.name, charData.id, charData.role_level, charData.x, charData.y,
+                    charData.maxHealth, charData.health, charData.speed);
         }
 
         /**
@@ -918,6 +975,7 @@ public abstract class Entity implements Comparable<Entity> {
         private boolean assetsLoaded;
 
         public Wall(int wallId, int tileId, TiledMapTile tile, int tileX, int tileY) {
+            super();
             this.tile = tile;
             this.tileX = tileX;
             this.tileY = tileY;
@@ -973,7 +1031,12 @@ public abstract class Entity implements Comparable<Entity> {
 
         public static Wall toWall(GameRegister.Wall wallUpdate) {
             return new Wall(wallUpdate.wallId, wallUpdate.tileId,  WorldMap.getInstance().getTileFromId(wallUpdate.tileId),
-                                wallUpdate.tileX, wallUpdate.tileY);
+                    wallUpdate.tileX, wallUpdate.tileY);
+        }
+
+        @Override
+        public void takeDamage() {
+
         }
 
         @Override
@@ -1010,7 +1073,7 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         @Override
-        public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
+        public void renderUI(SpriteBatch batch) {
 
         }
 
@@ -1036,21 +1099,26 @@ public abstract class Entity implements Comparable<Entity> {
     public static class Tree extends Entity {
         public final int spawnId;
         private final int treeId;
+        private TypingLabel nameLabel;
         public int tileX, tileY;
         public TiledMapTile tile;
         public int tileId;
-        public float health;
+        public float health, maxHealth;
         public boolean isWalkable;
+        public String name;
         private boolean assetsLoaded;
 
-        public Tree(int treeId, int spawnId, int tileId, TiledMapTile tile, float health, int tileX, int tileY, Polygon hitBox) {
+        public Tree(int treeId, int spawnId, int tileId, TiledMapTile tile, String name, float maxHealth, float health, int tileX, int tileY, Polygon hitBox) {
+            super();
             this.tile = tile;
             this.tileX = tileX;
             this.tileY = tileY;
             this.treeId = treeId;
             this.tileId = tileId;
             this.spawnId = spawnId;
+            this.name = name;
             this.health = health;
+            this.maxHealth = maxHealth;
             this.isWalkable = tile.getProperties().get("walkable", Boolean.class);
             this.isObfuscator = tile.getProperties().get("obfuscator", Boolean.class);
             this.contextId = this.spawnId;
@@ -1073,13 +1141,28 @@ public abstract class Entity implements Comparable<Entity> {
                 debugCircle = getPixmapCircle(40, Color.BROWN,true);
                 debugTex=new Texture(debugCircle);
                 debugTex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+                nameLabel = new TypingLabel("{SIZE=55%}{COLOR=LIGHT_GRAY}"+this.name+"[%]", font);
+                nameLabel.skipToTheEnd();
                 assetsLoaded = true;
             });
         }
 
         public static Tree toTree(GameRegister.Tree treeUpdate) {
             return new Tree(treeUpdate.treeId, treeUpdate.spawnId, treeUpdate.tileId,  WorldMap.getInstance().getTileFromId(treeUpdate.tileId),
-                                treeUpdate.health, treeUpdate.tileX, treeUpdate.tileY, new Polygon(treeUpdate.hitBox));
+                    treeUpdate.name, treeUpdate.maxHealth, treeUpdate.health, treeUpdate.tileX, treeUpdate.tileY, new Polygon(treeUpdate.hitBox));
+        }
+
+        @Override
+        public void takeDamage() {
+            health-=5f;
+            if(health<=0) {
+                this.tile = WorldMap.getInstance().getMap().getTileSets().getTile(this.tileId-1);
+                this.isInteractive = false;
+                this.isTargetAble = false;
+                if(GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                    GameClient.getInstance().getClientCharacter().setTarget(null);
+                }
+            }
         }
 
         @Override
@@ -1116,21 +1199,103 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         @Override
-        public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
+        public void renderUI(SpriteBatch batch) {
+            if(this.health<=0) return;
+
+            /**
+             * TARGET INFO
+             */
+            float spriteH = tile.getTextureRegion().getRegionHeight() * unitScale;
+            float spriteW = tile.getTextureRegion().getRegionWidth() * unitScale;
+
+            /**ui background**/
+            float w = 1.9f;
+            float h = 0.5f;
+            uiBg.setBounds(this.finalDrawPos.x+spriteW/2f - w/2f, this.finalDrawPos.y+spriteH*1.1f, w, h);
+            uiBg.draw(batch, 0.74f);
+
+            /**target name**/
+            // draw creature tag
+            nameLabel.getFont().scale(tagScale, tagScale);
+            nameLabel.setAlignment(Align.center);
+
+            nameLabel.setBounds(this.finalDrawPos.x+spriteW/2f -  (nameLabel.getWidth()*tagScale/2f),
+                    this.finalDrawPos.y + 10f,
+                    nameLabel.getWidth(), nameLabel.getHeight());
+            nameLabel.draw(batch, 1.0f);
+
+            nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
+
+            /**health bar**/
+            // background
+            w = 1.55f;
+            h = 0.24f;
+            healthBarBg.setBounds(this.finalDrawPos.x+spriteW/2f - w/2f, this.finalDrawPos.y+spriteH*1.124f, w, h);
+            healthBarBg.draw(batch, 1f);
+
+            // health bar
+            float percent = health/maxHealth;
+            healthBar.setColor(Color.RED.cpy().lerp(Color.OLIVE, percent*1.25f + 0.15f));
+
+            w = 1.454f;
+            h = 0.126f;
+            healthBar.setBounds(healthBarBg.getX()+unitScale*1.55f, healthBarBg.getY()+unitScale*1.75f, w*percent, h);
+            healthBar.draw(batch, 1f);
+
+            // percent text
+            int percentInt = (int) (percent * 100f);
+            StringBuilder sb = new StringBuilder();
+            sb.append(percentInt);
+            sb.append("%");
+
+            TypingLabel tmpLabel = new TypingLabel(String.valueOf(sb), font);
+            float percentScale = tagScale*0.43f;
+            float percentW = tmpLabel.getWidth()*percentScale;
+            font.scale(percentScale, percentScale);
+            font.drawText(batch, sb, healthBarBg.getX() + healthBarBg.getWidth()/2f - percentW/2f, healthBarBg.getY()+unitScale*1.34f);
+            font.scaleTo(font.originalCellWidth, font.originalCellHeight);
         }
 
         @Override
         public void renderTargetUI(SpriteBatch batch) {
+            if(this.health<=0) return;
+            /**
+             * TARGET CIRCLE
+             */
             float tileHeight = TEX_HEIGHT * unitScale;
-            float halfTileHeight = tileHeight * 0.5f;
-            float targetScale = 0.75f;
+            float tileWidth = TEX_WIDTH * unitScale;
+
+            float step =  0.15f * Gdx.graphics.getDeltaTime() * animDir;
+
+            animSizeFactor = ((animSizeFactor + step));
+
+            if(animSizeFactor > 1.05f) animDir = -1;
+            if(animSizeFactor < 0.95f) animDir = 1;
+
+            float targetScale = 0.75f * animSizeFactor;
+
+            float x = finalDrawPos.x + tileWidth*0.033f;
+            float y = finalDrawPos.y - tileHeight*0.3f;
+            float a = x + tileWidth/2f;
+            float b = y + tileHeight/2f;
+            float scale = tileWidth*targetScale;
+            float smallerFactor = 0.81f;
+
             batch.end();
             Gdx.gl.glLineWidth(4);
             shapeDebug.setProjectionMatrix(camera.combined);
             shapeDebug.begin(ShapeRenderer.ShapeType.Line);
-            shapeDebug.setColor(Color.RED);
-            shapeDebug.ellipse(finalDrawPos.x+TEX_WIDTH*unitScale*0.155f, finalDrawPos.y - halfTileHeight*0.26f,
-                    TEX_WIDTH* unitScale*targetScale, TEX_HEIGHT*unitScale*targetScale, 120);
+            shapeDebug.setColor(Color.FIREBRICK);
+            shapeDebug.ellipse((x - a) * scale + a, (y - b) * scale + b,
+                    TEX_WIDTH* unitScale*targetScale, TEX_HEIGHT*unitScale*targetScale, 20);
+            shapeDebug.setColor(Color.MAROON);
+            scale = tileWidth*targetScale*smallerFactor;
+            shapeDebug.setAutoShapeType(true);
+            shapeDebug.set(ShapeRenderer.ShapeType.Filled);
+            shapeDebug.ellipse((x - a) * scale + a, (y - b) * scale + b,
+                    TEX_WIDTH* unitScale*targetScale*smallerFactor, TEX_HEIGHT*unitScale*targetScale*smallerFactor, 20);
+            //shapeDebug.setColor(Color.ORANGE);
+            //shapeDebug.arc(finalDrawPos.x+TEX_WIDTH*unitScale*0.155f, finalDrawPos.y - halfTileHeight*0.26f, 5f, 0f, 15);
             //shapeDebug.rect(drawPos.x, drawPos.y, 1f, 45f/32f);
             shapeDebug.end();
             Gdx.gl.glLineWidth(1);
@@ -1157,8 +1322,6 @@ public abstract class Entity implements Comparable<Entity> {
         private static final float ANIM_BASE_INTERVAL = 0.25175f; // the base interval between anim frames
         public Character target;
         public boolean assetsLoaded = false;
-        private Skin skin;
-        private Font font;
         Texture spriteSheet;
         Map<Direction, Animation<TextureRegion>> walk, idle, attack; // animations
         public Direction direction; // direction of this creature
@@ -1168,13 +1331,15 @@ public abstract class Entity implements Comparable<Entity> {
         public int spawnId;
         public Vector2 position, interPos, lastVelocity, startPos;
         public float x, y, speed, attackSpeed, range, spriteW, spriteH;
+        public float health, maxHealth;
         public State state;
         public TypingLabel nameLabel, outlineLabel;
         public int targetId;
         private Vector2 centerPos;
 
-        public Creature(String name, int creatureId, int spawnId, float x, float y, float speed, float attackSpeed,
+        public Creature(String name, int creatureId, int spawnId, float x, float y, float maxHealth, float health, float speed, float attackSpeed,
                         float range, float lastVelocityX, float lastVelocityY, String stateName, int targetId) {
+            super();
             this.name = name; this.entityName = name;
             this.creatureId = creatureId; this.spawnId = spawnId;
             this.uId = EntityController.getInstance().generateUid();
@@ -1187,6 +1352,8 @@ public abstract class Entity implements Comparable<Entity> {
             this.target = GameClient.getInstance().getOnlineCharacters().get(targetId);
             this.x = x;
             this.y = y;
+            this.maxHealth = maxHealth;
+            this.health = health;
             this.speed = speed;
             this.attackSpeed = attackSpeed;
             this.range = range;
@@ -1195,8 +1362,6 @@ public abstract class Entity implements Comparable<Entity> {
             this.isInteractive = true;
             this.isTargetAble = true;
             direction = Direction.SOUTHWEST;
-            skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
-            font = skin.get("emojiFont", Font.class); // gets typist font with icons
             nameLabel = new TypingLabel("{SIZE=55%}{COLOR=brick}"+this.name+"[%]", font);
             nameLabel.skipToTheEnd();
             outlineLabel = new TypingLabel("{SIZE=55%}{COLOR=black}"+this.name+"[%]", font);
@@ -1334,6 +1499,13 @@ public abstract class Entity implements Comparable<Entity> {
             this.speed = speed;
             this.state = State.getStateFromName(stateName);
             this.target = target;
+        }
+
+        @Override
+        public void takeDamage() {
+            health-=5f;
+            if(health<0)
+                health = maxHealth;
         }
 
         @Override
@@ -1504,13 +1676,14 @@ public abstract class Entity implements Comparable<Entity> {
         // transform a creature update from server into a creature object from client
         public static Creature toCreature(GameRegister.UpdateCreature creatureUpdate) {
             return new Creature(creatureUpdate.name, creatureUpdate.creatureId, creatureUpdate.spawnId,
-                    creatureUpdate.x, creatureUpdate.y, creatureUpdate.speed, creatureUpdate.attackSpeed,
+                    creatureUpdate.x, creatureUpdate.y, creatureUpdate.maxHealth, creatureUpdate.health,
+                    creatureUpdate.speed, creatureUpdate.attackSpeed,
                     creatureUpdate.range, creatureUpdate.lastVelocityX, creatureUpdate.lastVelocityY,
                     creatureUpdate.state, creatureUpdate.targetId);
         }
 
         @Override
-        public void renderUI(SpriteBatch batch, OrthographicCamera worldCamera) {
+        public void renderUI(SpriteBatch batch) {
 
 
         }

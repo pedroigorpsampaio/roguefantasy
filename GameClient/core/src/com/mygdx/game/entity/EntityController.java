@@ -92,11 +92,18 @@ public class EntityController {
                     }
                 }
 
-                // if entity is target of client player, render selected target UI
-                if(GameClient.getInstance().getClientCharacter().target != null &&
-                        GameClient.getInstance().getClientCharacter().target.uId == e.uId)
+                // if entity is target of client player, render selected target circle
+                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                        GameClient.getInstance().getClientCharacter().getTarget().uId == e.uId)
                     e.renderTargetUI(batch);
+
+                // render entity between target circle and entity ui
                 e.render(batch);
+
+                // if entity is target of client player, render selected entity UI
+                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                        GameClient.getInstance().getClientCharacter().getTarget().uId == e.uId)
+                    e.renderUI(batch);
 
                 if(obfuscateHit) {
                     Color c = batch.getColor();

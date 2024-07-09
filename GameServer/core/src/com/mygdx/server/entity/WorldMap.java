@@ -265,6 +265,8 @@ public class WorldMap implements InputProcessor {
                             case "tree":
                                 GameRegister.Tree tree = new GameRegister.Tree();
                                 tree.health = 100f; // initial health
+                                tree.maxHealth = 100f; // max health
+                                tree.name = cell.getTile().getProperties().get("name", String.class);
                                 tree.tileId = cell.getTile().getId();
                                 tree.treeId = cell.getTile().getProperties().get("tree_id", Integer.class);
                                 tree.tileX = j; tree.tileY = i;

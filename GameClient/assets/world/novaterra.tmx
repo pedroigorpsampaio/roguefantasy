@@ -2197,6 +2197,7 @@
   <tile id="251">
    <properties>
     <property name="has_collisor" type="bool" value="true"/>
+    <property name="name" value="oak"/>
     <property name="obfuscator" type="bool" value="false"/>
     <property name="tree_id" type="int" value="0"/>
     <property name="type" value="tree"/>
@@ -2212,6 +2213,7 @@
   <tile id="252">
    <properties>
     <property name="has_collisor" type="bool" value="true"/>
+    <property name="name" value="oak"/>
     <property name="obfuscator" type="bool" value="false"/>
     <property name="tree_id" type="int" value="0"/>
     <property name="type" value="tree"/>
@@ -2227,6 +2229,7 @@
   <tile id="253">
    <properties>
     <property name="has_collisor" type="bool" value="true"/>
+    <property name="name" value="birch"/>
     <property name="obfuscator" type="bool" value="false"/>
     <property name="tree_id" type="int" value="1"/>
     <property name="type" value="tree"/>
@@ -2242,6 +2245,7 @@
   <tile id="254">
    <properties>
     <property name="has_collisor" type="bool" value="true"/>
+    <property name="name" value="birch"/>
     <property name="obfuscator" type="bool" value="false"/>
     <property name="tree_id" type="int" value="1"/>
     <property name="type" value="tree"/>
@@ -2257,6 +2261,7 @@
   <tile id="255">
    <properties>
     <property name="has_collisor" type="bool" value="true"/>
+    <property name="name" value="dead_oak"/>
     <property name="obfuscator" type="bool" value="false"/>
     <property name="tree_id" type="int" value="2"/>
     <property name="type" value="tree"/>
@@ -2272,6 +2277,7 @@
   <tile id="256">
    <properties>
     <property name="has_collisor" type="bool" value="true"/>
+    <property name="name" value="dead_oak"/>
     <property name="obfuscator" type="bool" value="false"/>
     <property name="tree_id" type="int" value="2"/>
     <property name="type" value="tree"/>
@@ -2287,6 +2293,7 @@
   <tile id="257">
    <properties>
     <property name="has_collisor" type="bool" value="true"/>
+    <property name="name" value="dead_birch"/>
     <property name="obfuscator" type="bool" value="false"/>
     <property name="tree_id" type="int" value="3"/>
     <property name="type" value="tree"/>
@@ -2302,6 +2309,7 @@
   <tile id="258">
    <properties>
     <property name="has_collisor" type="bool" value="true"/>
+    <property name="name" value="dead_birch"/>
     <property name="obfuscator" type="bool" value="false"/>
     <property name="tree_id" type="int" value="3"/>
     <property name="type" value="tree"/>
