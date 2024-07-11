@@ -1,5 +1,7 @@
 package com.mygdx.game.ui;
 
+import static com.mygdx.game.entity.WorldMap.unitScale;
+
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
@@ -46,6 +48,7 @@ import com.badlogic.gdx.utils.Timer;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.StretchViewport;
 import com.github.tommyettinger.textra.Font;
+import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.entity.Entity;
 import com.mygdx.game.entity.EntityController;
@@ -73,7 +76,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private final InputMultiplexer inputMultiplexer;
     private final Touchpad touchPad;
     private final TextureAtlas uiAtlas;
-    private final Image closestEntityImg;
+    private Image closestEntityImg, targetImg;
     private Button selectTargetBtn, nextTargetBtn, lastTargetBtn;
     private FitViewport uiViewport;
     private Font font;
@@ -86,6 +89,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Label ramLabel;
     private Label bCallsLabel;
     private Label mouseOnLabel;
+    private Image uiBg, healthBar, healthBarBg;
+    private TypingLabel nameLabel, percentLabel;
+    private Stack targetUiStack;
     private static AssetManager manager;
     private Music bgm;
     private RogueFantasy game;
@@ -151,6 +157,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
         camera.update();
         uiCam.update();
 
+        // loads game chosen skin
+        skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
+
         // loads world map
         TiledMap map = manager.get("world/novaterra.tmx");
         world = WorldMap.getInstance();
@@ -158,6 +167,17 @@ public class GameScreen implements Screen, PropertyChangeListener {
         
         // ui atlas
         uiAtlas = manager.get("ui/packed_textures/ui.atlas");
+
+        /**
+         * Load entity ui assets
+         */
+        uiBg = new Image(uiAtlas.findRegion("panel"));
+        healthBarBg = new Image(uiAtlas.findRegion("healthBarBg"));
+        healthBar = new Image(uiAtlas.findRegion("healthBar"));
+        nameLabel = new TypingLabel("Kane", skin);
+        nameLabel.skipToTheEnd();
+        percentLabel = new TypingLabel("100%", skin);
+        percentLabel.skipToTheEnd();
 
         TextureAtlas.AtlasRegion region = uiAtlas.findRegion("RectangleBox_96x96");
         TextureRegionDrawable up = new TextureRegionDrawable(new TextureRegion(new Sprite(region)));
@@ -174,19 +194,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
 
-        // gets font from asset manager
-        // BitmapFont fontMedium = manager.get("fonts/immortalMedium.ttf", BitmapFont.class);
-
         // get and play music
         Random rand = new Random();
         bgm = manager.get("bgm/maps/bgm_"+rand.nextInt(3)+".mp3", Music.class);
         bgm.setLooping(true);
         bgm.setVolume(prefs.getFloat("bgmVolume", 1.0f));
         bgm.play();
-
-        // loads game chosen skin
-        skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
-        //skin.add("fontMedium", fontMedium, BitmapFont.class);
 
         stage = new Stage(new StretchViewport(1280, 720));
         gestureDetector = new GestureDetector(20, 0.4f,
@@ -216,6 +229,19 @@ public class GameScreen implements Screen, PropertyChangeListener {
         mouseOnLabel = new Label("Entity: none", skin, "fontMedium", Color.WHITE);
         mouseOnLabel.setAlignment(Align.left);
         mouseOnLabel.setX(bCallsLabel.getX()+bCallsLabel.getWidth()+22);
+
+        targetUiStack = new Stack();
+        float x = stage.getWidth()/2f;
+        float y = stage.getHeight() - CommonUI.TARGET_UI_HEIGHT/2f;
+        float w =  CommonUI.TARGET_UI_WIDTH;
+        float h =  CommonUI.TARGET_UI_HEIGHT;
+
+        /**ui entity target background**/
+        uiBg.setBounds(x - w/2f, y - h/2, w, h);
+        targetImg = new Image();
+        targetImg.setBounds(uiBg.getX(), uiBg.getY(), w/5f, h/1.2f);
+        //.setOrigin(targetStack.getWidth()/2f,targetStack.getHeight()/2f);
+
 
         Stack targetStack = new Stack();
         //selectTargetBtn.setX(Gdx.graphics.getWidth() - selectTargetBtn.getWidth() * 2f);
@@ -412,6 +438,97 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 update();
             }
         },0,GameRegister.clientTickrate());
+    }
+
+    /**
+     * Shows entity target UI that is shown on entity hover/targeting
+     */
+    private void showEntityTargetUI(Entity e) {
+        if(e == null || !e.isTargetAble) return; // nothing to render if entity is null or not selectable
+
+        float w =  CommonUI.TARGET_UI_WIDTH;
+        float h =  CommonUI.TARGET_UI_HEIGHT;
+
+        ///**ui background**/
+        //uiBg.setBounds(x - w/2f, y - h/2, w, h);
+        //uiBg.draw(batch, bgAlpha);
+
+        /**target sprite**/
+        TextureRegion eFrame = e.getCurrentFrame();
+        targetImg.setDrawable(new TextureRegionDrawable(eFrame));
+        float width = w / 3f;
+        float height = h / 1.0f;
+        switch(e.type) {
+            case TREE:
+                width = w / 4f;height = h / 1.5f;
+                break;
+            case CREATURE:
+                width = w / 3f;height = h / 1.0f;
+                break;
+            case CHARACTER:
+                width = w / 5f;height = h / 1.4f;
+                break;
+            default:
+                break;
+        }
+        targetImg.setBounds(uiBg.getX()+uiBg.getWidth()/5.5f-width/2f, uiBg.getY()+uiBg.getHeight()/2f-height/2f, width, height);
+
+        /**health bar**/
+        // background
+        w *= 0.5857f;
+        h *= 0.32f;
+        healthBarBg.setBounds(uiBg.getX()+uiBg.getWidth()/2f - w/3.17f, uiBg.getY()+h*0.49f, w, h);
+
+        // health bar
+        float percent = e.health/e.maxHealth;
+        healthBar.setColor(Color.RED.cpy().lerp(Color.OLIVE, percent*1.25f + 0.15f));
+
+        w *= 0.938f;
+        h *= 0.525f;
+        healthBar.setBounds(healthBarBg.getX()+w*0.032f, healthBarBg.getY()+h*0.45f, w*percent, h);
+
+        /**tag name**/
+        nameLabel.setText("{SIZE=75%}{COLOR=LIGHT_GRAY}"+e.entityName+"[%]{ENDCOLOR}");
+        nameLabel.setAlignment(Align.center);
+        nameLabel.setBounds(healthBarBg.getX()+healthBarBg.getWidth()/2f-nameLabel.getWidth()/2f,
+                            healthBarBg.getY() + healthBarBg.getHeight()*1.6f,
+                nameLabel.getWidth(), nameLabel.getHeight());
+
+        /**percent text**/
+        int percentInt = (int) (percent * 100f);
+        StringBuilder sb = new StringBuilder();
+        sb.append(percentInt);
+        sb.append("%");
+
+        percentLabel.setText("{SIZE=69%}{COLOR=LIGHT_GRAY}"+sb+"[%]{ENDCOLOR}");
+        percentLabel.setAlignment(Align.center);
+        percentLabel.setBounds(healthBarBg.getX() + healthBarBg.getWidth()/2f -percentLabel.getWidth()/2f,
+                                healthBarBg.getY()+healthBarBg.getHeight()/3.17f,
+                                    percentLabel.getWidth(), percentLabel.getHeight());
+
+//        TypingLabel tmpLabel = new TypingLabel(String.valueOf(sb), font);
+//        float percentScale = tagScale*0.66f;
+//        float percentW = tmpLabel.getWidth()*percentScale;
+//        font.scale(percentScale, percentScale);
+//        font.drawText(batch, sb, healthBarBg.getX() + healthBarBg.getWidth()/2f - percentW/2f,
+//                healthBarBg.getY()+healthBarBg.getHeight()/3.17f);
+//        font.scaleTo(font.originalCellWidth, font.originalCellHeight);
+
+        stage.addActor(uiBg);
+        stage.addActor(targetImg);
+        stage.addActor(healthBarBg);
+        stage.addActor(healthBar);
+        stage.addActor(nameLabel);
+        stage.addActor(percentLabel);
+    }
+
+    public void hideEntityTargetUI() {
+        uiBg.remove();
+        targetImg.remove();
+        healthBarBg.remove();
+        healthBar.remove();
+        nameLabel.remove();
+        percentLabel.remove();
     }
 
     @Override
@@ -628,6 +745,31 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // draw entities using ordered list (if there is any)
         if(entityController.entities.size() > 0)
             entityController.renderEntities(batch);
+
+        // if entity is target of client player, render selected entity UI
+        Entity target = gameClient.getClientCharacter().getTarget();
+        if(target != null) {
+            target.renderUI(batch);
+            showEntityTargetUI(target);
+        }
+
+        batch.setProjectionMatrix(camera.combined);
+        // always draw client simplified ui
+        gameClient.getClientCharacter().renderUI(batch);
+
+        // renders hover entity information
+        if((Gdx.app.getType() == Application.ApplicationType.Desktop &&
+                WorldMap.hoverEntity != null)) {
+            if(target == null
+                || target.uId !=
+            WorldMap.hoverEntity.uId) { // only renders if target is not the one being hovered, as info is already being rendered by being a target
+                WorldMap.hoverEntity.renderUI(batch);
+                showEntityTargetUI(WorldMap.hoverEntity);
+            }
+        }
+
+        if(target == null && WorldMap.hoverEntity == null)
+            hideEntityTargetUI(); // makes sure to hide target ui when no target nor hover exists
 
         batch.end();
         batch.setBlendFunction(srcFunc, dstFunc);

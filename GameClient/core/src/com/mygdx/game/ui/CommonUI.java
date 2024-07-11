@@ -27,6 +27,9 @@ import java.util.regex.Pattern;
 
 // Common UI methods that help different UI modules
 public class CommonUI {
+    public static final float TARGET_UI_WIDTH = 340;
+    public static final float TARGET_UI_HEIGHT = 105;
+    public static final float TARGET_UI_BG_ALPHA = 1.00f;
     public static boolean enableDebugTex = false;
     public static HashMap<String, Cursor> cursorBank;
 

@@ -14,7 +14,6 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
-import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -25,17 +24,11 @@ import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
-import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.ui.ProgressBar;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.Font;
-import com.github.tommyettinger.textra.Layout;
-import com.github.tommyettinger.textra.Line;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
@@ -61,11 +54,13 @@ public abstract class Entity implements Comparable<Entity> {
     private ShapeRenderer shapeRenderer; // for debug
     protected Pixmap debugCircle; // for debug
     protected Texture debugTex; // for debug
-    public static float tagScale = unitScale * 0.4f;
+    public TypingLabel nameLabel; // name label of entity
+    public static float tagScale = unitScale * 0.415f;
     static float rectOffsetUp = 0.2f, rectOffsetDown = 0.2f, rectOffsetLeft = 0.4f, rectOffsetRight = 0.4f;
     public Polygon hitBox = new Polygon();
     public Vector2 drawPos = new Vector2(0,0); // position to draw this entity
     public Vector2 finalDrawPos = new Vector2(0,0); // final position to draw this entity (for y-ordering, sometimes drawPos differs from final draw pos)
+    public Vector2 centerPos = new Vector2(0,0); // center position of entity sprite
     public int uId; // this entity unique id
     public int contextId; // the id of this id in context, based on what type of entity it is
     public Type type; // the type of this entity, specifying its child class
@@ -83,6 +78,10 @@ public abstract class Entity implements Comparable<Entity> {
     protected float fadeSpeed = 2f;
     protected float animSizeFactor = 1f; // for yo yo size animation
     protected float animDir = 1; // for yo yo movement animation
+    public float health;
+    public float maxHealth;
+    public float spriteW;
+    public float spriteH;
     protected TextureRegion currentFrame = null;
 
     public Entity() {
@@ -267,6 +266,162 @@ public abstract class Entity implements Comparable<Entity> {
     }
 
     /**
+     * Draws entity tag ui containing entity info including name and health and mana if client
+     *
+     * @param batch     the batch to draw
+     * @param x         the entities' x position to use as anchor for ui
+     * @param y         the entities' y position to use as anchor for ui
+     * @param w         the desired width of tag ui
+     * @param h         the desired height of tag ui
+     * @param nameColor the color of the tag name
+     */
+    public void renderEntityTag(SpriteBatch batch, float x, float y, float w, float h, Color nameColor) {
+        if(this.health<=0) return; // don't render if not alive
+
+        float eAlpha = alpha;
+        if(alpha>1.0f) eAlpha = 1.0f;
+
+        /**health bar background**/
+        healthBarBg.setBounds(x+spriteW/2f - w/2f, y+spriteH -h/2, w, h);
+        healthBarBg.draw(batch, eAlpha);
+
+        /**health bar**/
+        float percent = health/maxHealth;
+        healthBar.setColor(Color.RED.cpy().lerp(Color.OLIVE, percent*1.25f + 0.15f));
+
+        w *= 0.938f;
+        h *= 0.525f;
+        healthBar.setBounds(healthBarBg.getX()+w*0.032f, healthBarBg.getY()+h*0.45f, w*percent, h);
+        healthBar.draw(batch, eAlpha);
+
+
+        /**entity tag name**/
+        nameLabel.getFont().scale(tagScale, tagScale);
+        nameLabel.setColor(nameColor);
+        nameLabel.setBounds(healthBarBg.getX()+healthBarBg.getWidth()/2f -  (nameLabel.getWidth()*tagScale/2f) -w*0.0267f,
+                healthBarBg.getY() + 8.16f + healthBarBg.getHeight(), nameLabel.getWidth(), nameLabel.getHeight());
+
+        nameLabel.draw(batch, eAlpha);
+
+        nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
+
+        // makes sure batch color is reset with correct alpha
+        batch.setColor(Color.WHITE);
+    }
+
+    /**
+     * Render entity complete ui
+     *
+     * @param batch     the batch to draw
+     * @param x         the entities' x position to use as anchor for ui
+     * @param y         the entities' y position to use as anchor for ui
+     * @param w         the desired width of tag ui
+     * @param h         the desired height of tag ui
+     * @param nameColor the color of the tag name
+     */
+    public void renderEntityUI(SpriteBatch batch, float x, float y, float w, float h, Color nameColor) {
+        if(health<=0) return;
+
+        // entity may teleport
+        float eAlpha = alpha;
+        if(alpha>1.0f) eAlpha = 1.0f;
+
+        /**
+         * Entity INFO
+         */
+        /**ui background**/
+        uiBg.setBounds(x+spriteW/2f - w/2f, y+spriteH, w, h);
+        uiBg.draw(batch, 0.74f * eAlpha);
+
+        /**health bar**/
+        // background
+        w *= 0.8157f;
+        h *= 0.48f;
+        healthBarBg.setBounds(uiBg.getX()+uiBg.getWidth()/2f - w/2f, uiBg.getY()+h*0.18f, w, h);
+        healthBarBg.draw(batch, eAlpha);
+
+        // health bar
+        float percent = health/maxHealth;
+        healthBar.setColor(Color.RED.cpy().lerp(Color.OLIVE, percent*1.25f + 0.15f));
+
+        w *= 0.938f;
+        h *= 0.525f;
+        healthBar.setBounds(healthBarBg.getX()+w*0.032f, healthBarBg.getY()+h*0.45f, w*percent, h);
+        healthBar.draw(batch, eAlpha);
+
+        /**tag name**/
+        nameLabel.getFont().scale(tagScale, tagScale);
+        nameLabel.setColor(nameColor);
+        nameLabel.setAlignment(Align.center);
+
+        nameLabel.setBounds(healthBarBg.getX()+healthBarBg.getWidth()/2f -  (nameLabel.getWidth()*tagScale/2f) - 0.01f*w,
+                healthBarBg.getY() +8.16f + 2*h,
+                nameLabel.getWidth(), nameLabel.getHeight());
+        nameLabel.draw(batch, eAlpha);
+
+        nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
+
+        // percent text
+        int percentInt = (int) (percent * 100f);
+        StringBuilder sb = new StringBuilder();
+        sb.append(percentInt);
+        sb.append("%");
+
+        TypingLabel tmpLabel = new TypingLabel(String.valueOf(sb), font);
+        float percentScale = tagScale*0.43f;
+        float percentW = tmpLabel.getWidth()*percentScale;
+        font.scale(percentScale, percentScale);
+        font.drawText(batch, sb, healthBarBg.getX() + healthBarBg.getWidth()/2f - percentW/2f, healthBarBg.getY()+h*0.34f);
+        font.scaleTo(font.originalCellWidth, font.originalCellHeight);
+
+        // makes sure batch color is reset with correct alpha
+        batch.setColor(Color.WHITE);
+    }
+
+    public void renderTargetCircle(SpriteBatch batch, float xOffset, float yOffset,float scale) {
+        if(this.health<=0) return;
+        /**
+         * TARGET CIRCLE
+         */
+        float tileHeight = TEX_HEIGHT * unitScale;
+        float tileWidth = TEX_WIDTH * unitScale;
+
+        float step =  0.15f * Gdx.graphics.getDeltaTime() * animDir;
+
+        animSizeFactor = ((animSizeFactor + step));
+
+        if(animSizeFactor > 1.05f) animDir = -1;
+        if(animSizeFactor < 0.95f) animDir = 1;
+
+        float targetScale = scale * animSizeFactor;
+
+        float x = finalDrawPos.x + tileWidth*xOffset;
+        float y = finalDrawPos.y + tileHeight*yOffset;
+        float a = x + tileWidth/2f;
+        float b = y + tileHeight/2f;
+        float scaleFactor = tileWidth*targetScale;
+        float smallerFactor = 0.81f;
+
+        batch.end();
+        Gdx.gl.glLineWidth(4);
+        shapeDebug.setProjectionMatrix(camera.combined);
+        shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+        shapeDebug.setColor(Color.FIREBRICK);
+        shapeDebug.ellipse((x - a) * scaleFactor + a, (y - b) * scaleFactor + b,
+                TEX_WIDTH* unitScale*targetScale, TEX_HEIGHT*unitScale*targetScale, 20);
+        shapeDebug.setColor(Color.MAROON);
+        scaleFactor = tileWidth*targetScale*smallerFactor;
+        shapeDebug.setAutoShapeType(true);
+        shapeDebug.set(ShapeRenderer.ShapeType.Filled);
+        shapeDebug.ellipse((x - a) * scaleFactor + a, (y - b) * scaleFactor + b,
+                TEX_WIDTH* unitScale*targetScale*smallerFactor, TEX_HEIGHT*unitScale*targetScale*smallerFactor, 20);
+
+        shapeDebug.end();
+        Gdx.gl.glLineWidth(1);
+        batch.begin();
+    }
+
+    /**
      * Entities that belongs to the world can be drawn in the world using this method
      * @param batch     the batch to draw entity
      */
@@ -300,10 +455,8 @@ public abstract class Entity implements Comparable<Entity> {
         public int id, role_level, outfitId;
         public Vector2 position, interPos;
         public Direction direction;
-        public float x, y, speed, spriteW, spriteH;
-        public float health, maxHealth;
-        public TypingLabel nameLabel, outlineLabel;
-        private Vector2 centerPos = new Vector2();
+        public float x, y, speed;
+        public TypingLabel outlineLabel;
         private Vector2 startPos; // used for interpolation
         public ConcurrentSkipListMap<Long, Vector2> bufferedPos;
         private Map.Entry<Long, Vector2> oldestEntry;
@@ -731,26 +884,13 @@ public abstract class Entity implements Comparable<Entity> {
 
         @Override
         public void renderUI(SpriteBatch batch) {
-
+            renderEntityTag(batch, this.finalDrawPos.x-unitScale*0.47f, this.finalDrawPos.y-unitScale*8.81f, 0.7f, 0.12f, Color.YELLOW);
         }
 
         @Override
         public void renderTargetUI(SpriteBatch batch) {
             if(this.id != GameClient.getInstance().getClientCharacter().id) { // if its other character, render selected ui
-                float tileHeight = TEX_HEIGHT * unitScale;
-                float halfTileHeight = tileHeight * 0.5f;
-                float targetScale = 0.75f;
-                batch.end();
-                Gdx.gl.glLineWidth(4);
-                shapeDebug.setProjectionMatrix(camera.combined);
-                shapeDebug.begin(ShapeRenderer.ShapeType.Line);
-                shapeDebug.setColor(Color.RED);
-                shapeDebug.ellipse(finalDrawPos.x+TEX_WIDTH*unitScale*0.11f, finalDrawPos.y - halfTileHeight*0.22f,
-                        TEX_WIDTH* unitScale*targetScale, TEX_HEIGHT*unitScale*targetScale, 120);
-                //shapeDebug.rect(drawPos.x, drawPos.y, 1f, 45f/32f);
-                shapeDebug.end();
-                Gdx.gl.glLineWidth(1);
-                batch.begin();
+                renderTargetCircle(batch, -0.015f, -0.23f,0.85f);
             }
         }
 
@@ -829,7 +969,9 @@ public abstract class Entity implements Comparable<Entity> {
             // updates positions and dimensions
             spriteH = currentFrame.getRegionHeight()* unitScale;
             spriteW = currentFrame.getRegionWidth()* unitScale;
-            centerPos = new Vector2(this.interPos.x + spriteW/2f + spriteW/20f, this.interPos.y + spriteH/2f + spriteH/20f);
+            //centerPos = new Vector2(this.interPos.x + spriteW/2f + spriteW/20f, this.interPos.y + spriteH/2f + spriteH/20f);
+            this.centerPos.x = this.interPos.x + spriteW/2f + spriteW/20f;
+            this.centerPos.y = this.interPos.y + spriteH/2f + spriteH/20f;
             this.drawPos.x = this.interPos.x + spriteW/2f + spriteW/15f;
             this.drawPos.y = this.interPos.y + spriteH/12f + spriteH/18f;
 
@@ -853,21 +995,6 @@ public abstract class Entity implements Comparable<Entity> {
                     cPos.x-spriteW*0.23f, cPos.y+spriteH*0.71f, // up-left
                     cPos.x+spriteW*0.23f, cPos.y+spriteH*0.71f, // up-right
                     cPos.x+spriteW*0.23f, cPos.y}); // down-right
-
-            // renders player tag
-            nameLabel.getFont().scale(tagScale, tagScale);
-
-            nameLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/1.75f), this.centerPos.y + spriteH/2f + 8f,
-                    nameLabel.getWidth(), nameLabel.getHeight());
-            outlineLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/1.75f)-tagScale, this.centerPos.y + spriteH/2f + 8f-tagScale,
-                    nameLabel.getWidth() +tagScale, nameLabel.getHeight()+tagScale);
-
-            float fontAlpha = alpha;
-            if(alpha>1.0f) fontAlpha = 1.0f;
-            outlineLabel.draw(batch, fontAlpha);
-            nameLabel.draw(batch, fontAlpha);
-
-            nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
 
             if(CommonUI.enableDebugTex) {
                 Polygon tileCollider = new Polygon(new float[]{
@@ -1099,11 +1226,9 @@ public abstract class Entity implements Comparable<Entity> {
     public static class Tree extends Entity {
         public final int spawnId;
         private final int treeId;
-        private TypingLabel nameLabel;
         public int tileX, tileY;
         public TiledMapTile tile;
         public int tileId;
-        public float health, maxHealth;
         public boolean isWalkable;
         public String name;
         private boolean assetsLoaded;
@@ -1117,6 +1242,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.tileId = tileId;
             this.spawnId = spawnId;
             this.name = name;
+            this.entityName = name;
             this.health = health;
             this.maxHealth = maxHealth;
             this.isWalkable = tile.getProperties().get("walkable", Boolean.class);
@@ -1179,6 +1305,10 @@ public abstract class Entity implements Comparable<Entity> {
             this.finalDrawPos.x = this.drawPos.x;
             this.finalDrawPos.y = this.drawPos.y - halfTileHeight*1.38f;
             this.currentFrame = tile.getTextureRegion();
+            spriteH = currentFrame.getRegionHeight() * unitScale;
+            spriteW = currentFrame.getRegionWidth() * unitScale;
+            this.centerPos.x = this.finalDrawPos.x + spriteW/2f;
+            this.centerPos.y = this.finalDrawPos.y + spriteH/2f;
             batch.draw(tile.getTextureRegion(), this.finalDrawPos.x, this.finalDrawPos.y,
                     tile.getTextureRegion().getRegionWidth()* unitScale * edgeFactor,
                     tile.getTextureRegion().getRegionHeight()* unitScale * edgeFactor);
@@ -1200,106 +1330,12 @@ public abstract class Entity implements Comparable<Entity> {
 
         @Override
         public void renderUI(SpriteBatch batch) {
-            if(this.health<=0) return;
-
-            /**
-             * TARGET INFO
-             */
-            float spriteH = tile.getTextureRegion().getRegionHeight() * unitScale;
-            float spriteW = tile.getTextureRegion().getRegionWidth() * unitScale;
-
-            /**ui background**/
-            float w = 1.9f;
-            float h = 0.5f;
-            uiBg.setBounds(this.finalDrawPos.x+spriteW/2f - w/2f, this.finalDrawPos.y+spriteH*1.1f, w, h);
-            uiBg.draw(batch, 0.74f);
-
-            /**target name**/
-            // draw creature tag
-            nameLabel.getFont().scale(tagScale, tagScale);
-            nameLabel.setAlignment(Align.center);
-
-            nameLabel.setBounds(this.finalDrawPos.x+spriteW/2f -  (nameLabel.getWidth()*tagScale/2f),
-                    this.finalDrawPos.y + 10f,
-                    nameLabel.getWidth(), nameLabel.getHeight());
-            nameLabel.draw(batch, 1.0f);
-
-            nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
-
-            /**health bar**/
-            // background
-            w = 1.55f;
-            h = 0.24f;
-            healthBarBg.setBounds(this.finalDrawPos.x+spriteW/2f - w/2f, this.finalDrawPos.y+spriteH*1.124f, w, h);
-            healthBarBg.draw(batch, 1f);
-
-            // health bar
-            float percent = health/maxHealth;
-            healthBar.setColor(Color.RED.cpy().lerp(Color.OLIVE, percent*1.25f + 0.15f));
-
-            w = 1.454f;
-            h = 0.126f;
-            healthBar.setBounds(healthBarBg.getX()+unitScale*1.55f, healthBarBg.getY()+unitScale*1.75f, w*percent, h);
-            healthBar.draw(batch, 1f);
-
-            // percent text
-            int percentInt = (int) (percent * 100f);
-            StringBuilder sb = new StringBuilder();
-            sb.append(percentInt);
-            sb.append("%");
-
-            TypingLabel tmpLabel = new TypingLabel(String.valueOf(sb), font);
-            float percentScale = tagScale*0.43f;
-            float percentW = tmpLabel.getWidth()*percentScale;
-            font.scale(percentScale, percentScale);
-            font.drawText(batch, sb, healthBarBg.getX() + healthBarBg.getWidth()/2f - percentW/2f, healthBarBg.getY()+unitScale*1.34f);
-            font.scaleTo(font.originalCellWidth, font.originalCellHeight);
+            renderEntityTag(batch, this.finalDrawPos.x+unitScale*0.75f, this.finalDrawPos.y+unitScale*4.81f, 0.7f, 0.12f, Color.LIME);
         }
 
         @Override
         public void renderTargetUI(SpriteBatch batch) {
-            if(this.health<=0) return;
-            /**
-             * TARGET CIRCLE
-             */
-            float tileHeight = TEX_HEIGHT * unitScale;
-            float tileWidth = TEX_WIDTH * unitScale;
-
-            float step =  0.15f * Gdx.graphics.getDeltaTime() * animDir;
-
-            animSizeFactor = ((animSizeFactor + step));
-
-            if(animSizeFactor > 1.05f) animDir = -1;
-            if(animSizeFactor < 0.95f) animDir = 1;
-
-            float targetScale = 0.75f * animSizeFactor;
-
-            float x = finalDrawPos.x + tileWidth*0.033f;
-            float y = finalDrawPos.y - tileHeight*0.3f;
-            float a = x + tileWidth/2f;
-            float b = y + tileHeight/2f;
-            float scale = tileWidth*targetScale;
-            float smallerFactor = 0.81f;
-
-            batch.end();
-            Gdx.gl.glLineWidth(4);
-            shapeDebug.setProjectionMatrix(camera.combined);
-            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
-            shapeDebug.setColor(Color.FIREBRICK);
-            shapeDebug.ellipse((x - a) * scale + a, (y - b) * scale + b,
-                    TEX_WIDTH* unitScale*targetScale, TEX_HEIGHT*unitScale*targetScale, 20);
-            shapeDebug.setColor(Color.MAROON);
-            scale = tileWidth*targetScale*smallerFactor;
-            shapeDebug.setAutoShapeType(true);
-            shapeDebug.set(ShapeRenderer.ShapeType.Filled);
-            shapeDebug.ellipse((x - a) * scale + a, (y - b) * scale + b,
-                    TEX_WIDTH* unitScale*targetScale*smallerFactor, TEX_HEIGHT*unitScale*targetScale*smallerFactor, 20);
-            //shapeDebug.setColor(Color.ORANGE);
-            //shapeDebug.arc(finalDrawPos.x+TEX_WIDTH*unitScale*0.155f, finalDrawPos.y - halfTileHeight*0.26f, 5f, 0f, 15);
-            //shapeDebug.rect(drawPos.x, drawPos.y, 1f, 45f/32f);
-            shapeDebug.end();
-            Gdx.gl.glLineWidth(1);
-            batch.begin();
+            renderTargetCircle(batch, 0.033f, -0.3f,0.75f);
         }
 
         @Override
@@ -1330,12 +1366,10 @@ public abstract class Entity implements Comparable<Entity> {
         public int creatureId;
         public int spawnId;
         public Vector2 position, interPos, lastVelocity, startPos;
-        public float x, y, speed, attackSpeed, range, spriteW, spriteH;
-        public float health, maxHealth;
+        public float x, y, speed, attackSpeed, range;
         public State state;
-        public TypingLabel nameLabel, outlineLabel;
+        public TypingLabel outlineLabel;
         public int targetId;
-        private Vector2 centerPos;
 
         public Creature(String name, int creatureId, int spawnId, float x, float y, float maxHealth, float health, float speed, float attackSpeed,
                         float range, float lastVelocityX, float lastVelocityY, String stateName, int targetId) {
@@ -1362,7 +1396,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.isInteractive = true;
             this.isTargetAble = true;
             direction = Direction.SOUTHWEST;
-            nameLabel = new TypingLabel("{SIZE=55%}{COLOR=brick}"+this.name+"[%]", font);
+            nameLabel = new TypingLabel("{SIZE=55%}{COLOR=LIGHT_GRAY}"+this.name+"[%]", font);
             nameLabel.skipToTheEnd();
             outlineLabel = new TypingLabel("{SIZE=55%}{COLOR=black}"+this.name+"[%]", font);
             outlineLabel.skipToTheEnd();
@@ -1545,7 +1579,9 @@ public abstract class Entity implements Comparable<Entity> {
 
             animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
 
-            centerPos = new Vector2(this.interPos.x + spriteW/2f, this.interPos.y + spriteH/2f);
+            //centerPos = new Vector2(this.interPos.x + spriteW/2f, this.interPos.y + spriteH/2f);
+            this.centerPos.x = this.interPos.x + spriteW/2f;
+            this.centerPos.y = this.interPos.y + spriteH/2f;
             this.drawPos.x = this.interPos.x + spriteW/2f;
             this.drawPos.y = this.interPos.y + spriteH/3f;
 
@@ -1591,18 +1627,18 @@ public abstract class Entity implements Comparable<Entity> {
                 batch.begin();
             }
 
-            // draw creature tag
-            nameLabel.getFont().scale(tagScale, tagScale);
-
-            nameLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/2f), this.centerPos.y + spriteH/2f + 8f,
-                    nameLabel.getWidth(), nameLabel.getHeight());
-            outlineLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/2f)-tagScale, this.centerPos.y + spriteH/2f + 8f-tagScale,
-                    nameLabel.getWidth() +tagScale, nameLabel.getHeight()+tagScale);
-
-            outlineLabel.draw(batch, 1.0f);
-            nameLabel.draw(batch, 1.0f);
-
-            nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
+//            // draw creature tag
+//            nameLabel.getFont().scale(tagScale, tagScale);
+//
+//            nameLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/2f), this.centerPos.y + spriteH/2f + 8f,
+//                    nameLabel.getWidth(), nameLabel.getHeight());
+//            outlineLabel.setBounds(this.centerPos.x - (nameLabel.getWidth()*tagScale/2f)-tagScale, this.centerPos.y + spriteH/2f + 8f-tagScale,
+//                    nameLabel.getWidth() +tagScale, nameLabel.getHeight()+tagScale);
+//
+//            outlineLabel.draw(batch, 1.0f);
+//            nameLabel.draw(batch, 1.0f);
+//
+//            nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
 
             // resets batch alpha for further rendering
             Color c = batch.getColor();
@@ -1684,26 +1720,12 @@ public abstract class Entity implements Comparable<Entity> {
 
         @Override
         public void renderUI(SpriteBatch batch) {
-
-
+            renderEntityTag(batch, this.finalDrawPos.x, this.finalDrawPos.y-unitScale*7.51f, 0.7f, 0.12f, Color.RED);
         }
 
         @Override
         public void renderTargetUI(SpriteBatch batch) {
-            float tileHeight = TEX_HEIGHT * unitScale;
-            float halfTileHeight = tileHeight * 0.5f;
-            float targetScale = 0.8f;
-            batch.end();
-            Gdx.gl.glLineWidth(4);
-            shapeDebug.setProjectionMatrix(camera.combined);
-            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
-            shapeDebug.setColor(Color.RED);
-            shapeDebug.ellipse(finalDrawPos.x+TEX_WIDTH*unitScale*0.6f, finalDrawPos.y + halfTileHeight*2.25f,
-                    TEX_WIDTH* unitScale*targetScale, TEX_HEIGHT*unitScale*targetScale, 120);
-            //shapeDebug.rect(drawPos.x, drawPos.y, 1f, 45f/32f);
-            shapeDebug.end();
-            Gdx.gl.glLineWidth(1);
-            batch.begin();
+            renderTargetCircle(batch, 0.5f, 1.0f,0.85f);
         }
 
         @Override

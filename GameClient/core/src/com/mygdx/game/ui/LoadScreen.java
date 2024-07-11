@@ -107,7 +107,7 @@ public class LoadScreen implements Screen {
             fontMedium.fontFileName = "fonts/immortal.ttf";
             fontMedium.fontParameters.size = 25;
             fontMedium.fontParameters.borderColor = Color.BLACK;
-            fontMedium.fontParameters.borderWidth = 1.5f;
+            fontMedium.fontParameters.borderWidth = 1.75f;
             fontMedium.fontParameters.magFilter = Texture.TextureFilter.Linear;
             fontMedium.fontParameters.minFilter = Texture.TextureFilter.Linear;
             manager.load("fonts/immortalMedium.ttf", BitmapFont.class, fontMedium);

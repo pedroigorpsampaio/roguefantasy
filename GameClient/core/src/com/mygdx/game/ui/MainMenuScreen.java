@@ -80,9 +80,6 @@ public class MainMenuScreen implements Screen {
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
 
-        // gets font from asset manager
-       // BitmapFont fontMedium = manager.get("fonts/immortalMedium.ttf", BitmapFont.class);
-
         // get and play music
         Random rand = new Random();
         bgm = manager.get("bgm/menu/menu_"+rand.nextInt(2)+".mp3", Music.class);

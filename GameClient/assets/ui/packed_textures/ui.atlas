@@ -6,126 +6,133 @@ filter: MipMap, MipMap
 repeat: none
 Cursor Attack Green
   rotate: false
-  xy: 158, 56
+  xy: 262, 78
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Cannot Use
   rotate: false
-  xy: 192, 56
+  xy: 60, 27
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Chop Green
   rotate: false
-  xy: 158, 22
+  xy: 262, 44
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Default
   rotate: false
-  xy: 192, 22
+  xy: 296, 78
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Blue
   rotate: false
-  xy: 230, 84
+  xy: 94, 27
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Green
   rotate: false
-  xy: 264, 84
+  xy: 296, 44
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Red
   rotate: false
-  xy: 298, 84
+  xy: 330, 78
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Violet
   rotate: false
-  xy: 332, 84
+  xy: 330, 44
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Move Down
   rotate: false
-  xy: 366, 84
+  xy: 262, 10
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Move Up
   rotate: false
-  xy: 400, 84
+  xy: 296, 10
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Pickaxe Green
   rotate: false
-  xy: 434, 84
+  xy: 330, 10
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Scythe Green
   rotate: false
-  xy: 468, 84
+  xy: 364, 78
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 RectangleBox_96x96
   rotate: false
-  xy: 2, 20
+  xy: 164, 24
   size: 96, 96
   orig: 96, 96
   offset: 0, 0
   index: -1
 UiBg
   rotate: false
-  xy: 100, 31
+  xy: 2, 2
   size: 56, 57
   orig: 56, 57
   offset: 0, 0
   index: -1
 healthBar
   rotate: false
-  xy: 100, 90
+  xy: 262, 112
   size: 120, 8
   orig: 120, 8
   offset: 0, 0
   index: -1
 healthBarBg
   rotate: false
-  xy: 100, 100
+  xy: 2, 61
   size: 128, 16
   orig: 128, 16
   offset: 0, 0
   index: -1
+panel
+  rotate: false
+  xy: 2, 79
+  size: 160, 41
+  orig: 160, 41
+  offset: 0, 0
+  index: -1
 tile040
   rotate: false
-  xy: 2, 2
+  xy: 132, 61
   size: 16, 16
   orig: 16, 16
   offset: 0, 0
   index: -1
 tile041
   rotate: false
-  xy: 20, 2
+  xy: 60, 9
   size: 15, 16
   orig: 15, 16
   offset: 0, 0

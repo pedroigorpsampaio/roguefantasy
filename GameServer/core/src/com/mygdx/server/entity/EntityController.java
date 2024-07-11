@@ -55,18 +55,18 @@ public class EntityController {
         }
 
         // spawn one wolf for testing
-//        Entity wolfPrefab = dominion.createEntity(
-//                "Herr Wolfgang IV",
-//                new Component.Tag(0, "Herr Wolfgang IV"),
-//                new Component.Position(26, 4),
-//                new Component.Velocity(0, 0),
-//                new Component.Attributes(64f*RogueFantasyServer.world.getUnitScale(), 64f*RogueFantasyServer.world.getUnitScale(),
-//                        100f, 100f,
-//                        100f*RogueFantasyServer.world.getUnitScale(), 50f,
-//                        14f*RogueFantasyServer.world.getUnitScale()),
-//                new Component.Spawn(0, new Component.Position(0, 0), 15)
-//        ).setState(Component.AI.State.IDLE);
-//        wolfPrefab.add(new Component.AI(wolfPrefab));
+        Entity wolfPrefab = dominion.createEntity(
+                "Herr Wolfgang IV",
+                new Component.Tag(0, "Herr Wolfgang IV"),
+                new Component.Position(26, 4),
+                new Component.Velocity(0, 0),
+                new Component.Attributes(64f*RogueFantasyServer.world.getUnitScale(), 64f*RogueFantasyServer.world.getUnitScale(),
+                        100f, 100f,
+                        100f*RogueFantasyServer.world.getUnitScale(), 50f,
+                        14f*RogueFantasyServer.world.getUnitScale()),
+                new Component.Spawn(0, new Component.Position(0, 0), 15)
+        ).setState(Component.AI.State.IDLE);
+        wolfPrefab.add(new Component.AI(wolfPrefab));
 
         // create systems
         scheduler = createSystems();

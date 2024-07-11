@@ -100,11 +100,6 @@ public class EntityController {
                 // render entity between target circle and entity ui
                 e.render(batch);
 
-                // if entity is target of client player, render selected entity UI
-                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
-                        GameClient.getInstance().getClientCharacter().getTarget().uId == e.uId)
-                    e.renderUI(batch);
-
                 if(obfuscateHit) {
                     Color c = batch.getColor();
                     batch.setColor(c.r, c.g, c.b, 1f);//set alpha back to 1
@@ -304,8 +299,8 @@ public class EntityController {
                         Entity e1Entity = (Entity) e1.getValue();
                         Entity e2Entity = (Entity) e2.getValue();
 
-                        float e1Dist = e1Entity.finalDrawPos.dst(GameClient.getInstance().getClientCharacter().finalDrawPos);
-                        float e2Dist = e2Entity.finalDrawPos.dst(GameClient.getInstance().getClientCharacter().finalDrawPos);
+                        float e1Dist = e1Entity.centerPos.dst(GameClient.getInstance().getClientCharacter().centerPos);
+                        float e2Dist = e2Entity.centerPos.dst(GameClient.getInstance().getClientCharacter().centerPos);
                         int res = e1Dist > e2Dist ? 1 : -1;
                         return res != 0 ? res : 1; // Special fix to preserve items with equal values
                     }
