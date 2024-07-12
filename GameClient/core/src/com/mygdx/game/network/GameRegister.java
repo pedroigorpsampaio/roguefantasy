@@ -109,6 +109,7 @@ public class GameRegister {
     public enum EntityState{
         TELEPORTING_IN,
         TELEPORTING_OUT,
+        ATTACKING,
         FREE,
     }
 

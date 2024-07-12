@@ -452,7 +452,7 @@ public class GameClient extends DispatchServer {
                 character.maxHealth = msg.character.maxHealth;
             }
 
-            character.state = msg.character.state;
+            //character.state = msg.character.state;
 
             //if(GameClient.getInstance().clientCharId != msg.character.id) {
 

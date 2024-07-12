@@ -7,21 +7,20 @@ import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.math.Intersector;
+import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.utils.Timer;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.ui.GameScreen;
+import com.mygdx.game.util.Common;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.SortedSet;
-import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -259,6 +258,61 @@ public class EntityController {
         }
     }
 
+    /**
+     * Checks if a point hits a entity in the world, considering its drawn order
+     * @param position  the position to check if hits an entity
+     * @param caster if not null, will ignore the caster entity in hit check
+     * @return the entity hit or null if no entity was hit
+     */
+    public Entity hit(Entity caster, Vector2 position) {
+        for (Map.Entry<Integer, Entity> entry : entriesSortedByValues(entities)) {
+            Entity e = entry.getValue();
+
+            // ignores caster if any
+            if(caster != null) {
+                if(caster.uId == e.uId)
+                    continue;
+            }
+
+            // found a entity that hits
+            if(e.hitBox.contains(position))
+                return e;
+        }
+        // return null means no entity was hit by the point
+        return null;
+    }
+
+    /**
+     * Checks if a line hits a entity in the world, considering its drawn order
+     * @param caster if not null, will ignore the caster entity in hit check
+     * @param p1 the first point of the line to check if hits an entity
+     * @param p2 the second point of the line to check if hits an entity
+     * @param obfuscator only consider entities that obfuscates player (walls for instance)
+     * @return the entity hit or null if no entity was hit
+     */
+    public Entity hit(Entity caster, Vector2 p1, Vector2 p2, boolean obfuscator) {
+        for (Map.Entry<Integer, Entity> entry : entriesSortedByValues(entities)) {
+            Entity e = entry.getValue();
+
+            // ignores caster if any
+            if(caster != null) {
+                if(caster.uId == e.uId)
+                    continue;
+            }
+
+            if(obfuscator && !e.isObfuscator)
+                continue;
+
+            // found a entity that hits
+            if(Intersector.intersectSegmentPolygon(p1, p2, e.hitBox)) {
+                e.remove();
+                return e;
+            }
+        }
+        // return null means no entity was hit by the point
+        return null;
+    }
+
 
     /**
      * Sorter that sorts based on isometric world
@@ -299,8 +353,8 @@ public class EntityController {
                         Entity e1Entity = (Entity) e1.getValue();
                         Entity e2Entity = (Entity) e2.getValue();
 
-                        float e1Dist = e1Entity.centerPos.dst(GameClient.getInstance().getClientCharacter().centerPos);
-                        float e2Dist = e2Entity.centerPos.dst(GameClient.getInstance().getClientCharacter().centerPos);
+                        float e1Dist = e1Entity.getEntityCenter().dst(GameClient.getInstance().getClientCharacter().getEntityCenter());
+                        float e2Dist = e2Entity.getEntityCenter().dst(GameClient.getInstance().getClientCharacter().getEntityCenter());
                         int res = e1Dist > e2Dist ? 1 : -1;
                         return res != 0 ? res : 1; // Special fix to preserve items with equal values
                     }

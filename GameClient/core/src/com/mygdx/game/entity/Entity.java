@@ -19,6 +19,8 @@ import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
+import com.badlogic.gdx.math.Circle;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
@@ -27,12 +29,15 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.utils.Align;
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.Pool;
 import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.ui.CommonUI;
+import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
 
 import java.util.Iterator;
@@ -46,7 +51,9 @@ public abstract class Entity implements Comparable<Entity> {
     public static AssetManager assetManager; // screen asset manager
     public static Stage stage; // screen stage
     private final TextureAtlas uiAtlas;
-    protected final Image uiBg, healthBar, healthBarBg;
+    protected final Image uiBg;
+    protected Image healthBar;
+    protected final Image healthBarBg;
     protected Skin skin;
     protected Font font;
     public String entityName = "";
@@ -64,7 +71,8 @@ public abstract class Entity implements Comparable<Entity> {
     public int uId; // this entity unique id
     public int contextId; // the id of this id in context, based on what type of entity it is
     public Type type; // the type of this entity, specifying its child class
-    public GameRegister.EntityState state; // the server current state known of this entity
+    public GameRegister.EntityState state = GameRegister.EntityState.FREE; // the server current state known of this entity
+    protected Timer interactionTimer; // timer that controls the interaction of entity
     public boolean isInteractive = false; // if this entity is interactive
     public boolean isTargetAble = false; // if this entity is target-able
     public boolean isObfuscator = false; // if this entity is obfuscator it will be rendered transparent when on top of player
@@ -78,11 +86,11 @@ public abstract class Entity implements Comparable<Entity> {
     protected float fadeSpeed = 2f;
     protected float animSizeFactor = 1f; // for yo yo size animation
     protected float animDir = 1; // for yo yo movement animation
-    public float health;
-    public float maxHealth;
+    public float health, maxHealth, attackSpeed = 10f;
     public float spriteW;
     public float spriteH;
     protected TextureRegion currentFrame = null;
+    protected Vector2 center = new Vector2();
 
     public Entity() {
         /**
@@ -93,8 +101,14 @@ public abstract class Entity implements Comparable<Entity> {
         font = skin.get("emojiFont", Font.class); // gets typist font with icons
         uiBg = new Image(uiAtlas.findRegion("UiBg"));
         healthBarBg = new Image(uiAtlas.findRegion("healthBarBg"));
-        healthBar = new Image(uiAtlas.findRegion("healthBar"));
+        Gdx.app.postRunnable(() -> {
+            TextureAtlas.AtlasRegion reg = uiAtlas.findRegion("healthBar");
+            reg.getTexture().setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+            healthBar = new Image(reg);
+        });
     }
+
+    public abstract Vector2 getEntityCenter();
 
     /**
      * Checks if point hits this entity
@@ -287,7 +301,12 @@ public abstract class Entity implements Comparable<Entity> {
 
         /**health bar**/
         float percent = health/maxHealth;
-        healthBar.setColor(Color.RED.cpy().lerp(Color.OLIVE, percent*1.25f + 0.15f));
+        Color c = Color.GREEN;
+        if(percent < 0.61)
+            c = Color.YELLOW;
+        if(percent < 0.25)
+            c = Color.RED;
+        healthBar.setColor(c);
 
         w *= 0.938f;
         h *= 0.525f;
@@ -463,6 +482,7 @@ public abstract class Entity implements Comparable<Entity> {
         public CopyOnWriteArrayList<EntityInterPos> buffer = new CopyOnWriteArrayList<>();
         private Vector2 goalPos;
         private float tIntElapsed;
+        private boolean isWalking = false;
 
         @Override
         public int compareTo(Entity entity) {
@@ -490,10 +510,16 @@ public abstract class Entity implements Comparable<Entity> {
 
         public void setTarget(Entity e) {
             if(target != null && e != null && e.uId == target.uId) return; // same target as before, do nothing
+            if(e != null && !e.isTargetAble) return; // if its not targetable return
 
             if(e != null) e.resetYoYoAnim(); // if a entity is selected, reset its yo yo target animation
 
             this.target = e; // set target to an entity or null representing client has no target atm
+
+            stopInteraction(); // in case there was an interaction going on, stop it before starts a new one
+
+            if(e != null)   // only starts interaction if a target is selected
+                startInteraction();
         }
 
         public static class EntityInterPos {
@@ -549,7 +575,7 @@ public abstract class Entity implements Comparable<Entity> {
                         spriteSheet.getWidth() / FRAME_COLS,
                         spriteSheet.getHeight() / FRAME_ROWS);
 
-                float atkFactor = 20f / (speed*0.33f); // TODO: ATTK SPEEd
+                float atkFactor = 1.5f / (speed*0.33f); // TODO: ATTK SPEEd
                 float walkFactor = (4f / (speed*0.10f)) * unitScale;
 
                 // Place the regions into a 1D array in the correct order, starting from the top
@@ -563,7 +589,6 @@ public abstract class Entity implements Comparable<Entity> {
                     switch(i) { // switch rows to add each animation correctly
                         case 0:
                             idle.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
-
                             break;
                         case 1:
                             walk.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
@@ -688,8 +713,10 @@ public abstract class Entity implements Comparable<Entity> {
 
         public void teleport(float x, float y) {
             if(!teleportInAnim) { // server detected collision and sent it before client (can happen on low latencies)
-                isTeleporting = true;
-                teleportInAnim = true;
+                this.isTeleporting = true;
+                this.teleportInAnim = true;
+                this.state = GameRegister.EntityState.TELEPORTING_IN;
+                this.stopInteraction();
             }
             new Thread(() -> {
                 while (this.teleportInAnim) { // wait until teleport in animation to end to update to destination
@@ -784,6 +811,8 @@ public abstract class Entity implements Comparable<Entity> {
                     if(!this.isTeleporting) {
                         this.isTeleporting = true;
                         this.teleportInAnim = true;
+                        this.state = GameRegister.EntityState.TELEPORTING_IN;
+                        this.stopInteraction();
                     }
                 }
             }
@@ -882,6 +911,53 @@ public abstract class Entity implements Comparable<Entity> {
             return newMove;
         }
 
+        public void startInteraction() {
+            // starts update timer that control user inputs and server communication
+            interactionTimer=new Timer();
+
+            //TODO: SEND INTERACTION START TO SERVER TO CALCULATE DMG AND TO ACTUALLY TAKE HEALTH AND STUFF
+
+            interactionTimer.scheduleTask(new Timer.Task() {
+                @Override
+                public void run() {
+                    attackTarget();
+                }
+            },1/this.attackSpeed, 1/this.attackSpeed);
+        }
+
+        /** Stops any interaction that this entity is doing **/
+        public void stopInteraction() {
+            if(interactionTimer != null)
+                interactionTimer.stop();
+
+            if(this.state != GameRegister.EntityState.FREE)
+                this.state = GameRegister.EntityState.FREE;
+        }
+
+        /**
+         * Deals damage to target
+         */
+        public void attackTarget() {
+            if(target != null) {
+                // if there is a wall between player and target, do not attack
+                Entity hit = EntityController.getInstance().hit(this, this.getEntityCenter(), target.getEntityCenter(), true);
+                if (hit != null) {
+                    this.state = GameRegister.EntityState.FREE;
+                    return;
+                }
+                // player is able to attack target
+                this.state = GameRegister.EntityState.ATTACKING;
+                spawnMagicProjectile();
+            }
+        }
+
+        /** Spawns magic projectile **/
+        private void spawnMagicProjectile() {
+            Projectile projectile = GameScreen.getProjectilePool().obtain();
+            projectile.init(0.1f, this, target);
+            GameScreen.addProjectile(projectile);
+        }
+
         @Override
         public void renderUI(SpriteBatch batch) {
             renderEntityTag(batch, this.finalDrawPos.x-unitScale*0.47f, this.finalDrawPos.y-unitScale*8.81f, 0.7f, 0.12f, Color.YELLOW);
@@ -893,23 +969,43 @@ public abstract class Entity implements Comparable<Entity> {
                 renderTargetCircle(batch, -0.015f, -0.23f,0.85f);
             }
         }
+        //player
+        @Override
+        public Vector2 getEntityCenter() {
+            center.set(finalDrawPos.x + spriteW/4f, finalDrawPos.y + spriteH/6f);
+            return center;
+        }
 
         @Override
         public void takeDamage() {
             health-=5f;
-            if(health<0)
+            if(health<0) {
                 health = maxHealth;
+                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                        GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                    GameClient.getInstance().getClientCharacter().setTarget(null);
+                }
+            }
         }
 
         @Override
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
+            isWalking = false;
 
             animTime += Gdx.graphics.getDeltaTime(); // accumulates anim timer
             Map<Direction, Animation<TextureRegion>> currentAnimation = idle;
 
+            // predicts direction if a target is selected
+            if(target != null) {
+                // predict direction
+                Vector2 dir = target.centerPos.sub(this.centerPos).nor();
+                direction = Direction.getDirection(Math.round(dir.x), Math.round(dir.y));
+            }
+
             if(interPos.dst(position) != 0f && Common.entityInterpolation) {
+                isWalking = true;
                 currentAnimation = walk;
                 if (GameClient.getInstance().getClientCharacter().id == this.id)
                     interpolate(true);
@@ -917,6 +1013,13 @@ public abstract class Entity implements Comparable<Entity> {
                     interpolate(false);
             } else { // not walking, set idle animations
                 currentAnimation = idle;
+            }
+
+            // attacking animation only when not walking (since we dont have attacking animation while walking atm!)
+            if(this.state == GameRegister.EntityState.ATTACKING && !isWalking) {
+                if(target != null) {
+                    currentAnimation = attack;
+                }
             }
 
             if(isUnmovable()) currentAnimation = idle;
@@ -933,6 +1036,7 @@ public abstract class Entity implements Comparable<Entity> {
                         alpha = 0.15f;
                         teleportInAnim = false;
                         teleportOutAnim = true;
+                        this.state = GameRegister.EntityState.TELEPORTING_OUT;
                     }
                 }
 
@@ -948,6 +1052,7 @@ public abstract class Entity implements Comparable<Entity> {
                             @Override
                             public void run() {
                                 isTeleporting = false; // finished teleporting - inform server
+                                state = GameRegister.EntityState.FREE;
                                 GameClient.getInstance().sendResponse(new GameRegister.Response(GameRegister.Response.Type.TELEPORT_FINISHED));
                             }
                         },0.5f); // delay flag and server response, to be discard unwanted lagged movements
@@ -959,10 +1064,11 @@ public abstract class Entity implements Comparable<Entity> {
             applyEffects(batch); // apply entity effects before drawing
             this.finalDrawPos.x = this.interPos.x + spriteW/12f;
             this.finalDrawPos.y = this.interPos.y + spriteH/12f;
+
             // Get current frame of animation for the current stateTime
             currentFrame = currentAnimation.get(direction).getKeyFrame(animTime, true);
-            batch.draw(currentFrame, this.finalDrawPos.x, this.finalDrawPos.y, currentFrame.getRegionWidth()* unitScale,
-                    currentFrame.getRegionHeight()* unitScale);
+            batch.draw(currentFrame, this.finalDrawPos.x, this.finalDrawPos.y, currentFrame.getRegionWidth() * unitScale,
+                    currentFrame.getRegionHeight() * unitScale);
 
             //System.out.println("playerW: " + currentFrame.getRegionWidth() + " / playerH: " + currentFrame.getRegionHeight());
 
@@ -1160,6 +1266,12 @@ public abstract class Entity implements Comparable<Entity> {
             return new Wall(wallUpdate.wallId, wallUpdate.tileId,  WorldMap.getInstance().getTileFromId(wallUpdate.tileId),
                     wallUpdate.tileX, wallUpdate.tileY);
         }
+        //wall
+        @Override
+        public Vector2 getEntityCenter() {
+            center.set(finalDrawPos.x + spriteW/2f, finalDrawPos.y + spriteH/2f);
+            return center;
+        }
 
         @Override
         public void takeDamage() {
@@ -1277,6 +1389,12 @@ public abstract class Entity implements Comparable<Entity> {
             return new Tree(treeUpdate.treeId, treeUpdate.spawnId, treeUpdate.tileId,  WorldMap.getInstance().getTileFromId(treeUpdate.tileId),
                     treeUpdate.name, treeUpdate.maxHealth, treeUpdate.health, treeUpdate.tileX, treeUpdate.tileY, new Polygon(treeUpdate.hitBox));
         }
+        //tree
+        @Override
+        public Vector2 getEntityCenter() {
+            center.set(finalDrawPos.x + spriteW/3.6f, finalDrawPos.y + spriteH/12f);
+            return center;
+        }
 
         @Override
         public void takeDamage() {
@@ -1285,7 +1403,8 @@ public abstract class Entity implements Comparable<Entity> {
                 this.tile = WorldMap.getInstance().getMap().getTileSets().getTile(this.tileId-1);
                 this.isInteractive = false;
                 this.isTargetAble = false;
-                if(GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                        GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
                     GameClient.getInstance().getClientCharacter().setTarget(null);
                 }
             }
@@ -1366,7 +1485,7 @@ public abstract class Entity implements Comparable<Entity> {
         public int creatureId;
         public int spawnId;
         public Vector2 position, interPos, lastVelocity, startPos;
-        public float x, y, speed, attackSpeed, range;
+        public float x, y, speed, range;
         public State state;
         public TypingLabel outlineLabel;
         public int targetId;
@@ -1534,12 +1653,23 @@ public abstract class Entity implements Comparable<Entity> {
             this.state = State.getStateFromName(stateName);
             this.target = target;
         }
+        // creature
+        @Override
+        public Vector2 getEntityCenter() {
+            center.set(finalDrawPos.x + spriteW/2.5f, finalDrawPos.y + spriteH/2.5f);
+            return center;
+        }
 
         @Override
         public void takeDamage() {
             health-=5f;
-            if(health<0)
+            if(health<0) {
                 health = maxHealth;
+                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                        GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                    GameClient.getInstance().getClientCharacter().setTarget(null);
+                }
+            }
         }
 
         @Override

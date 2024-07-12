@@ -1,6 +1,6 @@
 package com.mygdx.game.ui;
 
-import static com.mygdx.game.entity.WorldMap.unitScale;
+import static com.mygdx.game.ui.CommonUI.ENABLE_TARGET_UI;
 
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
@@ -11,7 +11,6 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.Cursor;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
@@ -38,12 +37,12 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Stack;
 import com.badlogic.gdx.scenes.scene2d.ui.Touchpad;
-import com.badlogic.gdx.scenes.scene2d.utils.ActorGestureListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
-import com.badlogic.gdx.scenes.scene2d.utils.Layout;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
+import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.I18NBundle;
+import com.badlogic.gdx.utils.Pool;
 import com.badlogic.gdx.utils.Timer;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.StretchViewport;
@@ -52,6 +51,7 @@ import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.entity.Entity;
 import com.mygdx.game.entity.EntityController;
+import com.mygdx.game.entity.Projectile;
 import com.mygdx.game.entity.WorldMap;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
@@ -59,7 +59,7 @@ import com.mygdx.game.util.Common;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Random;
 
 /**
@@ -122,6 +122,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public static Vector3 unprojectedMouse = new Vector3();
     private Vector3 screenMouse = new Vector3();
     private Vector2 joystickDir = new Vector2(); // the current joystick direction (for android)
+    private Texture testTexure;
+    // array containing the active projectiles.
+    private static final Array<Projectile> projectiles = new Array<Projectile>();
+    public static void addProjectile(Projectile projectile) {projectiles.add(projectile);}
+    // projectile pool.
+    private static final Pool<Projectile> projectilePool = new Pool<Projectile>() {
+        @Override
+        protected Projectile newObject() {
+            return new Projectile();
+        }
+    };
+    public static Pool<Projectile> getProjectilePool() {return projectilePool;}
 
     /**
      * Prepares the screen/stage of the game
@@ -143,6 +155,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         uiDebug = new ShapeRenderer();
         shapeDebug = new ShapeRenderer();
         joystick = new Joystick(5, 20, 50);
+
+        testTexure =new Texture(Gdx.files.internal("sfx/PrismaWand_1.png"));
 
         // Constructs a new OrthographicCamera, using the given viewport width and height
         // Height is multiplied by aspect ratio.
@@ -386,9 +400,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     // if its first touch and there is a interactive entity, select it
                     if(Gdx.input.justTouched() && button == 1 && !onStageActor) { // Only acts on world if it did not hit any UI actor)
                         //if(WorldMap.hoverEntity != null)
-                        if(GameClient.getInstance().getClientCharacter().getTarget() != null
-                         && GameClient.getInstance().getClientCharacter().getTarget() == WorldMap.hoverEntity)
-                            GameClient.getInstance().getClientCharacter().getTarget().takeDamage(); // for debug atm
+//                        if(GameClient.getInstance().getClientCharacter().getTarget() != null
+//                         && GameClient.getInstance().getClientCharacter().getTarget() == WorldMap.hoverEntity)
+//                            GameClient.getInstance().getClientCharacter().getTarget().takeDamage(); // for debug atm
 
                         GameClient.getInstance().getClientCharacter().setTarget(WorldMap.hoverEntity);
                     }
@@ -712,6 +726,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
             updateCursor();
 
         updateCamera(); // updates camera
+        updateProjectiles(); // update alive projectiles 
+        
         batch.setProjectionMatrix(camera.combined); // sets camera for projection
 
         Gdx.gl.glClearColor(0, 0, 0, 1);
@@ -741,16 +757,21 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         world.render(); // render world
 
-        //batch.setBlendFunction(GL20.GL_DST_COLOR, GL20.GL_ONE);
         // draw entities using ordered list (if there is any)
         if(entityController.entities.size() > 0)
             entityController.renderEntities(batch);
 
-        // if entity is target of client player, render selected entity UI
+        // render projectiles
+        for (Projectile projectile : projectiles) {
+            batch.draw(testTexure, projectile.position.x, projectile.position.y, 20f*WorldMap.unitScale, 20f*WorldMap.unitScale);
+        }
+
+        // render player target info if there is a target
         Entity target = gameClient.getClientCharacter().getTarget();
         if(target != null) {
             target.renderUI(batch);
-            showEntityTargetUI(target);
+            if(ENABLE_TARGET_UI)
+                showEntityTargetUI(target);
         }
 
         batch.setProjectionMatrix(camera.combined);
@@ -764,11 +785,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 || target.uId !=
             WorldMap.hoverEntity.uId) { // only renders if target is not the one being hovered, as info is already being rendered by being a target
                 WorldMap.hoverEntity.renderUI(batch);
-                showEntityTargetUI(WorldMap.hoverEntity);
+                if(ENABLE_TARGET_UI)
+                    showEntityTargetUI(WorldMap.hoverEntity);
             }
         }
 
-        if(target == null && WorldMap.hoverEntity == null)
+        if(ENABLE_TARGET_UI && target == null && WorldMap.hoverEntity == null)
             hideEntityTargetUI(); // makes sure to hide target ui when no target nor hover exists
 
         batch.end();
@@ -782,6 +804,15 @@ public class GameScreen implements Screen, PropertyChangeListener {
             for(Rectangle portal : WorldMap.portals) {
                 shapeDebug.rect(portal.x, portal.y, portal.width, portal.height);
             }
+            shapeDebug.end();
+        }
+
+        // line between player and target debug
+        if(gameClient.getClientCharacter() != null && gameClient.getClientCharacter().getTarget() != null  && CommonUI.enableDebugTex) {
+            shapeDebug.setProjectionMatrix(camera.combined);
+            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+            shapeDebug.setColor(Color.BLUE);
+            shapeDebug.line(gameClient.getClientCharacter().getEntityCenter(), gameClient.getClientCharacter().getTarget().getEntityCenter());
             shapeDebug.end();
         }
 
@@ -877,6 +908,32 @@ public class GameScreen implements Screen, PropertyChangeListener {
     }
 
     /**
+     * Update current alive projectiles
+     */
+    private void updateProjectiles() {
+        Iterator<Projectile> iter = projectiles.iterator();
+        while (iter.hasNext()) {
+            Projectile projectile = iter.next();
+            projectile.update(Gdx.graphics.getDeltaTime());
+
+            // if raindrop is not on screen anymore removes it and free pool
+            if (projectile.alive == false) {
+                iter.remove();
+                projectilePool.free(projectile);
+            }
+            // if raindrop hits bucket, count it and remove it/free pool
+//            if (raindrop.overlaps(bucket)) {
+//                dropsGathered++;
+//                dropSound.play();
+//                if (raindrop.alive == true) {
+//                    iter.remove();
+//                    raindropsPool.free(raindrop);
+//                }
+//            }
+        }
+    }
+
+    /**
      * Updates cursor based on current hovered entity
      */
     private void updateCursor() {
@@ -942,6 +999,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         //stage.dispose();
         bgm.dispose();
         world.dispose();
+        testTexure.dispose();
     }
 
 //    public void stopUpdateTimer() {
