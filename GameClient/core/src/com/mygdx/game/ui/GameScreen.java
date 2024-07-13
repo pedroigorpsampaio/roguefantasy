@@ -762,9 +762,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
             entityController.renderEntities(batch);
 
         // render projectiles
-        for (Projectile projectile : projectiles) {
-            batch.draw(testTexure, projectile.position.x, projectile.position.y, 20f*WorldMap.unitScale, 20f*WorldMap.unitScale);
-        }
+//        for (Projectile projectile : projectiles) {
+//            projectile.render(batch);
+//        }
 
         // render player target info if there is a target
         Entity target = gameClient.getClientCharacter().getTarget();

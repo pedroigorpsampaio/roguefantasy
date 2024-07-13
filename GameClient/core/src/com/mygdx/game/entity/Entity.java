@@ -20,6 +20,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.math.Circle;
+import com.badlogic.gdx.math.Interpolation;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
@@ -50,7 +51,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public abstract class Entity implements Comparable<Entity> {
     public static AssetManager assetManager; // screen asset manager
     public static Stage stage; // screen stage
-    private final TextureAtlas uiAtlas;
+    protected final TextureAtlas uiAtlas, sfxAtlas;
     protected final Image uiBg;
     protected Image healthBar;
     protected final Image healthBarBg;
@@ -86,7 +87,7 @@ public abstract class Entity implements Comparable<Entity> {
     protected float fadeSpeed = 2f;
     protected float animSizeFactor = 1f; // for yo yo size animation
     protected float animDir = 1; // for yo yo movement animation
-    public float health, maxHealth, attackSpeed = 10f;
+    public float health, maxHealth, attackSpeed = 1f;
     public float spriteW;
     public float spriteH;
     protected TextureRegion currentFrame = null;
@@ -96,6 +97,7 @@ public abstract class Entity implements Comparable<Entity> {
         /**
          * Load assets common to entities
          */
+        sfxAtlas = assetManager.get("sfx/packed_textures/sfx.atlas");
         uiAtlas = assetManager.get("ui/packed_textures/ui.atlas");
         skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
         font = skin.get("emojiFont", Font.class); // gets typist font with icons
@@ -210,6 +212,7 @@ public abstract class Entity implements Comparable<Entity> {
         WALL,
         PORTAL,
         TREE,
+        PROJECTILE,
         CHARACTER
     }
 
@@ -954,7 +957,8 @@ public abstract class Entity implements Comparable<Entity> {
         /** Spawns magic projectile **/
         private void spawnMagicProjectile() {
             Projectile projectile = GameScreen.getProjectilePool().obtain();
-            projectile.init(0.1f, this, target);
+            projectile.init(sfxAtlas.findRegions("PrismaWand"), 0.7f, 0.7f, 1.0f/attackSpeed,
+                            1/30f,this, target, true, true, Interpolation.bounce);
             GameScreen.addProjectile(projectile);
         }
 
@@ -972,7 +976,7 @@ public abstract class Entity implements Comparable<Entity> {
         //player
         @Override
         public Vector2 getEntityCenter() {
-            center.set(finalDrawPos.x + spriteW/4f, finalDrawPos.y + spriteH/6f);
+            center.set(finalDrawPos.x + spriteW/2f, finalDrawPos.y + spriteH/2.5f);
             return center;
         }
 
@@ -1392,7 +1396,7 @@ public abstract class Entity implements Comparable<Entity> {
         //tree
         @Override
         public Vector2 getEntityCenter() {
-            center.set(finalDrawPos.x + spriteW/3.6f, finalDrawPos.y + spriteH/12f);
+            center.set(finalDrawPos.x + spriteW/2f, finalDrawPos.y + spriteH/2f);
             return center;
         }
 
@@ -1656,7 +1660,7 @@ public abstract class Entity implements Comparable<Entity> {
         // creature
         @Override
         public Vector2 getEntityCenter() {
-            center.set(finalDrawPos.x + spriteW/2.5f, finalDrawPos.y + spriteH/2.5f);
+            center.set(finalDrawPos.x + spriteW/2f, finalDrawPos.y + spriteH/2f);
             return center;
         }
 

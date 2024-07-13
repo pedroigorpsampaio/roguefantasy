@@ -11,6 +11,7 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.assets.loaders.FileHandleResolver;
 import com.badlogic.gdx.assets.loaders.I18NBundleLoader;
+import com.badlogic.gdx.assets.loaders.TextureAtlasLoader;
 import com.badlogic.gdx.assets.loaders.resolvers.InternalFileHandleResolver;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
@@ -181,6 +182,7 @@ public class LoadScreen implements Screen {
                 VisUI.load(skin); //load VisUI
         }
 
+        manager.load("sfx/packed_textures/sfx.atlas", TextureAtlas.class);
         manager.load("ui/packed_textures/ui.atlas", TextureAtlas.class);
         // blocks until ui atlas is fully loaded
         manager.finishLoading();
@@ -188,7 +190,14 @@ public class LoadScreen implements Screen {
         // loads assets based on the next screen
         if(screen.equals("menu")) {
             //manager.load("eldamar.mp3", Music.class);
+            TextureAtlas sfxAtlas = manager.get("sfx/packed_textures/sfx.atlas", TextureAtlas.class);
+            for (Texture t: sfxAtlas.getTextures()) // apply linear filter to smooth texture resizing
+                t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+
             TextureAtlas uiAtlas = manager.get("ui/packed_textures/ui.atlas", TextureAtlas.class);
+            for (Texture t: uiAtlas.getTextures()) // apply linear filter to smooth texture resizing
+                t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+
             // builds cursor bank (only once, menu shares it with game screen)
             CommonUI.cursorBank = new HashMap<>();
             TextureAtlas.AtlasRegion region = uiAtlas.findRegion("Cursor Default");
