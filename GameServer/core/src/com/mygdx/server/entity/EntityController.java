@@ -62,7 +62,7 @@ public class EntityController {
                 new Component.Velocity(0, 0),
                 new Component.Attributes(64f*RogueFantasyServer.world.getUnitScale(), 64f*RogueFantasyServer.world.getUnitScale(),
                         100f, 100f,
-                        100f*RogueFantasyServer.world.getUnitScale(), 50f,
+                        100f*RogueFantasyServer.world.getUnitScale(), 1f,
                         14f*RogueFantasyServer.world.getUnitScale()),
                 new Component.Spawn(0, new Component.Position(0, 0), 15)
         ).setState(Component.AI.State.IDLE);
@@ -156,9 +156,18 @@ public class EntityController {
         creatureUpdate.lastVelocityY = entity.get(Component.Position.class).lastVelocityY;
         creatureUpdate.state = entity.get(Component.AI.class).state.getName();
         creatureUpdate.timestamp = Instant.now().toEpochMilli();
-        Component.Character target = entity.get(Component.AI.class).target;
-        if (target != null)
-            creatureUpdate.targetId = entity.get(Component.AI.class).target.tag.id;
+        Component.Target target = entity.get(Component.AI.class).target;
+        Object targetEntity = entity.get(Component.AI.class).target.entity;
+        if (targetEntity != null) {
+            switch (target.type) {
+                case CHARACTER:
+                    creatureUpdate.targetId = target.id;
+                    break;
+                default:
+                    creatureUpdate.targetId = -1;
+                    break;
+            }
+        }
         else
             creatureUpdate.targetId = -1;
 
@@ -190,11 +199,21 @@ public class EntityController {
             creatureUpdate.lastVelocityY = entity.entity().get(Component.Position.class).lastVelocityY;
             creatureUpdate.state = entity.entity().get(Component.AI.class).state.getName();
             creatureUpdate.timestamp = Instant.now().toEpochMilli();
-            Component.Character target = entity.entity().get(Component.AI.class).target;
-            if(target != null)
-                creatureUpdate.targetId = entity.entity().get(Component.AI.class).target.tag.id;
+            Component.Target target = entity.entity().get(Component.AI.class).target;
+            Object targetEntity = entity.entity().get(Component.AI.class).target.entity;
+            if (targetEntity != null) {
+                switch (target.type) {
+                    case CHARACTER:
+                        creatureUpdate.targetId = target.id;
+                        break;
+                    default:
+                        creatureUpdate.targetId = -1;
+                        break;
+                }
+            }
             else
                 creatureUpdate.targetId = -1;
+
             creatureData.add(creatureUpdate);
         }
         return creatureData;

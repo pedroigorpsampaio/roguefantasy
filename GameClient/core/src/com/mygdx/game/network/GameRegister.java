@@ -20,7 +20,7 @@ public class GameRegister {
     public static final int serverTickrate = 15; // the amount of communication updates per second in server
     public static final int clientTickrate = 20; // the amount of communication updates per second in client
     static public boolean lagSimulation = true; // simulate lag
-    static public int lag = 170; // simulated lag value in ms
+    static public int lag = 470; // simulated lag value in ms
     static public final int N_ROWS = 45; // number of rows to be sent to player in state (AoI)
     static public final int N_COLS = 45; // number of cols to be sent to player in state (AoI)
 
@@ -65,6 +65,9 @@ public class GameRegister {
         kryo.register(Teleport.class);
         kryo.register(EntityState.class);
         kryo.register(Tree.class);
+        kryo.register(Interaction.class);
+        kryo.register(InteractionRequest.class);
+        kryo.register(EntityType.class);
     }
 
     static public class Layer {
@@ -73,6 +76,8 @@ public class GameRegister {
 
     static public class Ping {
         public boolean isReply;
+        public int avg;
+
         public Ping() {}
         public Ping(boolean isReply) {this.isReply = isReply;}
     }
@@ -111,6 +116,33 @@ public class GameRegister {
         TELEPORTING_OUT,
         ATTACKING,
         FREE,
+    }
+
+    public enum EntityType {
+        CREATURE,
+        NPC,
+        WALL,
+        PORTAL,
+        TREE,
+        PROJECTILE,
+        CHARACTER
+    }
+
+
+    // contains player possible interactions type
+    public enum Interaction{
+        ATTACK_ENTITY,
+        CUT_TREE,
+        MINE_ORE,
+        GRAB_ITEM,
+        STOP_INTERACTION,
+    }
+
+    static public class InteractionRequest {
+        public Interaction type;
+        public int targetId;
+        public EntityType entityType;
+        public long timestamp;
     }
 
     static public class UpdateCharacter {
@@ -161,7 +193,7 @@ public class GameRegister {
     public static class Character {
         public String name;
         public int id, role_level;
-        public float x, y, speed;
+        public float x, y, speed, attackSpeed;
         public float health, maxHealth;
         public boolean isTeleporting;
         public EntityState state = EntityState.FREE;

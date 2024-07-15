@@ -12,6 +12,7 @@ import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Pool;
 import com.mygdx.game.network.GameClient;
+import com.mygdx.game.network.GameRegister;
 
 public class Projectile extends Entity implements Pool.Poolable {
 
@@ -67,7 +68,7 @@ public class Projectile extends Entity implements Pool.Poolable {
         this.move.set(direction.x*Gdx.graphics.getDeltaTime()*speed, direction.y*Gdx.graphics.getDeltaTime()*speed);
         this.alive = true;
         this.uId = EntityController.getInstance().generateUid();
-        this.type = Type.PROJECTILE;
+        this.type = GameRegister.EntityType.PROJECTILE;
         EntityController.getInstance().entities.put(uId, this);
     }
 
@@ -78,7 +79,7 @@ public class Projectile extends Entity implements Pool.Poolable {
     }
 
     @Override
-    public void takeDamage() {
+    public void updateHealth(float health) {
 
     }
 
@@ -134,8 +135,8 @@ public class Projectile extends Entity implements Pool.Poolable {
                     initPos.y+(goalPos.y - initPos.y)*alpha);
 
         if(elapsed >= lifeTime) {
-            if(followTarget)
-                target.takeDamage(); // take damage of target
+//            if(followTarget)
+//                target.takeDamage(); // take damage of target
             die();
         }
 
@@ -143,7 +144,7 @@ public class Projectile extends Entity implements Pool.Poolable {
             // check if collided with an entity
             Entity e = EntityController.getInstance().hit(creator, position);
             if(e != null && e.isTargetAble) {
-                e.takeDamage();
+                //e.takeDamage();
                 die();
             }
         }
@@ -189,7 +190,7 @@ public class Projectile extends Entity implements Pool.Poolable {
     public int compareTo(Entity entity) {
         Vector2 e1Iso = this.position;
         Vector2 e2Iso = entity.drawPos;
-        float e1Depth = e1Iso.y - creator.spriteH/4.1f;
+        float e1Depth = e1Iso.y - creator.spriteH/3.75f;
         //float e1Depth = e1Iso.y - height/2.1f;
         float e2Depth = e2Iso.y;
 

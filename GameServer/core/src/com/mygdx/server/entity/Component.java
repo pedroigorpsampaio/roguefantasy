@@ -1,7 +1,10 @@
 package com.mygdx.server.entity;
 
+import static com.mygdx.server.entity.WorldMap.TEX_HEIGHT;
+import static com.mygdx.server.entity.WorldMap.TEX_WIDTH;
 import static com.mygdx.server.entity.WorldMap.TILES_HEIGHT;
 import static com.mygdx.server.entity.WorldMap.TILES_WIDTH;
+import static com.mygdx.server.entity.WorldMap.unitScale;
 import static com.mygdx.server.network.GameRegister.N_COLS;
 import static com.mygdx.server.network.GameRegister.N_ROWS;
 
@@ -11,20 +14,17 @@ import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.utils.Array;
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Output;
+import com.badlogic.gdx.utils.Timer;
 import com.mygdx.server.network.GameRegister;
 import com.mygdx.server.network.GameServer;
-import com.mygdx.server.network.LoginServer;
 import com.mygdx.server.ui.RogueFantasyServer;
 import com.mygdx.server.util.Common;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.dominion.ecs.api.Entity;
 
@@ -76,8 +76,13 @@ public class Component {
         public Vector2 lastTilePos = null;
         public GameServer.CharacterConnection connection = null;
         public GameRegister.EntityState state = GameRegister.EntityState.FREE;
-        private Output lastState = null;
+        public GameRegister.UpdateState lastState = null; // last state sent to this character
         public boolean isTeleporting = false;
+        public Target target = new Target(); // player current target
+        public AoIEntities aoIEntities = new AoIEntities(); // current AoI entities of player (last game state)
+        public int avgLatency = 0; // average latency of this player
+        protected Timer interactionTimer=new Timer(); // timer that controls the interaction of this character
+        //public boolean isInteracting = false; // flag that controls if this character is interacting at any given time
 
         /**
          * Prepares character data to be sent to clients with
@@ -108,6 +113,7 @@ public class Component {
             update.character.speed = attr.speed;
             update.character.role_level = role_level;
             update.character.state = state;
+            update.character.attackSpeed = attr.attackSpeed;
             update.dir = dir;
             update.lastRequestId = lastMoveId;
             update.character.isTeleporting = isTeleporting;
@@ -318,6 +324,8 @@ public class Component {
          */
         public GameRegister.UpdateState buildStateAoI() {
             GameRegister.UpdateState state = new GameRegister.UpdateState(); // the state message
+            // reset aoi entities helper data
+            aoIEntities = new AoIEntities();
             // get this players position in isometric tile map
             Vector2 tPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(this.position.x, this.position.y));
             float pX = tPos.x;
@@ -374,6 +382,7 @@ public class Component {
                                             if (entity.get(Component.Position.class) == null) // non-player entity // TODO: SEPARATE TYPES OF ENTITIES!!
                                                     continue;
                                             state.creatureUpdates.add(EntityController.getInstance().getCreatureData(entity));
+                                            aoIEntities.creatures.put(entity.get(Component.Spawn.class).id, entity);
                                         }
                                     }
                                 }
@@ -386,6 +395,7 @@ public class Component {
                                             if (character == null) // non-player entity // TODO: SEPARATE TYPES OF ENTITIES!!
                                                 continue;
                                             state.characterUpdates.add(character.getCharacterData());
+                                            aoIEntities.characters.put(character.tag.id, character);
                                         }
                                     }
                                 }
@@ -397,6 +407,8 @@ public class Component {
                                 }
                                 if(EntityController.getInstance().entityWorldState[col][row].tree != null) { // add tree
                                     state.trees.add(EntityController.getInstance().entityWorldState[col][row].tree);
+                                    aoIEntities.trees.put(EntityController.getInstance().entityWorldState[col][row].tree.spawnId,
+                                                            EntityController.getInstance().entityWorldState[col][row].tree);
                                 }
                             }
                         }
@@ -417,36 +429,167 @@ public class Component {
             this.lastState = null;
             this.state = GameRegister.EntityState.FREE;
             this.isTeleporting = false;
+            this.target.id = -1;
+            this.target.type = null;
+            this.target.entity = null;
+            this.avgLatency = 0;
+            this.stopInteraction();
         }
 
-        public boolean compareStates(GameRegister.UpdateState state) {
-            // state message serialization
-            Output newState = new Output(1024, -1);
-            Kryo kryo = new Kryo();
-            kryo.register(GameRegister.UpdateCreature.class);
-            kryo.register(GameRegister.UpdateCharacter.class);
-            kryo.register(GameRegister.UpdateState.class);
-            kryo.register(ArrayList.class);
-            kryo.register(short[][].class);
-            kryo.register(short[].class);
-            kryo.register(int[][].class);
-            kryo.register(int[].class);
-            kryo.register(com.mygdx.server.network.GameRegister.Character.class);
-            kryo.register(Vector2.class);
-            kryo.register(GameRegister.Layer.class);
-            kryo.writeObject(newState, state);
+        /**
+         * Proceeds to attack current target in intervals based on attack speed and avg ping
+         */
+        public void attack() {
+            if(target == null || target.entity == null) return; // no target to attack
 
-            if(lastState == null) {
-                lastState = new Output(1024, -1);
-                return false;
-            }
-            if(!Arrays.equals(this.lastState.getBuffer(), newState.getBuffer())) {
-                lastState.setBuffer(newState.getBuffer());
-                RogueFantasyServer.worldStateMessageSize = String.valueOf(newState.total());
-                return false;
-            }
+            //if(isInteracting) return; // an interaction must be stopped before starting a new one
 
-            return true;
+            // starts update timer that control user interaction
+//            interactionTimer=new Timer();
+            stopInteraction.set(false);
+
+            float latency = System.currentTimeMillis() - target.timestamp;
+            float delay = (1/attr.attackSpeed)-(latency/1000f);
+            if(delay <= 0) delay = 0;
+
+            //isInteracting = true;
+
+            if(hitTarget.isScheduled())
+               hitTarget.cancel();
+
+            interactionTimer.scheduleTask(hitTarget, delay, GameRegister.clientTickrate());
+        }
+
+        public Timer.Task hitTarget = new Timer.Task() {
+            @Override
+            public void run() {
+                target.hit(attr);
+                if(stopInteraction.get()) {
+                    stopInteraction.set(false);
+                }
+            }
+        };
+        AtomicBoolean stopInteraction = new AtomicBoolean(false);
+        public void stopInteraction() {
+//            if (interactionTimer != null) {
+//                interactionTimer.stop();
+//            }
+            interactionTimer.clear();
+            stopInteraction.set(true); // set stop interaction flag to true, so current task will be the last one
+
+            target.id = -1;
+            target.type = null;
+            target.entity = null;
+            //isInteracting = false;
+        }
+
+        /**
+         * Called when character is hit
+         * @param attacker  the attributes of the attacker
+         */
+        public void hit(Attributes attacker) {
+            attr.health-=5f;
+        }
+
+//        public boolean compareStates(GameRegister.UpdateState state) {
+//            // state message serialization
+//            Output newState = new Output(1024, -1);
+//            Kryo kryo = new Kryo();
+//            kryo.register(GameRegister.UpdateCreature.class);
+//            kryo.register(GameRegister.UpdateCharacter.class);
+//            kryo.register(GameRegister.UpdateState.class);
+//            kryo.register(ArrayList.class);
+//            kryo.register(short[][].class);
+//            kryo.register(short[].class);
+//            kryo.register(int[][].class);
+//            kryo.register(int[].class);
+//            kryo.register(com.mygdx.server.network.GameRegister.Character.class);
+//            kryo.register(Vector2.class);
+//            kryo.register(GameRegister.Layer.class);
+//            kryo.writeObject(newState, state);
+//
+//            if(lastState == null) {
+//                lastState = new Output(1024, -1);
+//                return false;
+//            }
+//            if(!Arrays.equals(this.lastState.getBuffer(), newState.getBuffer())) {
+//                lastState.setBuffer(newState.getBuffer());
+//                RogueFantasyServer.worldStateMessageSize = String.valueOf(newState.total());
+//                return false;
+//            }
+//
+//            return true;
+//        }
+    }
+
+    public static class Target {
+        public int id;
+        public GameRegister.EntityType type;
+        public Object entity;
+        public long timestamp;
+        private long lastAttack = System.currentTimeMillis();
+
+        /**
+         * called when this target is hit
+         * @param attacker the attributes of the attacker
+         */
+        public void hit(Attributes attacker) {
+            if(type == null || entity == null) return;
+
+            long now = System.currentTimeMillis();
+            if(now - lastAttack >= 1000f/attacker.attackSpeed ) { // only attacks respecting attack speed of attacker
+                lastAttack = System.currentTimeMillis();
+                switch (type) {
+                    case CHARACTER:
+                        Component.Character targetCharacter = (Component.Character) entity;
+                        targetCharacter.hit(attacker);
+                        break;
+                    case TREE:
+                        GameRegister.Tree tree = (GameRegister.Tree) entity;
+                        tree.health -= 5f;
+                        break;
+                    case CREATURE:
+                        Entity targetCreature = (Entity) entity;
+                        targetCreature.get(Component.AI.class).hit(attacker);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        /**
+         * Gets target position
+         * @return          the position of this target in the world
+         */
+        public Vector2 getPosition() {
+            Vector2 position = null;
+            switch (type) {
+                case CHARACTER:
+                    Component.Character targetCharacter = (Component.Character) entity;
+                    if(targetCharacter == null) return null;
+                    position = new Vector2(targetCharacter.position.x, targetCharacter.position.y);
+                    break;
+                case TREE:
+                    GameRegister.Tree tree = (GameRegister.Tree) entity;
+                    if(tree == null) return null;
+                    float tileWidth = TEX_WIDTH * unitScale;
+                    float tileHeight = TEX_HEIGHT * unitScale;
+                    float halfTileWidth = tileWidth * 0.5f;
+                    float halfTileHeight = tileHeight * 0.5f;
+
+                    position = new Vector2( (tree.tileX * halfTileWidth) + (tree.tileY * halfTileWidth),
+                            (tree.tileY * halfTileHeight) - (tree.tileX * halfTileHeight) + tileHeight - halfTileHeight*1.38f);
+                    break;
+                case CREATURE:
+                    Entity targetCreature = (Entity) entity;
+                    if(targetCreature == null) return null;
+                    position = new Vector2(targetCreature.get(Component.Position.class).x, targetCreature.get(Component.Position.class).y);
+                    break;
+                default:
+                    break;
+            }
+            return position;
         }
     }
 
@@ -592,9 +735,21 @@ public class Component {
         public Event(Type type, Character trigger) {this.type = type; this.trigger = trigger;}
     }
 
+    /**
+     * Helper structure to quickly get interactive entities in AoI of client (each client saves last state AoIEntities data)
+     */
+    public static class AoIEntities {
+        public Map<Integer, Entity> creatures; // map of entities in AoI of client (creatures for now)
+        public Map<Integer, Component.Character> characters; // map of character in AoI of client
+        public Map<Integer, GameRegister.Tree> trees; // map of trees in AoI of client
+
+        public AoIEntities() {creatures = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>(); trees = new ConcurrentHashMap<>();}
+    }
+
+
     public static class AI {
         private final Entity body; // the body that this ai controls (the entity with AI component)
-        public Character target = null;
+        public Target target = new Target();
         public State state = State.IDLE;
 
         public AI(Entity body) {
@@ -639,10 +794,12 @@ public class Component {
                 case PLAYER_ENTERED_AOI:
                 case TARGET_OUT_OF_RANGE:
                     this.state = State.FOLLOWING;
-                    target = event.trigger;
+                    target.id = event.trigger.tag.id;
+                    target.type = GameRegister.EntityType.CHARACTER;
+                    target.entity = event.trigger;
                     break;
                 case PLAYER_LEFT_AOI:
-                    if (target != null && target.equals(event.trigger)) {
+                    if (target.entity != null && target.id == event.trigger.tag.id) {
                         // TODO: SEARCH FOR OTHER TARGET IN AOI RANGE
                         // if there is no target close, idle walk or do nothing?
                         this.state = State.IDLE_WALKING;
@@ -650,7 +807,7 @@ public class Component {
                         Component.Spawn spawn = body.get(Component.Spawn.class);
                         spawn.position.x = position.x;
                         spawn.position.y = position.y;
-                        target = null;
+                        target.entity = null;
                     }
                     break;
                 case TARGET_IN_RANGE:
@@ -678,15 +835,23 @@ public class Component {
             }
         }
 
+        public void hit(Attributes attacker) {
+            body.get(Attributes.class).health-=5f;
+        }
+
         // attack if in range
         private void attack() {
-            if(target == null) return; // no target to attack
+            if(target.entity == null) return; // no target to attack
 
             Component.Position position = body.get(Component.Position.class);
             Component.Attributes attributes = body.get(Component.Attributes.class);
 
-            Component.Position targetPos = target.position;
-            Component.Attributes targetAttr = target.attr;;
+            if(target.type != GameRegister.EntityType.CHARACTER) return; // only attack players atm
+
+            Character character = (Character) target.entity;
+
+            Component.Position targetPos = character.position;
+            Component.Attributes targetAttr = character.attr;
 
             Vector2 goalPos = new Vector2(targetPos.x + targetAttr.width/2f, targetPos.y + targetAttr.height/12f);
             Vector2 aiPos = new Vector2(position.x + attributes.width/2f, position.y + attributes.height/3f);
@@ -695,7 +860,7 @@ public class Component {
             Vector2 futurePos = new Vector2(aiPos).add(deltaVec);
 
             if(goalPos.dst(futurePos) > attributes.range) { // not close enough, do not attack anymore
-                react(new Event(Event.Type.TARGET_OUT_OF_RANGE, target));
+                react(new Event(Event.Type.TARGET_OUT_OF_RANGE, character));
                 return;
             }
 
@@ -710,8 +875,13 @@ public class Component {
             Component.Velocity velocity = body.get(Component.Velocity.class);
             Component.Attributes attributes = body.get(Component.Attributes.class);
 
-            Component.Position targetPos = target.position;
-            Component.Attributes targetAttr = target.attr;
+            if(target.type != GameRegister.EntityType.CHARACTER) return; // only follow  players atm
+
+            Character character = (Character) target.entity;
+
+
+            Component.Position targetPos = character.position;
+            Component.Attributes targetAttr = character.attr;
 
 //            System.out.printf("Target %s\n",
 //                    targetAttr.width/2f);
@@ -724,7 +894,7 @@ public class Component {
 
             if(goalPos.dst(futurePos) <= attributes.range) { // close enough, do not move anymore
                 velocity.x = 0; velocity.y = 0;
-                react(new Event(Event.Type.TARGET_IN_RANGE, target));
+                react(new Event(Event.Type.TARGET_IN_RANGE, character));
                 return;
             }
 
@@ -736,7 +906,7 @@ public class Component {
             Component.Velocity velocity = body.get(Component.Velocity.class);
             Component.Spawn spawn = body.get(Component.Spawn.class);
             Component.Attributes attributes = body.get(Component.Attributes.class);
-            if(target == null) { // move aimlessly
+            if(target.entity == null) { // move aimlessly if there is no target
                 if(position.x <= spawn.position.x && position.y <= spawn.position.y) {
                     velocity.x = 1 * attributes.speed * GameRegister.clientTickrate();
                     velocity.y = 0;

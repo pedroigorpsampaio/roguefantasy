@@ -75,6 +75,9 @@ public class GameRegister {
         kryo.register(Teleport.class);
         kryo.register(EntityState.class);
         kryo.register(Tree.class);
+        kryo.register(Interaction.class);
+        kryo.register(InteractionRequest.class);
+        kryo.register(EntityType.class);
     }
 
     static public class Layer {
@@ -83,6 +86,7 @@ public class GameRegister {
 
     static public class Ping {
         public boolean isReply;
+        public int avg;
         public Ping() {}
         public Ping(boolean isReply) {this.isReply = isReply;}
     }
@@ -123,6 +127,31 @@ public class GameRegister {
         FREE,
     }
 
+    public enum EntityType {
+        CREATURE,
+        NPC,
+        WALL,
+        PORTAL,
+        TREE,
+        PROJECTILE,
+        CHARACTER
+    }
+
+    // contains player possible interactions type
+    public enum Interaction{
+        ATTACK_ENTITY,
+        CUT_TREE,
+        MINE_ORE,
+        GRAB_ITEM,
+        STOP_INTERACTION,
+    }
+
+    static public class InteractionRequest {
+        public Interaction type;
+        public int targetId;
+        public EntityType entityType;
+        public long timestamp;
+    }
 
     static public class UpdateCharacter {
         public Character character;
@@ -172,7 +201,7 @@ public class GameRegister {
     public static class Character {
         public String name;
         public int id, role_level;
-        public float x, y, speed;
+        public float x, y, speed, attackSpeed;
         public float health, maxHealth;
         public boolean isTeleporting;
         public EntityState state = EntityState.FREE;

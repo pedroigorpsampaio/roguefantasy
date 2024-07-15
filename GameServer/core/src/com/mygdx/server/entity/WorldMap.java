@@ -81,7 +81,7 @@ public class WorldMap implements InputProcessor {
     private TiledMapTileLayer layerCut;
     private Matrix4 isoTransform;
     private Matrix4 invIsotransform;
-    private float unitScale;
+    public static final float unitScale = 1 / 32f;
     private IsometricTiledMapRenderer renderer;
     public static float WORLD_WIDTH, WORLD_HEIGHT;
     public static int TILES_WIDTH, TILES_HEIGHT, TEX_WIDTH, TEX_HEIGHT;
@@ -102,7 +102,6 @@ public class WorldMap implements InputProcessor {
         Log.info("game-server", "Loading world map...");
         map = new TmxMapLoader().load(fileName);
         this.batch = batch;
-        unitScale = 1 / 32f;
         renderer = new IsometricTiledMapRenderer(map, unitScale, batch);
         shapeRenderer = new ShapeRenderer();
         float w = Gdx.graphics.getWidth();

@@ -168,10 +168,12 @@ public class GameClient extends DispatchServer {
     private void sendPing() {
         if(client == null || !isConnected) return;
 
+        GameRegister.Ping ping = new GameRegister.Ping(false);
+        ping.avg = (int) avgLatency;
         if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
-            lagNetwork.send(new GameRegister.Ping(false));
+            lagNetwork.send(ping);
         } else {
-            client.sendUDP(new GameRegister.Ping(false));
+            client.sendUDP(ping);
         }
         lastPingTs = System.currentTimeMillis(); // updates last ping sent timestamp
     }
@@ -230,6 +232,9 @@ public class GameClient extends DispatchServer {
 
     // log off from server
     public void logoff() {
+        // stops interacting with any entity
+        if(getClientCharacter() != null)
+            getClientCharacter().stopInteractionTimer();
         // resets counts requests of each type of request
         // for server reconciliation
         requestsCounter = new ConcurrentHashMap<>();
@@ -245,6 +250,25 @@ public class GameClient extends DispatchServer {
             client.close();
         }).start();
         if(pingDelay.isScheduled()) pingDelay.cancel();
+    }
+
+    /**
+     * Send interaction request to server meaning that client triggered an interaction with
+     * an entity in the world that must be processed server-side
+     * @param type      the type of interaction triggered by client
+     * @param targetId  the id of the entity/target that client interacted with (must be contextId, to be correctly identified server-side)
+     * @param entityType the type of entity that player is interacting with
+     */
+    public void requestInteraction(GameRegister.Interaction type, int targetId, GameRegister.EntityType entityType) {
+        GameRegister.InteractionRequest iReq = new GameRegister.InteractionRequest();
+        iReq.type = type; iReq.targetId = targetId; iReq.entityType = entityType;
+        iReq.timestamp = System.currentTimeMillis();
+
+        // if lag simulation is on, add to queue with a timer to be sent
+        if(lagNetwork != null && GameRegister.lagSimulation)
+            lagNetwork.send(iReq);
+        else
+            client.sendUDP(iReq);
     }
 
     public void sendResponse (GameRegister.Response response) {
@@ -385,7 +409,7 @@ public class GameClient extends DispatchServer {
                 EntityController.getInstance().entities.put(tree.uId, tree); // put on list of entities (which will manage if its visible or not)
             } else { // if it is, update its attributes
                 tree = trees.get(treeUpdate.spawnId);
-                //tree.health = treeUpdate.health;
+                tree.updateHealth(treeUpdate.health);
                 tree.maxHealth = treeUpdate.maxHealth;
                 tree.name = treeUpdate.name;
             }
@@ -407,7 +431,7 @@ public class GameClient extends DispatchServer {
                 //EntityController.getInstance().removeEntity(creature.uId); // remove to reorder list correctly
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
 
-                //creature.health = creatureUpdate.health;
+                creature.updateHealth(creatureUpdate.health);
                 creature.maxHealth = creatureUpdate.maxHealth;
             }
 
@@ -448,8 +472,11 @@ public class GameClient extends DispatchServer {
                 //EntityController.getInstance().removeEntity(creature.uId); // remove to reorder list correctly
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
 
-                //character.health = msg.character.health;
+                /** updates attributes **/
+                character.updateHealth(msg.character.health);
                 character.maxHealth = msg.character.maxHealth;
+                character.updateAtkSpeed(msg.character.attackSpeed);
+                character.updateSpeed(msg.character.speed);
             }
 
             //character.state = msg.character.state;
@@ -460,9 +487,6 @@ public class GameClient extends DispatchServer {
             if(GameClient.getInstance().clientCharId != msg.character.id) {
                 character.direction = Entity.Direction.getDirection(MathUtils.round(msg.dir.x), MathUtils.round(msg.dir.y));
             }
-
-            // updates attributes
-            character.updateSpeed(msg.character.speed);
 
             // if its client, discard movements while teleporting (disposable late prediction packets)
             if(GameClient.getInstance().clientCharId == msg.character.id && character.isTeleporting) return;

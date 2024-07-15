@@ -19,9 +19,7 @@ import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
-import com.badlogic.gdx.math.Circle;
 import com.badlogic.gdx.math.Interpolation;
-import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
@@ -30,8 +28,6 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.utils.Align;
-import com.badlogic.gdx.utils.Array;
-import com.badlogic.gdx.utils.Pool;
 import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
@@ -70,10 +66,10 @@ public abstract class Entity implements Comparable<Entity> {
     public Vector2 finalDrawPos = new Vector2(0,0); // final position to draw this entity (for y-ordering, sometimes drawPos differs from final draw pos)
     public Vector2 centerPos = new Vector2(0,0); // center position of entity sprite
     public int uId; // this entity unique id
-    public int contextId; // the id of this id in context, based on what type of entity it is
-    public Type type; // the type of this entity, specifying its child class
+    public int contextId; // the id of this id in context, based on what type of entity it is and its the Id that should be used for identification in server
+    public GameRegister.EntityType type; // the type of this entity, specifying its child class
     public GameRegister.EntityState state = GameRegister.EntityState.FREE; // the server current state known of this entity
-    protected Timer interactionTimer; // timer that controls the interaction of entity
+    protected Timer interactionTimer=new Timer(); // timer that controls the interaction of entity
     public boolean isInteractive = false; // if this entity is interactive
     public boolean isTargetAble = false; // if this entity is target-able
     public boolean isObfuscator = false; // if this entity is obfuscator it will be rendered transparent when on top of player
@@ -87,7 +83,7 @@ public abstract class Entity implements Comparable<Entity> {
     protected float fadeSpeed = 2f;
     protected float animSizeFactor = 1f; // for yo yo size animation
     protected float animDir = 1; // for yo yo movement animation
-    public float health, maxHealth, attackSpeed = 1f;
+    public float health, maxHealth, attackSpeed;
     public float spriteW;
     public float spriteH;
     protected TextureRegion currentFrame = null;
@@ -202,19 +198,9 @@ public abstract class Entity implements Comparable<Entity> {
     }
 
     /**
-     * For DEBUG ONLY!
+     * For correct health updating of entities
      */
-    public abstract void takeDamage();
-
-    public enum Type {
-        CREATURE,
-        NPC,
-        WALL,
-        PORTAL,
-        TREE,
-        PROJECTILE,
-        CHARACTER
-    }
+    public abstract void updateHealth(float health);
 
     public enum Direction {
         NORTHWEST(-1, 1),
@@ -486,6 +472,7 @@ public abstract class Entity implements Comparable<Entity> {
         private Vector2 goalPos;
         private float tIntElapsed;
         private boolean isWalking = false;
+        private boolean isInteracting = false; // if character is interacting with an entity atm
 
         @Override
         public int compareTo(Entity entity) {
@@ -517,12 +504,15 @@ public abstract class Entity implements Comparable<Entity> {
 
             if(e != null) e.resetYoYoAnim(); // if a entity is selected, reset its yo yo target animation
 
-            this.target = e; // set target to an entity or null representing client has no target atm
-
             stopInteraction(); // in case there was an interaction going on, stop it before starts a new one
 
-            if(e != null)   // only starts interaction if a target is selected
+            this.target = e; // set target to an entity or null representing client has no target atm
+
+            if(e != null) {   // only starts interaction if a target is selected
                 startInteraction();
+            } else {
+                stopInteractionTimer(); // makes sure everything is stopped when there is no target
+            }
         }
 
         public static class EntityInterPos {
@@ -530,7 +520,7 @@ public abstract class Entity implements Comparable<Entity> {
             public Vector2 position;
         }
 
-        public Character(String name, int id, int role_level, float x, float y, float maxHealth, float health, float speed) {
+        public Character(String name, int id, int role_level, float x, float y, float maxHealth, float health, float speed, float attackSpeed) {
             super();
             this.name = name; this.id = id; this.role_level = role_level; this.outfitId = 0;
             this.entityName = name;
@@ -542,8 +532,9 @@ public abstract class Entity implements Comparable<Entity> {
             this.health = health;
             this.direction = Direction.SOUTH;
             this.bufferedPos = new ConcurrentSkipListMap<>();
+            this.attackSpeed = attackSpeed;
             this.contextId = this.id;
-            this.type = Type.CHARACTER;
+            this.type = GameRegister.EntityType.CHARACTER;
             this.isInteractive = true;
             this.isTargetAble = true;
             //this.bufferedPos.putIfAbsent(System.currentTimeMillis(), new Vector2(this.x, this.y));
@@ -597,7 +588,7 @@ public abstract class Entity implements Comparable<Entity> {
                             walk.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 2:
-                            attack.put(Direction.SOUTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
+                            attack.put(Direction.SOUTH, new Animation<TextureRegion>((1f/attackSpeed)/frames.length, frames));
                             break;
                         case 3:
                             idle.put(Direction.SOUTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
@@ -606,7 +597,7 @@ public abstract class Entity implements Comparable<Entity> {
                             walk.put(Direction.SOUTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 5:
-                            attack.put(Direction.SOUTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
+                            attack.put(Direction.SOUTHWEST, new Animation<TextureRegion>((1f/attackSpeed)/frames.length, frames));
                             break;
                         case 6:
                             idle.put(Direction.WEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
@@ -615,7 +606,7 @@ public abstract class Entity implements Comparable<Entity> {
                             walk.put(Direction.WEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 8:
-                            attack.put(Direction.WEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
+                            attack.put(Direction.WEST, new Animation<TextureRegion>((1f/attackSpeed)/frames.length, frames));
                             break;
                         case 9:
                             idle.put(Direction.NORTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
@@ -624,7 +615,7 @@ public abstract class Entity implements Comparable<Entity> {
                             walk.put(Direction.NORTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 11:
-                            attack.put(Direction.NORTHWEST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
+                            attack.put(Direction.NORTHWEST, new Animation<TextureRegion>((1f/attackSpeed)/frames.length, frames));
                             break;
                         case 12:
                             idle.put(Direction.NORTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
@@ -633,7 +624,7 @@ public abstract class Entity implements Comparable<Entity> {
                             walk.put(Direction.NORTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 14:
-                            attack.put(Direction.NORTH, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
+                            attack.put(Direction.NORTH, new Animation<TextureRegion>((1f/attackSpeed)/frames.length, frames));
                             break;
                         case 15:
                             idle.put(Direction.SOUTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
@@ -642,7 +633,7 @@ public abstract class Entity implements Comparable<Entity> {
                             walk.put(Direction.SOUTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 17:
-                            attack.put(Direction.SOUTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
+                            attack.put(Direction.SOUTHEAST, new Animation<TextureRegion>((1f/attackSpeed)/frames.length, frames));
                             break;
                         case 18:
                             idle.put(Direction.EAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
@@ -651,7 +642,7 @@ public abstract class Entity implements Comparable<Entity> {
                             walk.put(Direction.EAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 20:
-                            attack.put(Direction.EAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
+                            attack.put(Direction.EAST, new Animation<TextureRegion>((1f/attackSpeed)/frames.length, frames));
                             break;
                         case 21:
                             idle.put(Direction.NORTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL, frames));
@@ -660,7 +651,7 @@ public abstract class Entity implements Comparable<Entity> {
                             walk.put(Direction.NORTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * walkFactor, frames));
                             break;
                         case 23:
-                            attack.put(Direction.NORTHEAST, new Animation<TextureRegion>(ANIM_BASE_INTERVAL * atkFactor, frames));
+                            attack.put(Direction.NORTHEAST, new Animation<TextureRegion>((1f/attackSpeed)/frames.length, frames));
                             break;
                         default:
                             break;
@@ -676,6 +667,23 @@ public abstract class Entity implements Comparable<Entity> {
                         nameLabel.getWidth(), nameLabel.getHeight());
                 assetsLoaded = true;
             });
+        }
+
+        /**
+         * Updates attack speed of character adjusting animation speed as well (should be used instead of changing attack speed var directly)
+         * @param atkSpeed the new attack speed of the player (should be bigger than 0.5)
+         */
+        public void updateAtkSpeed(float atkSpeed) {
+            if(atkSpeed <= 0.5) return;
+
+            this.attackSpeed = atkSpeed;
+            synchronized (attack) {
+                Iterator<Animation<TextureRegion>> itr = attack.values().iterator();
+                while(itr.hasNext()) {
+                    Animation<TextureRegion> anim = itr.next();
+                    anim.setFrameDuration((1f/attackSpeed)/anim.getKeyFrames().length);
+                }
+            }
         }
 
         /**
@@ -915,42 +923,62 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         public void startInteraction() {
-            // starts update timer that control user inputs and server communication
-            interactionTimer=new Timer();
+            // starts update timer that control user interaction
+            //interactionTimer=new Timer();
 
-            //TODO: SEND INTERACTION START TO SERVER TO CALCULATE DMG AND TO ACTUALLY TAKE HEALTH AND STUFF
+            // SEND INTERACTION START TO SERVER TO PROCESS INTERACTION SERVER-SIDE - OF ATTACK TYPE IN THIS CASE
+            GameClient.getInstance().requestInteraction(GameRegister.Interaction.ATTACK_ENTITY,  target.contextId, target.type);
+
+            float delay = (1/attackSpeed)*0.2f;
+            isInteracting = true;
 
             interactionTimer.scheduleTask(new Timer.Task() {
                 @Override
                 public void run() {
                     attackTarget();
                 }
-            },1/this.attackSpeed, 1/this.attackSpeed);
+            },0f, GameRegister.clientTickrate());
         }
 
         /** Stops any interaction that this entity is doing **/
         public void stopInteraction() {
-            if(interactionTimer != null)
-                interactionTimer.stop();
-
-            if(this.state != GameRegister.EntityState.FREE)
-                this.state = GameRegister.EntityState.FREE;
+            if(isInteracting && target != null) {
+                // send msg to stop interaction to server
+                GameClient.getInstance().requestInteraction(GameRegister.Interaction.STOP_INTERACTION, target.contextId, target.type);
+                stopInteractionTimer();
+            }
         }
 
+        public void stopInteractionTimer() {
+            if (interactionTimer != null)
+                interactionTimer.clear();
+
+            if (this.state != GameRegister.EntityState.FREE)
+                this.state = GameRegister.EntityState.FREE;
+
+            isInteracting = false; // sets interaction flag to false
+        }
+
+        long lastAttack = System.currentTimeMillis();
         /**
          * Deals damage to target
          */
         public void attackTarget() {
-            if(target != null) {
+            if(target != null && target.health >= 0f) {
                 // if there is a wall between player and target, do not attack
                 Entity hit = EntityController.getInstance().hit(this, this.getEntityCenter(), target.getEntityCenter(), true);
                 if (hit != null) {
                     this.state = GameRegister.EntityState.FREE;
                     return;
                 }
-                // player is able to attack target
-                this.state = GameRegister.EntityState.ATTACKING;
-                spawnMagicProjectile();
+
+                long now = System.currentTimeMillis();
+                if(now - lastAttack >= 1000f/this.attackSpeed ) {
+                    lastAttack = System.currentTimeMillis();
+                    // player is able to attack target
+                    this.state = GameRegister.EntityState.ATTACKING;
+                    spawnMagicProjectile();
+                }
             }
         }
 
@@ -981,10 +1009,10 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         @Override
-        public void takeDamage() {
-            health-=5f;
-            if(health<0) {
-                health = maxHealth;
+        public void updateHealth(float health) {
+            this.health = health;
+            if(this.health<0) {
+                this.health = maxHealth;
                 if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
                         GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
                     GameClient.getInstance().getClientCharacter().setTarget(null);
@@ -1031,7 +1059,8 @@ public abstract class Entity implements Comparable<Entity> {
             // animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
 
             // if its in teleport in animation, deal with fade animation since client never is removed from AoI
-            if(GameClient.getInstance().getClientCharacter().id == this.id) {
+            if(GameClient.getInstance().getClientCharacter() != null &&
+                    GameClient.getInstance().getClientCharacter().id == this.id) {
                 if (teleportInAnim) {
                     Color c = batch.getColor();
                     batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
@@ -1183,7 +1212,7 @@ public abstract class Entity implements Comparable<Entity> {
 
         public static Character toCharacter(GameRegister.Character charData) {
             return new Character(charData.name, charData.id, charData.role_level, charData.x, charData.y,
-                    charData.maxHealth, charData.health, charData.speed);
+                    charData.maxHealth, charData.health, charData.speed, charData.attackSpeed);
         }
 
         /**
@@ -1221,7 +1250,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.isWalkable = tile.getProperties().get("walkable", Boolean.class);
             this.isObfuscator = tile.getProperties().get("obfuscator", Boolean.class);
             this.contextId = this.wallId;
-            this.type = Type.WALL;
+            this.type = GameRegister.EntityType.WALL;
 
             float tileWidth = TEX_WIDTH * unitScale;
             float tileHeight = TEX_HEIGHT * unitScale;
@@ -1240,7 +1269,7 @@ public abstract class Entity implements Comparable<Entity> {
             hitBox.setPosition(this.drawPos.x + halfTileWidth*0.5f, this.drawPos.y + halfTileHeight*0.8f);
 
             if(tile.getProperties().get("type", String.class).equals("portal")) {
-                this.type = Type.PORTAL;
+                this.type = GameRegister.EntityType.PORTAL;
                 this.isInteractive = true;
 
                 hitBox = new Polygon(new float[] {
@@ -1278,7 +1307,7 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         @Override
-        public void takeDamage() {
+        public void updateHealth(float health) {
 
         }
 
@@ -1364,7 +1393,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.isWalkable = tile.getProperties().get("walkable", Boolean.class);
             this.isObfuscator = tile.getProperties().get("obfuscator", Boolean.class);
             this.contextId = this.spawnId;
-            this.type = Type.TREE;
+            this.type = GameRegister.EntityType.TREE;
             this.isInteractive = true;
             this.isTargetAble = true;
             this.uId = EntityController.getInstance().generateUid();
@@ -1398,20 +1427,6 @@ public abstract class Entity implements Comparable<Entity> {
         public Vector2 getEntityCenter() {
             center.set(finalDrawPos.x + spriteW/2f, finalDrawPos.y + spriteH/2f);
             return center;
-        }
-
-        @Override
-        public void takeDamage() {
-            health-=5f;
-            if(health<=0) {
-                this.tile = WorldMap.getInstance().getMap().getTileSets().getTile(this.tileId-1);
-                this.isInteractive = false;
-                this.isTargetAble = false;
-                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
-                        GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
-                    GameClient.getInstance().getClientCharacter().setTarget(null);
-                }
-            }
         }
 
         @Override
@@ -1473,6 +1488,24 @@ public abstract class Entity implements Comparable<Entity> {
             else
                 return 1;
         }
+
+        /**
+         * Updates health dealing with the consequences of new health value
+         * @param health    the new value of health to update to
+         */
+        @Override
+        public void updateHealth(float health) {
+            this.health = health;
+            if(health<=0) {
+                this.tile = WorldMap.getInstance().getMap().getTileSets().getTile(this.tileId-1);
+                this.isInteractive = false;
+                this.isTargetAble = false;
+                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                        GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                    GameClient.getInstance().getClientCharacter().setTarget(null);
+                }
+            }
+        }
     }
 
     public static class Creature extends Entity {
@@ -1515,7 +1548,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.attackSpeed = attackSpeed;
             this.range = range;
             this.contextId = this.spawnId;
-            this.type = Type.CREATURE;
+            this.type = GameRegister.EntityType.CREATURE;
             this.isInteractive = true;
             this.isTargetAble = true;
             direction = Direction.SOUTHWEST;
@@ -1611,29 +1644,29 @@ public abstract class Entity implements Comparable<Entity> {
                 for (int j = 0; j < 15; j++) {
                     frames[index++] = tmp[0][j];
                 }
-                attack.put(Direction.SOUTHWEST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
-                attack.put(Direction.SOUTH, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
-                attack.put(Direction.WEST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                attack.put(Direction.SOUTHWEST, new Animation<>((1f/attackSpeed)/frames.length, frames));
+                attack.put(Direction.SOUTH, new Animation<>((1f/attackSpeed)/frames.length, frames));
+                attack.put(Direction.WEST, new Animation<>((1f/attackSpeed)/frames.length, frames));
                 index = 0;
                 frames = new TextureRegion[15];
                 for (int j = 0; j < 15; j++) {
                     frames[index++] = tmp[1][j];
                 }
-                attack.put(Direction.SOUTHEAST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
-                attack.put(Direction.EAST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                attack.put(Direction.SOUTHEAST, new Animation<>((1f/attackSpeed)/frames.length, frames));
+                attack.put(Direction.EAST, new Animation<>((1f/attackSpeed)/frames.length, frames));
                 index = 0;
                 frames = new TextureRegion[15];
                 for (int j = 0; j < 15; j++) {
                     frames[index++] = tmp[2][j];
                 }
-                attack.put(Direction.NORTHWEST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
-                attack.put(Direction.NORTH, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                attack.put(Direction.NORTHWEST, new Animation<>((1f/attackSpeed)/frames.length, frames));
+                attack.put(Direction.NORTH, new Animation<>((1f/attackSpeed)/frames.length, frames));
                 index = 0;
                 frames = new TextureRegion[15];
                 for (int j = 0; j < 15; j++) {
                     frames[index++] = tmp[3][j];
                 }
-                attack.put(Direction.NORTHEAST, new Animation<>(ANIM_BASE_INTERVAL / (attackSpeed * 0.075f), frames));
+                attack.put(Direction.NORTHEAST, new Animation<>((1f/attackSpeed)/frames.length, frames));
                 // reset the elapsed animation time
                 animTime = 0f;
 
@@ -1665,10 +1698,10 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         @Override
-        public void takeDamage() {
-            health-=5f;
-            if(health<0) {
-                health = maxHealth;
+        public void updateHealth(float health) {
+            this.health = health;
+            if(this.health<0) {
+                this.health = maxHealth;
                 if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
                         GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
                     GameClient.getInstance().getClientCharacter().setTarget(null);

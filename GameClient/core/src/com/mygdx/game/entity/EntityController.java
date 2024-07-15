@@ -12,6 +12,7 @@ import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.mygdx.game.network.GameClient;
+import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
 
@@ -249,7 +250,7 @@ public class EntityController {
             Iterator<Map.Entry<Integer, Entity>> itr = entities.entrySet().iterator();
             while (itr.hasNext()) {
                 Entity entity = itr.next().getValue();
-                if(entity.type == Entity.Type.PROJECTILE) continue; // projectile removes themselves and are not part of server-client aoi communication
+                if(entity.type == GameRegister.EntityType.PROJECTILE) continue; // projectile removes themselves and are not part of server-client aoi communication
                 if(entity.uId == GameClient.getInstance().getClientUid()) continue; // no point in removing client entity from drawing list of entities
                 if(!lastAoIEntities.contains(entity.uId)) { // remove entity from lists if has not been in last AoI state update
                     if(!entity.fadeOut)

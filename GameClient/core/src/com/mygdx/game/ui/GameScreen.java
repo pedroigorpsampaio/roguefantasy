@@ -767,6 +767,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 //        }
 
         // render player target info if there is a target
+        if(gameClient.getClientCharacter() == null) return;
+
         Entity target = gameClient.getClientCharacter().getTarget();
         if(target != null) {
             target.renderUI(batch);
@@ -775,6 +777,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         }
 
         batch.setProjectionMatrix(camera.combined);
+
+        if(gameClient.getClientCharacter() == null) return;
         // always draw client simplified ui
         gameClient.getClientCharacter().renderUI(batch);
 
@@ -876,7 +880,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         if(WorldMap.hoverEntity == null)
             mouseOnLabel.setText("Entity: none");
         else {
-            if(WorldMap.hoverEntity.type == Entity.Type.TREE) {
+            if(WorldMap.hoverEntity.type == GameRegister.EntityType.TREE) {
                 Entity.Tree tree = GameClient.getInstance().getTree(WorldMap.hoverEntity.uId);
                 if (tree != null) //{
                     mouseOnLabel.setText("Entity: " + GameClient.getInstance().getTree(WorldMap.hoverEntity.uId).spawnId + " (" + WorldMap.hoverEntity.type.toString() + ")");

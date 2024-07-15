@@ -1,12 +1,10 @@
 package com.mygdx.server.network;
 
+import static com.mygdx.server.network.GameRegister.Interaction.ATTACK_ENTITY;
+
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
-import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Timer;
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
@@ -19,27 +17,19 @@ import com.mygdx.server.ui.CommandDispatcher.Command;
 import com.mygdx.server.ui.RogueFantasyServer;
 import com.mygdx.server.util.Encoder;
 
-import java.beans.Visibility;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import javax.swing.text.Position;
-
-import dev.dominion.ecs.api.Dominion;
 import dev.dominion.ecs.api.Entity;
-import dev.dominion.ecs.api.Results;
-import dev.dominion.ecs.api.Scheduler;
 
 
 /**
@@ -79,11 +69,18 @@ public class GameServer implements CmdReceiver {
                 CharacterConnection connection = (CharacterConnection)c;
                 Component.Character character = connection.character;
 
+//                if(character != null && character.attr !=null)
+//                    System.out.println("SPEEDATK; " +character.attr.attackSpeed);
+
                 if (object instanceof GameRegister.Ping) { // if it is ping, just send it back asap
                     if(lagNetwork != null && GameRegister.lagSimulation) // send with simulated lag
                         lagNetwork.send(new GameRegister.Ping(true), connection);
                     else
                         connection.sendUDP(new GameRegister.Ping(true));
+
+                    // update char avg ping
+                    character.avgLatency = ((GameRegister.Ping)object).avg;
+
                     return;
                 }
 
@@ -141,6 +138,16 @@ public class GameServer implements CmdReceiver {
                             Log.debug("game-server", "Received unknown response type message");
                             break;
                     }
+                }
+
+                if (object instanceof GameRegister.InteractionRequest) {
+                    // Ignore if not logged in.
+                    if (character == null) return;
+
+                    GameRegister.InteractionRequest msg = (GameRegister.InteractionRequest)object;
+
+                    //System.out.println(msg.type + " : " + msg.entityType + " : " + msg.targetId );
+                    processInteraction(connection, msg);
                 }
 
                 if (object instanceof GameRegister.MoveCharacter) {
@@ -237,6 +244,14 @@ public class GameServer implements CmdReceiver {
 
                     character.lastMoveId = msg.requestId;
 
+                    // character has a target, direction changes as char should always look at target
+                    if(character.target.entity != null) {
+                        // calculates new direction based on target
+                        Vector2 targetPos = character.target.getPosition();
+                        if(targetPos != null)
+                            character.dir = targetPos.sub(new Vector2(character.position.x, character.position.y)).nor();
+                    }
+
                     if (!saveCharacter(character)) {
                         connection.close();
                         return;
@@ -257,6 +272,9 @@ public class GameServer implements CmdReceiver {
                     synchronized (loggedIn) {
                         loggedIn.remove(connection.character.tag.id); // remove from logged in list
                     }
+
+                    // saves character
+                    saveCharacter(connection.character);
 
                     GameRegister.RemoveCharacter removeCharacter = new GameRegister.RemoveCharacter();
                     Component.Character charComp = connection.character;
@@ -426,22 +444,21 @@ public class GameServer implements CmdReceiver {
     }
 
     public void sendStateToAll() {
-        GameRegister.UpdateState state = new GameRegister.UpdateState();
         synchronized(loggedIn) { // prepare character updates
             Iterator<Map.Entry<Integer, CharacterConnection>> i = loggedIn.entrySet().iterator();
             while (i.hasNext()) {
                 Map.Entry<Integer, CharacterConnection> entry = i.next();
                 CharacterConnection charConn = entry.getValue();
                 Component.Character charComp = charConn.character;
-                state = charComp.buildStateAoI();
+                charComp.lastState = charComp.buildStateAoI();
                 //if(charComp.compareStates(state)) return; // if last state is the same, dont bother send to client
 
                 //state.characterUpdates.add(update);
 
                 if(lagNetwork != null && GameRegister.lagSimulation)
-                    lagNetwork.send(state, charConn);
+                    lagNetwork.send(charComp.lastState, charConn);
                 else
-                    charConn.sendUDP(state);
+                    charConn.sendUDP(charComp.lastState);
             }
 
         }
@@ -478,6 +495,103 @@ public class GameServer implements CmdReceiver {
             }
         }
     }
+
+    /**
+     * Processes interactions requests received by clients
+     *
+     * @param connection    the character connection that requested the interaction
+     * @param interaction the interaction request containing the data of the request
+     */
+    private void processInteraction(CharacterConnection connection, GameRegister.InteractionRequest interaction) {
+        Component.Character character = connection.character;
+
+        // gets the correct entity
+        Object entity = null;
+
+        Vector2 clientPos = new Vector2(character.position.x, character.position.y);
+        Vector2 targetPos = null;
+        switch (interaction.entityType) {
+            case CHARACTER:
+                entity = character.aoIEntities.characters.get(interaction.targetId);
+                break;
+            case TREE:
+                entity = character.aoIEntities.trees.get(interaction.targetId);
+                break;
+            case CREATURE:
+                entity = character.aoIEntities.creatures.get(interaction.targetId);
+                break;
+            default:
+                break;
+        }
+
+        if(entity == null) {
+            System.out.println("Could not find entity to interact: " + interaction.targetId + " : " + interaction.entityType);
+            return; // could not find entity to interact with
+        }
+
+        // new target of character
+        if(interaction.type != GameRegister.Interaction.STOP_INTERACTION) {
+            character.target.id = interaction.targetId;
+            character.target.type = interaction.entityType;
+            character.target.entity = entity;
+            character.target.timestamp = interaction.timestamp;
+            // calculates new direction based on new target
+            targetPos = character.target.getPosition();
+            if(targetPos != null) {
+                character.dir = targetPos.sub(clientPos).nor();
+                startTimerInteraction(connection, interaction.type);
+            }
+        } else { // if client has stopped interaction, stop interaction
+            character.stopInteraction();
+        }
+
+    }
+
+    private void startTimerInteraction(CharacterConnection connection, GameRegister.Interaction type) {
+        Component.Character character = connection.character;
+
+        switch (type) {
+            case ATTACK_ENTITY:
+                //if(!character.isInteracting) // only start attacking if no interactions are happening at the moment
+                    character.attack();
+                break;
+            case STOP_INTERACTION: // THIS SHOULD NOT HAPPEN, THIS METHOD IS CALLED ONLY ON OTHER CASES
+                character.stopInteraction();
+                character.target.id = -1;
+                character.target.type = null;
+                character.target.entity = null;
+                return;
+            default:
+                break;
+        }
+    }
+
+//    /**
+//     * Processes attack requests received by clients
+//     *
+//     * @param connection    the character connection that is requesting attack
+//     * @param target        the target entity that is receiving the attack
+//     */
+//    private void startTimerInteraction(CharacterConnection connection, GameRegister.Interaction interaction) {
+//        Component.Character character = connection.character;
+//
+//        switch (target.type) {
+//            case CHARACTER:
+//                Component.Character targetCharacter = (Component.Character) target.entity;
+//                targetCharacter.attr.health-=5f;
+//                break;
+//            case TREE:
+//                GameRegister.Tree tree = (GameRegister.Tree) target.entity;
+//                tree.health-=5f;
+//                break;
+//            case CREATURE:
+//                Entity targetCreature = (Entity) target.entity;
+//                targetCreature.get(Component.Attributes.class).health-=5f;
+//                break;
+//            default:
+//                break;
+//        }
+//    }
 
     public void stop() {
         if(isOnline) {
@@ -567,6 +681,7 @@ public class GameServer implements CmdReceiver {
         }
 
         Log.info("cmd", "Changed player "+pName+" " +attrName+ " to "+value);
+        saveCharacter(c);
 
     }
 
@@ -623,7 +738,7 @@ public class GameServer implements CmdReceiver {
             character.tag = new Component.Tag(conn.charData.id, conn.charData.character);
             character.position = new Component.Position(26, 4);
             character.attr = new Component.Attributes(32f*RogueFantasyServer.world.getUnitScale(), 48f*RogueFantasyServer.world.getUnitScale(),
-                                100f, 100f, 250f*RogueFantasyServer.world.getUnitScale(),50f,
+                                100f, 100f, 250f*RogueFantasyServer.world.getUnitScale(),1f,
                                 10f*RogueFantasyServer.world.getUnitScale());
             Log.debug("login-server", character.tag.name+" is NOT registered, new token generated! "+character.token);
             registeredTokens.add(character); // adds character to registered list with new token
