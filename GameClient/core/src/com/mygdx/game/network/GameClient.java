@@ -1,6 +1,7 @@
 package com.mygdx.game.network;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.utils.Timer;
 import com.esotericsoftware.kryonet.Client;
@@ -16,6 +17,8 @@ import com.mygdx.game.network.GameRegister.MoveCharacter;
 import com.mygdx.game.network.GameRegister.RemoveCharacter;
 import com.mygdx.game.network.GameRegister.UpdateCharacter;
 import com.mygdx.game.network.GameRegister.UpdateCreature;
+import com.mygdx.game.ui.FloatingText;
+import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
 import com.mygdx.game.util.Encoder;
 
@@ -266,9 +269,9 @@ public class GameClient extends DispatchServer {
 
         // if lag simulation is on, add to queue with a timer to be sent
         if(lagNetwork != null && GameRegister.lagSimulation)
-            lagNetwork.send(iReq);
+            lagNetwork.send(iReq, 1);
         else
-            client.sendUDP(iReq);
+            client.sendTCP(iReq);
     }
 
     public void sendResponse (GameRegister.Response response) {
@@ -408,10 +411,15 @@ public class GameClient extends DispatchServer {
                 trees.put(treeUpdate.spawnId, tree);
                 EntityController.getInstance().entities.put(tree.uId, tree); // put on list of entities (which will manage if its visible or not)
             } else { // if it is, update its attributes
+
+                /** update tree attributes **/
                 tree = trees.get(treeUpdate.spawnId);
                 tree.updateHealth(treeUpdate.health);
                 tree.maxHealth = treeUpdate.maxHealth;
                 tree.name = treeUpdate.name;
+
+                /** render tree damages received since last state **/
+                tree.renderDamagePoints(treeUpdate.damages);
             }
         }
 
@@ -431,8 +439,12 @@ public class GameClient extends DispatchServer {
                 //EntityController.getInstance().removeEntity(creature.uId); // remove to reorder list correctly
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
 
+                /** update creature attributes **/
                 creature.updateHealth(creatureUpdate.health);
                 creature.maxHealth = creatureUpdate.maxHealth;
+
+                /** render creature damages received since last state **/
+                creature.renderDamagePoints(creatureUpdate.damages);
             }
 
             Entity.Character target = characters.get(creatureUpdate.targetId);
@@ -477,6 +489,9 @@ public class GameClient extends DispatchServer {
                 character.maxHealth = msg.character.maxHealth;
                 character.updateAtkSpeed(msg.character.attackSpeed);
                 character.updateSpeed(msg.character.speed);
+
+                /** render character damages received since last state **/
+                character.renderDamagePoints(msg.character.damages);
             }
 
             //character.state = msg.character.state;

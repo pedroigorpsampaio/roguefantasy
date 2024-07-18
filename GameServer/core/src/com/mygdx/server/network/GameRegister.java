@@ -31,7 +31,7 @@ public class GameRegister {
     static public final int serverTickrate = 15; // the amount of communication updates per second in server
     static public final int clientTickrate = 20; // the amount of communication updates per second in client
     static public boolean lagSimulation = true; // simulate lag
-    static public int lag = 170; // simulated lag value in ms
+    static public int lag = 240; // simulated lag value in ms
     static public final int N_ROWS = 45; // number of rows to be sent to player in state (AoI)
     static public final int N_COLS = 45; // number of cols to be sent to player in state (AoI)
 
@@ -78,6 +78,8 @@ public class GameRegister {
         kryo.register(Interaction.class);
         kryo.register(InteractionRequest.class);
         kryo.register(EntityType.class);
+        kryo.register(Damage.class);
+        kryo.register(DamageType.class);
     }
 
     static public class Layer {
@@ -137,6 +139,20 @@ public class GameRegister {
         CHARACTER
     }
 
+    public enum DamageType {
+        NORMAL,
+        DOUBLE,
+        CRITICAL,
+        POISON,
+    }
+
+    static public class Damage {
+        public DamageType type;
+        public int value;
+        public int attackerId;
+        public EntityType attackerType;
+    }
+
     // contains player possible interactions type
     public enum Interaction{
         ATTACK_ENTITY,
@@ -165,6 +181,7 @@ public class GameRegister {
         public int creatureId;
         public float x, y, speed, attackSpeed, lastVelocityX, lastVelocityY, range;
         public float health, maxHealth;
+        public ArrayList<Damage> damages = new ArrayList<>();
         public int targetId; // in case is following a player
         public long timestamp; // the last timestamp request processed that resulted in this x,y
         public String name, state;
@@ -203,6 +220,7 @@ public class GameRegister {
         public int id, role_level;
         public float x, y, speed, attackSpeed;
         public float health, maxHealth;
+        public ArrayList<Damage> damages = new ArrayList<>();
         public boolean isTeleporting;
         public EntityState state = EntityState.FREE;
     }
@@ -221,6 +239,7 @@ public class GameRegister {
         public String name;
         public int treeId, spawnId, tileId;
         public float health, maxHealth;
+        public ArrayList<Damage> damages = new ArrayList<>();
         public int tileX, tileY;
         public float[] hitBox;
     }

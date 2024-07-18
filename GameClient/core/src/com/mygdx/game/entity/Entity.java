@@ -34,12 +34,16 @@ import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.ui.CommonUI;
+import com.mygdx.game.ui.FloatingText;
 import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
@@ -119,6 +123,20 @@ public abstract class Entity implements Comparable<Entity> {
     }
     public boolean rayCast(Vector3 point) {
         return hitBox.contains(point.x, point.y);
+    }
+
+
+    public void renderDamagePoints(ArrayList<GameRegister.Damage> damages) {
+        Color c = (new Color(1,0.35f,0.35f,1));
+        if(this.type == GameRegister.EntityType.TREE)
+            c = Color.LIGHT_GRAY;
+
+        for(GameRegister.Damage dmg : damages) {
+            FloatingText dmgTxt = GameScreen.getFloatingTextPool().obtain();
+            dmgTxt.init(this, String.valueOf(dmg.value), 0, spriteH/2f,  1.2f,
+                    c, 1.5f, 0.75f, true);
+            GameScreen.addFloatingText(dmgTxt);
+        }
     }
 
     /**
@@ -501,6 +519,7 @@ public abstract class Entity implements Comparable<Entity> {
         public void setTarget(Entity e) {
             if(target != null && e != null && e.uId == target.uId) return; // same target as before, do nothing
             if(e != null && !e.isTargetAble) return; // if its not targetable return
+            if(isUnmovable()) return; // in case unmovable(logging in, teleportin...) cannot interact
 
             if(e != null) e.resetYoYoAnim(); // if a entity is selected, reset its yo yo target animation
 
@@ -926,19 +945,21 @@ public abstract class Entity implements Comparable<Entity> {
             // starts update timer that control user interaction
             //interactionTimer=new Timer();
 
-            // SEND INTERACTION START TO SERVER TO PROCESS INTERACTION SERVER-SIDE - OF ATTACK TYPE IN THIS CASE
-            GameClient.getInstance().requestInteraction(GameRegister.Interaction.ATTACK_ENTITY,  target.contextId, target.type);
-
-            float delay = (1/attackSpeed)*0.2f;
+            float delay = (1/attackSpeed)*0.25f;
             isInteracting = true;
 
-            interactionTimer.scheduleTask(new Timer.Task() {
-                @Override
-                public void run() {
-                    attackTarget();
-                }
-            },0f, GameRegister.clientTickrate());
+            if(hitTarget.isScheduled())
+                hitTarget.cancel();
+
+            interactionTimer.scheduleTask(hitTarget,0f, GameRegister.clientTickrate());
         }
+
+        public Timer.Task hitTarget = new Timer.Task() {
+            @Override
+            public void run() {
+                attackTarget();
+            }
+        };
 
         /** Stops any interaction that this entity is doing **/
         public void stopInteraction() {
@@ -950,13 +971,18 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         public void stopInteractionTimer() {
-            if (interactionTimer != null)
-                interactionTimer.clear();
+//            if (interactionTimer != null)
+//                interactionTimer.clear();
+            if(hitTarget.isScheduled())
+                hitTarget.cancel();
 
             if (this.state != GameRegister.EntityState.FREE)
                 this.state = GameRegister.EntityState.FREE;
 
             isInteracting = false; // sets interaction flag to false
+
+            if(target != null)
+                target = null;
         }
 
         long lastAttack = System.currentTimeMillis();
@@ -976,7 +1002,14 @@ public abstract class Entity implements Comparable<Entity> {
                 if(now - lastAttack >= 1000f/this.attackSpeed ) {
                     lastAttack = System.currentTimeMillis();
                     // player is able to attack target
-                    this.state = GameRegister.EntityState.ATTACKING;
+                    if(this.state != GameRegister.EntityState.ATTACKING) { // started attacking
+                        // SEND INTERACTION START TO SERVER TO PROCESS INTERACTION SERVER-SIDE - OF ATTACK TYPE IN THIS CASE
+                        GameClient.getInstance().requestInteraction(GameRegister.Interaction.ATTACK_ENTITY,  target.contextId, target.type);
+                        this.state = GameRegister.EntityState.ATTACKING;
+                    }
+                    // do not attack if target is already dead
+                    if(target.health <= 0)
+                        return;
                     spawnMagicProjectile();
                 }
             }
@@ -1011,10 +1044,13 @@ public abstract class Entity implements Comparable<Entity> {
         @Override
         public void updateHealth(float health) {
             this.health = health;
-            if(this.health<0) {
-                this.health = maxHealth;
-                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
+            if(this.health<=0) {
+                this.isInteractive = false;
+                this.isTargetAble = false;
+                if(GameClient.getInstance().getClientCharacter() != null &&
+                        GameClient.getInstance().getClientCharacter().getTarget() != null &&
                         GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                    GameClient.getInstance().getClientCharacter().stopInteractionTimer();
                     GameClient.getInstance().getClientCharacter().setTarget(null);
                 }
             }
@@ -1389,6 +1425,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.name = name;
             this.entityName = name;
             this.health = health;
+            updateHealth(health); // updates health - changes sprite if necessary
             this.maxHealth = maxHealth;
             this.isWalkable = tile.getProperties().get("walkable", Boolean.class);
             this.isObfuscator = tile.getProperties().get("obfuscator", Boolean.class);
@@ -1496,12 +1533,14 @@ public abstract class Entity implements Comparable<Entity> {
         @Override
         public void updateHealth(float health) {
             this.health = health;
-            if(health<=0) {
+            if(this.health<=0) {
                 this.tile = WorldMap.getInstance().getMap().getTileSets().getTile(this.tileId-1);
                 this.isInteractive = false;
                 this.isTargetAble = false;
-                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                if(GameClient.getInstance().getClientCharacter() != null &&
+                        GameClient.getInstance().getClientCharacter().getTarget() != null &&
                         GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                    GameClient.getInstance().getClientCharacter().stopInteractionTimer();
                     GameClient.getInstance().getClientCharacter().setTarget(null);
                 }
             }
@@ -1700,10 +1739,13 @@ public abstract class Entity implements Comparable<Entity> {
         @Override
         public void updateHealth(float health) {
             this.health = health;
-            if(this.health<0) {
-                this.health = maxHealth;
-                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
+            if(this.health<=0) {
+                this.isInteractive = false;
+                this.isTargetAble = false;
+                if(GameClient.getInstance().getClientCharacter() != null &&
+                        GameClient.getInstance().getClientCharacter().getTarget() != null &&
                         GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                    GameClient.getInstance().getClientCharacter().stopInteractionTimer();
                     GameClient.getInstance().getClientCharacter().setTarget(null);
                 }
             }

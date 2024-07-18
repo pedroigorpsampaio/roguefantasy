@@ -118,14 +118,11 @@ public class Projectile extends Entity implements Pool.Poolable {
         float progress = Math.min(1f, elapsed/lifeTime);   // 0 -> 1
         float alpha = interpolation.apply(progress);
 
-        //this.position.set(creator.getEntityCenter().x,  creator.getEntityCenter().y);
         if(followTarget || targetPosNotSet) {
             this.goalPos.set(target.getEntityCenter().x, target.getEntityCenter().y);
             targetPosNotSet = false;
         }
 
-        //this.direction = new Vector2(goalPos.x, goalPos.y).sub(position).nor();
-        //this.move.set(direction.x*speed, direction.y*speed);
         // update bullet position
         if(followCreator)
             position.set(creator.getEntityCenter().x + (goalPos.x - creator.getEntityCenter().x)*alpha,
@@ -135,8 +132,6 @@ public class Projectile extends Entity implements Pool.Poolable {
                     initPos.y+(goalPos.y - initPos.y)*alpha);
 
         if(elapsed >= lifeTime) {
-//            if(followTarget)
-//                target.takeDamage(); // take damage of target
             die();
         }
 
@@ -144,19 +139,13 @@ public class Projectile extends Entity implements Pool.Poolable {
             // check if collided with an entity
             Entity e = EntityController.getInstance().hit(creator, position);
             if(e != null && e.isTargetAble) {
-                //e.takeDamage();
                 die();
             }
         }
 
-        // creates acceleration that helps projectile always find target, even moving ones
-//        this.speed += position.dst(goalPos)* unitScale * delta * GLOBAL_PROJECTILE_ACCELERATION;
-//
-//        // if Projectile reaches goal, set it to dead
-//        if (position.dst(goalPos) <= move.len()) {
-//            target.takeDamage(); // take damage of target
-//            alive = false;
-//        }
+        // if target of projectile is dead die also
+        if(target.health <= 0f) die();
+
     }
 
     /** just "kills" this projectile **/

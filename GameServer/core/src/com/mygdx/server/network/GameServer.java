@@ -462,6 +462,8 @@ public class GameServer implements CmdReceiver {
             }
 
         }
+
+        EntityController.getInstance().clearDamageData(); // clears damage data after sending state to all for the next tick
     }
 
     Component.Character loadCharacter (Component.Character character) {
@@ -508,6 +510,8 @@ public class GameServer implements CmdReceiver {
         // gets the correct entity
         Object entity = null;
 
+        System.out.println(interaction.type);
+
         Vector2 clientPos = new Vector2(character.position.x, character.position.y);
         Vector2 targetPos = null;
         switch (interaction.entityType) {
@@ -529,12 +533,13 @@ public class GameServer implements CmdReceiver {
             return; // could not find entity to interact with
         }
 
+        character.target.id = interaction.targetId;
+        character.target.type = interaction.entityType;
+        character.target.entity = entity;
+        character.target.timestamp = interaction.timestamp;
+
         // new target of character
         if(interaction.type != GameRegister.Interaction.STOP_INTERACTION) {
-            character.target.id = interaction.targetId;
-            character.target.type = interaction.entityType;
-            character.target.entity = entity;
-            character.target.timestamp = interaction.timestamp;
             // calculates new direction based on new target
             targetPos = character.target.getPosition();
             if(targetPos != null) {
@@ -555,7 +560,7 @@ public class GameServer implements CmdReceiver {
                 //if(!character.isInteracting) // only start attacking if no interactions are happening at the moment
                     character.attack();
                 break;
-            case STOP_INTERACTION: // THIS SHOULD NOT HAPPEN, THIS METHOD IS CALLED ONLY ON OTHER CASES
+            case STOP_INTERACTION: // THIS SHOULD NOT BE THE CASE EVER!
                 character.stopInteraction();
                 character.target.id = -1;
                 character.target.type = null;

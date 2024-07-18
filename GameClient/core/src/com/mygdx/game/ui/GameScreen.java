@@ -60,7 +60,9 @@ import com.mygdx.game.util.Common;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.Iterator;
+import java.util.Queue;
 import java.util.Random;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Implements the game screen
@@ -123,6 +125,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Vector3 screenMouse = new Vector3();
     private Vector2 joystickDir = new Vector2(); // the current joystick direction (for android)
     private Texture testTexure;
+
+    /** poolable objects **/
+
     // array containing the active projectiles.
     private static final Array<Projectile> projectiles = new Array<Projectile>();
     public static void addProjectile(Projectile projectile) {projectiles.add(projectile);}
@@ -134,6 +139,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
         }
     };
     public static Pool<Projectile> getProjectilePool() {return projectilePool;}
+
+    // floatingtext pool
+    private static final Pool<FloatingText> floatingTextPool = new Pool<FloatingText>() {
+        @Override
+        protected FloatingText newObject() {
+            return new FloatingText();
+        }
+    };
+
+    private static final Queue<FloatingText> floatingTexts = new ConcurrentLinkedQueue<FloatingText>();
+    public static void addFloatingText(FloatingText floatingText) {floatingTexts.add(floatingText);}
+    public static Pool<FloatingText> getFloatingTextPool() {return floatingTextPool;}
 
     /**
      * Prepares the screen/stage of the game
@@ -726,7 +743,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
             updateCursor();
 
         updateCamera(); // updates camera
-        updateProjectiles(); // update alive projectiles 
+        updateProjectiles(); // update alive projectiles
         
         batch.setProjectionMatrix(camera.combined); // sets camera for projection
 
@@ -796,6 +813,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         if(ENABLE_TARGET_UI && target == null && WorldMap.hoverEntity == null)
             hideEntityTargetUI(); // makes sure to hide target ui when no target nor hover exists
+
+        renderFloatingTexts(); // updates and renders floating texts alive
 
         batch.end();
         batch.setBlendFunction(srcFunc, dstFunc);
@@ -912,6 +931,23 @@ public class GameScreen implements Screen, PropertyChangeListener {
     }
 
     /**
+     * Update current alive floating texts
+     */
+    private void renderFloatingTexts() {
+        Iterator<FloatingText> iter = floatingTexts.iterator();
+        while (iter.hasNext()) {
+            FloatingText floatingText = iter.next();
+            floatingText.render(batch, Gdx.graphics.getDeltaTime());
+
+            // if floating text is dead removes it and free pool
+            if (floatingText.alive == false) {
+                iter.remove();
+                floatingTextPool.free(floatingText);
+            }
+        }
+    }
+
+    /**
      * Update current alive projectiles
      */
     private void updateProjectiles() {
@@ -920,20 +956,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
             Projectile projectile = iter.next();
             projectile.update(Gdx.graphics.getDeltaTime());
 
-            // if raindrop is not on screen anymore removes it and free pool
             if (projectile.alive == false) {
                 iter.remove();
                 projectilePool.free(projectile);
             }
-            // if raindrop hits bucket, count it and remove it/free pool
-//            if (raindrop.overlaps(bucket)) {
-//                dropsGathered++;
-//                dropSound.play();
-//                if (raindrop.alive == true) {
-//                    iter.remove();
-//                    raindropsPool.free(raindrop);
-//                }
-//            }
         }
     }
 
@@ -1004,6 +1030,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         bgm.dispose();
         world.dispose();
         testTexure.dispose();
+        projectiles.clear();
+        floatingTexts.clear();
     }
 
 //    public void stopUpdateTimer() {

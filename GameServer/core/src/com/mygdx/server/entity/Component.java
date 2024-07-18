@@ -67,6 +67,7 @@ public class Component {
     public static class Character {
         public String token;
         public int role_level;
+        public final static GameRegister.EntityType ENTITY_TYPE = GameRegister.EntityType.CHARACTER;
         public long lastMoveId = 0;
         public long lastMoveTs = 0;
         public Vector2 dir;
@@ -78,6 +79,7 @@ public class Component {
         public GameRegister.EntityState state = GameRegister.EntityState.FREE;
         public GameRegister.UpdateState lastState = null; // last state sent to this character
         public boolean isTeleporting = false;
+        public ArrayList<GameRegister.Damage> damages = new ArrayList<>(); // list of recent damages
         public Target target = new Target(); // player current target
         public AoIEntities aoIEntities = new AoIEntities(); // current AoI entities of player (last game state)
         public int avgLatency = 0; // average latency of this player
@@ -105,6 +107,8 @@ public class Component {
             GameRegister.UpdateCharacter update = new GameRegister.UpdateCharacter();
             update.character = new GameRegister.Character();
             update.character.id = tag.id;
+            for(GameRegister.Damage dmg : damages)
+                update.character.damages.add(dmg);
             update.character.x = position.x;
             update.character.y = position.y;
             update.character.name = tag.name;
@@ -133,6 +137,8 @@ public class Component {
             updatePositionIn2dArray();
             // check for actions on current tile (actions that get triggered by walking on it)
             triggerWalkableActions();
+            // stops any current interactions
+            stopInteraction();
         }
 
         /**
@@ -379,7 +385,7 @@ public class Component {
                                         Iterator<Entity> iterator = tileEntities.values().iterator();
                                         while (iterator.hasNext()) {
                                             Entity entity = iterator.next();
-                                            if (entity.get(Component.Position.class) == null) // non-player entity // TODO: SEPARATE TYPES OF ENTITIES!!
+                                            if (entity.get(Component.Position.class) == null)
                                                     continue;
                                             state.creatureUpdates.add(EntityController.getInstance().getCreatureData(entity));
                                             aoIEntities.creatures.put(entity.get(Component.Spawn.class).id, entity);
@@ -392,7 +398,7 @@ public class Component {
                                         Iterator<Character> iterator = tileCharacters.values().iterator();
                                         while (iterator.hasNext()) {
                                             Character character = iterator.next();
-                                            if (character == null) // non-player entity // TODO: SEPARATE TYPES OF ENTITIES!!
+                                            if (character == null)
                                                 continue;
                                             state.characterUpdates.add(character.getCharacterData());
                                             aoIEntities.characters.put(character.tag.id, character);
@@ -406,7 +412,21 @@ public class Component {
                                     state.portal.add(EntityController.getInstance().entityWorldState[col][row].portal.hitBox);
                                 }
                                 if(EntityController.getInstance().entityWorldState[col][row].tree != null) { // add tree
-                                    state.trees.add(EntityController.getInstance().entityWorldState[col][row].tree);
+                                    GameRegister.Tree tree = new GameRegister.Tree();
+                                    tree.treeId = EntityController.getInstance().entityWorldState[col][row].tree.treeId;
+                                    for(GameRegister.Damage dmg : EntityController.getInstance().entityWorldState[col][row].tree.damages) {
+                                        tree.damages.add(dmg);
+                                    }
+                                    tree.health = EntityController.getInstance().entityWorldState[col][row].tree.health;
+                                    tree.hitBox = EntityController.getInstance().entityWorldState[col][row].tree.hitBox;
+                                    tree.tileX = EntityController.getInstance().entityWorldState[col][row].tree.tileX;
+                                    tree.tileY = EntityController.getInstance().entityWorldState[col][row].tree.tileY;
+                                    tree.tileId = EntityController.getInstance().entityWorldState[col][row].tree.tileId;
+                                    tree.maxHealth = EntityController.getInstance().entityWorldState[col][row].tree.maxHealth;
+                                    tree.name = EntityController.getInstance().entityWorldState[col][row].tree.name;
+                                    tree.spawnId = EntityController.getInstance().entityWorldState[col][row].tree.spawnId;
+
+                                    state.trees.add(tree);
                                     aoIEntities.trees.put(EntityController.getInstance().entityWorldState[col][row].tree.spawnId,
                                                             EntityController.getInstance().entityWorldState[col][row].tree);
                                 }
@@ -448,25 +468,30 @@ public class Component {
 //            interactionTimer=new Timer();
             stopInteraction.set(false);
 
-            float latency = System.currentTimeMillis() - target.timestamp;
+            float latency = (System.currentTimeMillis() - target.timestamp)*2f;
             float delay = (1/attr.attackSpeed)-(latency/1000f);
             if(delay <= 0) delay = 0;
 
             //isInteracting = true;
-
+//
             if(hitTarget.isScheduled())
                hitTarget.cancel();
 
-            interactionTimer.scheduleTask(hitTarget, delay, GameRegister.clientTickrate());
+            target.hitCount = 0;
+            if(!hitTarget.isScheduled()) {
+                lastHitSchedule = System.currentTimeMillis();
+                interactionTimer.scheduleTask(hitTarget, delay, GameRegister.clientTickrate());
+            }
         }
 
+        public long lastHitSchedule = System.currentTimeMillis();
         public Timer.Task hitTarget = new Timer.Task() {
             @Override
             public void run() {
-                target.hit(attr);
-                if(stopInteraction.get()) {
-                    stopInteraction.set(false);
-                }
+                target.hit(tag.id, ENTITY_TYPE, attr);
+//                if(stopInteraction.get()) {
+//                    stopInteraction.set(false);
+//                }
             }
         };
         AtomicBoolean stopInteraction = new AtomicBoolean(false);
@@ -474,21 +499,58 @@ public class Component {
 //            if (interactionTimer != null) {
 //                interactionTimer.stop();
 //            }
-            interactionTimer.clear();
-            stopInteraction.set(true); // set stop interaction flag to true, so current task will be the last one
+            if(hitTarget.isScheduled()) {
+                float hitTargetMillisToExec = hitTarget.getExecuteTimeMillis();
+                hitTarget.cancel();
+                long elapsed = System.currentTimeMillis() - lastHitSchedule;
+                int correctHits = (int)(elapsed/(1000f/ attr.attackSpeed)) + 1;
+                Object e = target.entity;
+                GameRegister.EntityType type = target.type;
+                float timeLeft = (hitTargetMillisToExec - System.nanoTime()/1000000) / 1000f;
 
-            target.id = -1;
-            target.type = null;
-            target.entity = null;
-            //isInteracting = false;
+                // if hits are misaligned, send one last one delayed with last task remaining time to trigger as a delay
+                if(correctHits > target.hitCount)
+                    target.hitDelayed(timeLeft, tag.id, ENTITY_TYPE, attr, e, type);
+
+                // reset target for this player
+                target.id = -1;
+                target.type = null;
+                target.entity = null;
+
+//                interactionTimer.scheduleTask(new Timer.Task() {
+//                    @Override
+//                    public void run() {
+//                        target.hitDelayed(timeLeft, attr, e, type);
+                        //interactionTimer.clear();
+
+//                        target.id = -1;
+//                        target.type = null;
+//                        target.entity = null;
+//                    }
+//                }, timeLeft);
+            }
+
+            //interactionTimer.clear();
+            //stopInteraction.set(true); // set stop interaction flag to true, so current task will be the last one
         }
 
         /**
          * Called when character is hit
+         * @param attackerId the id of the attacker
+         * @param attackerType the type of the attacker
          * @param attacker  the attributes of the attacker
          */
-        public void hit(Attributes attacker) {
-            attr.health-=5f;
+        public void hit(int attackerId, GameRegister.EntityType attackerType, Attributes attacker) {
+            if(attr.health <= 0) return; // entity is dead
+
+            GameRegister.Damage dmg = new GameRegister.Damage();
+            dmg.attackerId = attackerId;
+            dmg.attackerType = attackerType;
+            dmg.type = GameRegister.DamageType.NORMAL;
+            dmg.value = 5;
+            attr.health -= dmg.value;
+            this.damages.add(dmg);
+            EntityController.getInstance().damagedEntities.characters.put(tag.id, this);
         }
 
 //        public boolean compareStates(GameRegister.UpdateState state) {
@@ -527,35 +589,101 @@ public class Component {
         public GameRegister.EntityType type;
         public Object entity;
         public long timestamp;
+        public int hitCount = 0;
         private long lastAttack = System.currentTimeMillis();
 
         /**
          * called when this target is hit
+         *
+         * @param attackerId the id of the attacker
+         * @param attackerType  the type of the attacker
          * @param attacker the attributes of the attacker
          */
-        public void hit(Attributes attacker) {
+        public void hit(int attackerId, GameRegister.EntityType attackerType, Attributes attacker) {
             if(type == null || entity == null) return;
 
             long now = System.currentTimeMillis();
             if(now - lastAttack >= 1000f/attacker.attackSpeed ) { // only attacks respecting attack speed of attacker
+                hitCount++;
                 lastAttack = System.currentTimeMillis();
                 switch (type) {
                     case CHARACTER:
                         Component.Character targetCharacter = (Component.Character) entity;
-                        targetCharacter.hit(attacker);
+                        targetCharacter.hit(attackerId, attackerType, attacker);
                         break;
                     case TREE:
                         GameRegister.Tree tree = (GameRegister.Tree) entity;
-                        tree.health -= 5f;
+                        if(tree.health <= 0) return; // tree is dead
+                        GameRegister.Damage dmg = new GameRegister.Damage();
+                        dmg.attackerId = attackerId;
+                        dmg.attackerType = attackerType;
+                        dmg.type = GameRegister.DamageType.NORMAL;
+                        dmg.value = 5;
+                        tree.health -= dmg.value;
+                        tree.damages.add(dmg);
+                        EntityController.getInstance().damagedEntities.trees.put(tree.spawnId, tree);
                         break;
                     case CREATURE:
                         Entity targetCreature = (Entity) entity;
-                        targetCreature.get(Component.AI.class).hit(attacker);
+                        targetCreature.get(Component.AI.class).hit(attackerId, attackerType, attacker);
                         break;
                     default:
                         break;
                 }
             }
+        }
+
+        /**
+         * Does a delayed hit on target (also respecting attack speed interval of attacker
+         * @param delay         the delay to consider for attack, respecting attack speed interval of attacker
+         * @param attackerId    the id of the attacker
+         * @param attackerType  the type of the attacker
+         * @param attacker      the attributes of the attacker
+         * @param e             the target entity (since its a delayed attack, target object can lose its references)
+         * @param t             the target type (since its a delayed attack, target object can lose its references)
+         */
+        public void hitDelayed(float delay, int attackerId, GameRegister.EntityType attackerType, Attributes attacker, Object e, GameRegister.EntityType t) {
+            if(t == null || e == null) return;
+
+            long now = System.currentTimeMillis();
+//            if((now - lastAttack) + delay < 1000f/attacker.attackSpeed)
+//                delay += 1000f/attacker.attackSpeed - ((now - lastAttack) + delay);
+
+            if(delay + (now-lastAttack) < 1000f/attacker.attackSpeed) {
+                delay = (1000f/attacker.attackSpeed - ((now-lastAttack) + delay)) / 1000f;
+                if(delay<0) delay = 0;
+            }
+
+            Timer.schedule(new Timer.Task() {
+                @Override
+                public void run() {
+                    lastAttack = System.currentTimeMillis();
+                    switch (t) {
+                        case CHARACTER:
+                            Component.Character targetCharacter = (Component.Character) e;
+                            targetCharacter.hit(attackerId, attackerType, attacker);
+                            break;
+                        case TREE:
+                            GameRegister.Tree tree = (GameRegister.Tree) e;
+                            if(tree.health <= 0) return; // tree is dead
+                            GameRegister.Damage dmg = new GameRegister.Damage();
+                            dmg.attackerId = attackerId;
+                            dmg.attackerType = attackerType;
+                            dmg.type = GameRegister.DamageType.NORMAL;
+                            dmg.value = 5;
+                            tree.health -= dmg.value;
+                            tree.damages.add(dmg);
+                            EntityController.getInstance().damagedEntities.trees.put(tree.spawnId, tree);
+                            break;
+                        case CREATURE:
+                            Entity targetCreature = (Entity) e;
+                            targetCreature.get(Component.AI.class).hit(attackerId, attackerType, attacker);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }, delay);
         }
 
         /**
@@ -746,11 +874,11 @@ public class Component {
         public AoIEntities() {creatures = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>(); trees = new ConcurrentHashMap<>();}
     }
 
-
     public static class AI {
         private final Entity body; // the body that this ai controls (the entity with AI component)
         public Target target = new Target();
         public State state = State.IDLE;
+        public ArrayList<GameRegister.Damage> damages = new ArrayList<>(); // list of recent damages
 
         public AI(Entity body) {
             this.body = body;
@@ -835,8 +963,23 @@ public class Component {
             }
         }
 
-        public void hit(Attributes attacker) {
-            body.get(Attributes.class).health-=5f;
+        /**
+         * Called when creature is hit
+         * @param attackerId the id of the attacker
+         * @param attackerType the type of the attacker
+         * @param attacker  the attributes of the attacker
+         */
+        public void hit(int attackerId, GameRegister.EntityType attackerType, Attributes attacker) {
+            if(body.get(Attributes.class).health <= 0) return; // entity is dead
+
+            GameRegister.Damage dmg = new GameRegister.Damage();
+            dmg.attackerId = attackerId;
+            dmg.attackerType = attackerType;
+            dmg.type = GameRegister.DamageType.NORMAL;
+            dmg.value = 5;
+            body.get(Attributes.class).health -= dmg.value;
+            this.damages.add(dmg);
+            EntityController.getInstance().damagedEntities.creatures.put(body.get(Spawn.class).id, body);
         }
 
         // attack if in range

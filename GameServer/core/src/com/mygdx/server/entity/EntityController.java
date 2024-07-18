@@ -5,6 +5,7 @@ import static com.mygdx.server.entity.WorldMap.TILES_WIDTH;
 
 import com.badlogic.gdx.math.Vector2;
 import com.mygdx.server.network.GameRegister;
+import com.mygdx.server.network.GameServer;
 import com.mygdx.server.ui.RogueFantasyServer;
 
 import java.time.Instant;
@@ -31,11 +32,22 @@ class Tile {
     public Tile() {entities = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>(); wall = null; portal = null; tree = null;}
 }
 
+/**
+ * Helper structure to quickly get just recent damaged entities in world to clear damage list
+ */
+class DamagedEntities {
+    public Map<Integer, Entity> creatures; // map of recent damaged entities in world (creatures for now)
+    public Map<Integer, Component.Character> characters; // map of recent damaged characters in world
+    public Map<Integer, GameRegister.Tree> trees; // map of recent damaged trees in world
+    public DamagedEntities() {creatures = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>(); trees = new ConcurrentHashMap<>();}
+}
+
 public class EntityController {
     private Dominion dominion; // the domain/world containing all entities
     private Scheduler scheduler;
     private static EntityController instance = null;
     public Tile[][] entityWorldState;
+    public DamagedEntities damagedEntities = new DamagedEntities();
 
     public static EntityController getInstance() {
         if(instance == null)
@@ -81,6 +93,33 @@ public class EntityController {
     public Map<Integer, Entity> getEntitiesAtTilePos(int i, int j) {
         synchronized (entityWorldState) {
             return entityWorldState[i][j].entities;
+        }
+    }
+
+    public void clearDamageData() {
+        synchronized (damagedEntities.trees) {
+            Iterator<Map.Entry<Integer, GameRegister.Tree>> i = damagedEntities.trees.entrySet().iterator();
+            while (i.hasNext()) {
+                Map.Entry<Integer, GameRegister.Tree> entry = i.next();
+                entry.getValue().damages.clear();
+                i.remove();
+            }
+        }
+        synchronized (damagedEntities.characters) {
+            Iterator<Map.Entry<Integer, Component.Character>> i = damagedEntities.characters.entrySet().iterator();
+            while (i.hasNext()) {
+                Map.Entry<Integer, Component.Character> entry = i.next();
+                entry.getValue().damages.clear();
+                i.remove();
+            }
+        }
+        synchronized (damagedEntities.creatures) {
+            Iterator<Map.Entry<Integer, Entity>> i = damagedEntities.creatures.entrySet().iterator();
+            while (i.hasNext()) {
+                Map.Entry<Integer, Entity> entry = i.next();
+                entry.getValue().get(Component.AI.class).damages.clear();
+                i.remove();
+            }
         }
     }
 
@@ -143,6 +182,8 @@ public class EntityController {
     public GameRegister.UpdateCreature getCreatureData(Entity entity) {
         GameRegister.UpdateCreature creatureUpdate = new GameRegister.UpdateCreature();
         creatureUpdate.creatureId = entity.get(Component.Tag.class).id;
+        for(GameRegister.Damage dmg : entity.get(Component.AI.class).damages)
+            creatureUpdate.damages.add(dmg);
         creatureUpdate.name = entity.get(Component.Tag.class).name;
         creatureUpdate.spawnId = entity.get(Component.Spawn.class).id;
         creatureUpdate.x = entity.get(Component.Position.class).x;

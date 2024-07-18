@@ -28,7 +28,10 @@ public class LagNetwork {
             if(messages != null && messages.size() > 0) {
                 for(int i = 0; i < messages.size(); i++) {
                     if (messages.get(i).timeToSend <= System.currentTimeMillis()) {
-                        client.sendUDP(messages.get(i).message);
+                        if(messages.get(i).type == 0)
+                            client.sendUDP(messages.get(i).message);
+                        else
+                            client.sendTCP(messages.get(i).message);
                         messages.remove(i);
                     }
                 }
@@ -40,15 +43,27 @@ public class LagNetwork {
         this.messages.add(new QueuedMessage(msg, System.currentTimeMillis()
                 + GameRegister.lag));
     }
+
+    public void send(Object msg, int type) {
+        this.messages.add(new QueuedMessage(msg, System.currentTimeMillis()
+                + GameRegister.lag, type));
+    }
 }
 
 class QueuedMessage {
     public Object message;  // the message (should be a class from register)
     public long timeToSend; // the timestamp in which this message should be sent
     //public Type type; // the type of this queued message to help cast later
+    public int type; // type 0 == udp / type 1 == tcp
 
     public QueuedMessage(Object message, long timeToSend) {
         this.message = message; this.timeToSend = timeToSend;
+        this.type = 0;
+    }
+
+    public QueuedMessage(Object message, long timeToSend, int type) {
+        this.message = message; this.timeToSend = timeToSend;
+        this.type = type;
     }
 
 }
