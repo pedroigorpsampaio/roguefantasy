@@ -912,6 +912,13 @@ public class WorldMap implements InputProcessor {
         return screenPos;
     }
 
+    public TiledMapTile getTileFromId(int tileId) {
+        TiledMapTileSets tileset = map.getTileSets();
+        int MASK_CLEAR = 0xE0000000;
+        TiledMapTile tile = tileset.getTile(tileId & ~MASK_CLEAR);
+        return tile;
+    }
+
     public void renderCell(TiledMapTileLayer.Cell cell, float x, float y, float layerOffsetX, float layerOffsetY, float layerOpacity) {
         if (cell == null) return;
         final TiledMapTile tile = cell.getTile();

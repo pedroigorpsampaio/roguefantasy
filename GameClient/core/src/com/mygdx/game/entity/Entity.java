@@ -92,6 +92,7 @@ public abstract class Entity implements Comparable<Entity> {
     public float spriteH;
     protected TextureRegion currentFrame = null;
     protected Vector2 center = new Vector2();
+    private GameRegister.AttackType attackType = null; // current attack type if any
 
     public Entity() {
         /**
@@ -216,6 +217,15 @@ public abstract class Entity implements Comparable<Entity> {
     }
 
     /**
+     * Updates the current attack type of entity
+     * @param attackType    the new attack type of the entity
+     */
+    public void updateAttack(GameRegister.AttackType attackType) {
+        if(this.attackType!=attackType)
+            this.attackType = attackType;
+    }
+
+    /**
      * For correct health updating of entities
      */
     public abstract void updateHealth(float health);
@@ -298,6 +308,7 @@ public abstract class Entity implements Comparable<Entity> {
      */
     public void renderEntityTag(SpriteBatch batch, float x, float y, float w, float h, Color nameColor) {
         if(this.health<=0) return; // don't render if not alive
+        if(this.healthBar == null || this.healthBarBg == null) return;
 
         float eAlpha = alpha;
         if(alpha>1.0f) eAlpha = 1.0f;
@@ -531,6 +542,48 @@ public abstract class Entity implements Comparable<Entity> {
                 startInteraction();
             } else {
                 stopInteractionTimer(); // makes sure everything is stopped when there is no target
+            }
+        }
+
+        /**
+         * This method is for other players when attacking state is received from server
+         * @param targetId      the target context id
+         * @param targetType    the type of the target entity
+         */
+        public void updateTarget(int targetId, GameRegister.EntityType targetType) {
+            if(targetType == null) { // no target, let set target handle it
+                setTarget(null);
+                return;
+            }
+
+            // get correct target and let setTarget handle its
+            Entity eTarget = null;
+
+            switch(targetType) {
+                case CHARACTER:
+                    eTarget = GameClient.getInstance().getCharacter(targetId);
+                    break;
+                case CREATURE:
+                    eTarget= GameClient.getInstance().getCreature(targetId);
+                    break;
+                case TREE:
+                    eTarget = GameClient.getInstance().getTree(targetId);
+                    break;
+                default:
+                    eTarget =null;
+                    break;
+            }
+
+            setTarget(eTarget);
+        }
+
+        //updates state of character
+        public void updateState(GameRegister.EntityState state) {
+            if(this.state != state) {
+                if(this.state == GameRegister.EntityState.ATTACKING) // new state and player was attacking
+                    this.setTarget(null); // stops attacking
+
+                this.state = state;
             }
         }
 
@@ -964,8 +1017,9 @@ public abstract class Entity implements Comparable<Entity> {
         /** Stops any interaction that this entity is doing **/
         public void stopInteraction() {
             if(isInteracting && target != null) {
-                // send msg to stop interaction to server
-                GameClient.getInstance().requestInteraction(GameRegister.Interaction.STOP_INTERACTION, target.contextId, target.type);
+                // send msg to stop interaction to server (if its client character)
+                if (GameClient.getInstance().getClientCharacter().id == this.id)
+                    GameClient.getInstance().requestInteraction(GameRegister.Interaction.STOP_INTERACTION, target.contextId, target.type);
                 stopInteractionTimer();
             }
         }
@@ -992,8 +1046,7 @@ public abstract class Entity implements Comparable<Entity> {
         public void attackTarget() {
             if(target != null && target.health >= 0f) {
                 // if there is a wall between player and target, do not attack
-                Entity hit = EntityController.getInstance().hit(this, this.getEntityCenter(), target.getEntityCenter(), true);
-                if (hit != null) {
+                if (!EntityController.getInstance().isTargetOnAttackRange(this, target)) {
                     this.state = GameRegister.EntityState.FREE;
                     return;
                 }
@@ -1003,10 +1056,13 @@ public abstract class Entity implements Comparable<Entity> {
                     lastAttack = System.currentTimeMillis();
                     // player is able to attack target
                     if(this.state != GameRegister.EntityState.ATTACKING) { // started attacking
-                        // SEND INTERACTION START TO SERVER TO PROCESS INTERACTION SERVER-SIDE - OF ATTACK TYPE IN THIS CASE
-                        GameClient.getInstance().requestInteraction(GameRegister.Interaction.ATTACK_ENTITY,  target.contextId, target.type);
-                        this.state = GameRegister.EntityState.ATTACKING;
+                        // SEND INTERACTION START TO SERVER TO PROCESS INTERACTION SERVER-SIDE - OF ATTACK TYPE IN THIS CASE (if its client)
+                        if (GameClient.getInstance().getClientCharacter().id == this.id) {
+                            GameClient.getInstance().requestInteraction(GameRegister.Interaction.ATTACK_ENTITY, target.contextId, target.type);
+                            this.state = GameRegister.EntityState.ATTACKING;
+                        }
                     }
+
                     // do not attack if target is already dead
                     if(target.health <= 0)
                         return;
@@ -1238,6 +1294,7 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         public void dispose() {
+            stopInteraction();
             //remove(); // remove itself from stage
             Gdx.app.postRunnable(() -> {
                 spriteSheet.dispose();
@@ -1891,8 +1948,6 @@ public abstract class Entity implements Comparable<Entity> {
                 clientOffset = range + speedFactor;
 
             if(interPos.dst(position) <= speedFactor + clientOffset) { // walks towards position until its close enough
-                //updateStage(position.x, position.y, true);
-                //interPos.x = position.x; interPos.y = position.y;
                 lastVelocity.x = 0; lastVelocity.y = 0;
                 // predict state (only if it is the target)
                 if(target != null  && target.id == GameClient.getInstance().getClientCharacter().id)

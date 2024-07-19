@@ -1,24 +1,11 @@
 package com.mygdx.server.network;
 
 
-import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.maps.MapLayers;
-import com.badlogic.gdx.maps.MapObjects;
-import com.badlogic.gdx.maps.MapProperties;
-import com.badlogic.gdx.maps.objects.RectangleMapObject;
-import com.badlogic.gdx.maps.tiled.TiledMapTile;
-import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
-import com.badlogic.gdx.maps.tiled.tiles.StaticTiledMapTile;
-import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.utils.Array;
-import com.badlogic.gdx.utils.ObjectMap;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryonet.EndPoint;
-import com.mygdx.server.entity.Component;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 
 /**
@@ -30,7 +17,7 @@ public class GameRegister {
     static public final int udp_port = 38572; // GAME SERVER UDP PORT
     static public final int serverTickrate = 15; // the amount of communication updates per second in server
     static public final int clientTickrate = 20; // the amount of communication updates per second in client
-    static public boolean lagSimulation = true; // simulate lag
+    static public boolean lagSimulation = false; // simulate lag
     static public int lag = 240; // simulated lag value in ms
     static public final int N_ROWS = 45; // number of rows to be sent to player in state (AoI)
     static public final int N_COLS = 45; // number of cols to be sent to player in state (AoI)
@@ -80,6 +67,7 @@ public class GameRegister {
         kryo.register(EntityType.class);
         kryo.register(Damage.class);
         kryo.register(DamageType.class);
+        kryo.register(AttackType.class);
     }
 
     static public class Layer {
@@ -126,6 +114,9 @@ public class GameRegister {
         TELEPORTING_IN,
         TELEPORTING_OUT,
         ATTACKING,
+        WOODCUTTING,
+        MINING,
+        FISHING,
         FREE,
     }
 
@@ -160,6 +151,12 @@ public class GameRegister {
         MINE_ORE,
         GRAB_ITEM,
         STOP_INTERACTION,
+    }
+
+    public enum AttackType{
+        MAGIC_PRISMA,
+        MELEE_SWORD,
+        RANGE_BOW,
     }
 
     static public class InteractionRequest {
@@ -219,10 +216,13 @@ public class GameRegister {
         public String name;
         public int id, role_level;
         public float x, y, speed, attackSpeed;
+        public int targetId;
+        public EntityType targetType;
         public float health, maxHealth;
         public ArrayList<Damage> damages = new ArrayList<>();
         public boolean isTeleporting;
         public EntityState state = EntityState.FREE;
+        public AttackType attackType;
     }
 
     public static class ClientId {

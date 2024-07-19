@@ -2,6 +2,9 @@ package com.mygdx.game.entity;
 
 import static com.mygdx.game.entity.Entity.rectOffsetLeft;
 import static com.mygdx.game.entity.Entity.rectOffsetRight;
+import static com.mygdx.game.entity.WorldMap.TEX_HEIGHT;
+import static com.mygdx.game.entity.WorldMap.TEX_WIDTH;
+import static com.mygdx.game.entity.WorldMap.unitScale;
 
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
@@ -82,7 +85,7 @@ public class EntityController {
                     }
                 }
 
-                if(e.contextId != GameClient.getInstance().getClientCharacter().id) { // only considers other entities and not client character
+                if(e.uId != GameClient.getInstance().getClientCharacter().uId) { // only considers other entities and not client character
                     if(e.isInteractive && !GameScreen.onStageActor) {// Only acts on world if it did not hit any UI actor
                         boolean mouseHit = e.rayCast(GameScreen.unprojectedMouse);
                         if(mouseHit) { // hover on an entity
@@ -312,6 +315,33 @@ public class EntityController {
         }
         // return null means no entity was hit by the point
         return null;
+    }
+
+    /**
+     * Checks if attacker is able to attack target
+     * @param attacker  the attacker entity
+     * @param target    the target entity
+     * @return  true if its possible to attack, false otherwise
+     */
+    public boolean isTargetOnAttackRange(Entity attacker, Entity target) {
+        float tileHeight = TEX_HEIGHT * unitScale;
+        float tileWidth = TEX_WIDTH * unitScale;
+        float halfTileWidth = tileWidth * 0.5f;
+
+        if(attacker == null || target == null) return false;
+
+        // if there is a wall between player and target, do not attack
+        Entity hit1 = EntityController.getInstance().hit(attacker,
+                new Vector2(attacker.finalDrawPos.x + halfTileWidth, attacker.finalDrawPos.y+tileHeight*0.5f),
+                new Vector2(target.finalDrawPos.x + halfTileWidth, target.finalDrawPos.y+tileHeight*0.5f), true);
+        Entity hit2 = EntityController.getInstance().hit(attacker,
+                new Vector2(attacker.finalDrawPos.x + halfTileWidth, attacker.finalDrawPos.y+tileHeight),
+                new Vector2(target.finalDrawPos.x + halfTileWidth, target.finalDrawPos.y+tileHeight), true);
+        Entity hit3 = EntityController.getInstance().hit(attacker,
+                new Vector2(attacker.finalDrawPos.x + halfTileWidth, attacker.finalDrawPos.y+tileHeight*2.5f),
+                new Vector2(target.finalDrawPos.x + halfTileWidth, target.finalDrawPos.y+tileHeight*2.5f), true);
+
+        return !(hit1 != null && hit2 != null && hit3 !=null);
     }
 
 

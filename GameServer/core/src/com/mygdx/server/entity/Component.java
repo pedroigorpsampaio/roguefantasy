@@ -10,7 +10,9 @@ import static com.mygdx.server.network.GameRegister.N_ROWS;
 
 import com.badlogic.gdx.maps.MapLayer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
+import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
+import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Vector2;
@@ -68,6 +70,7 @@ public class Component {
         public String token;
         public int role_level;
         public final static GameRegister.EntityType ENTITY_TYPE = GameRegister.EntityType.CHARACTER;
+        public GameRegister.AttackType attackType = null;
         public long lastMoveId = 0;
         public long lastMoveTs = 0;
         public Vector2 dir;
@@ -121,6 +124,9 @@ public class Component {
             update.dir = dir;
             update.lastRequestId = lastMoveId;
             update.character.isTeleporting = isTeleporting;
+            update.character.attackType = attackType;
+            update.character.targetId = target.id;
+            update.character.targetType = target.type;
             return update;
         }
 
@@ -407,6 +413,11 @@ public class Component {
                                 }
                                 if(EntityController.getInstance().entityWorldState[col][row].wall != null) { // add wall as wall update for client that treats it as entity
                                     state.wallUpdates.add(EntityController.getInstance().entityWorldState[col][row].wall);
+                                    if(WorldMap.getInstance().getTileFromId(EntityController.getInstance()
+                                                    .entityWorldState[col][row].wall.tileId).getProperties()
+                                                    .get("obfuscator", Boolean.class))
+                                        aoIEntities.obfuscatorWalls.put(EntityController.getInstance().entityWorldState[col][row].wall.wallId,
+                                                                        EntityController.getInstance().entityWorldState[col][row].wall);
                                 }
                                 if(EntityController.getInstance().entityWorldState[col][row].portal != null) { // add portal
                                     state.portal.add(EntityController.getInstance().entityWorldState[col][row].portal.hitBox);
@@ -466,7 +477,6 @@ public class Component {
 
             // starts update timer that control user interaction
 //            interactionTimer=new Timer();
-            stopInteraction.set(false);
 
             float latency = (System.currentTimeMillis() - target.timestamp)*2f;
             float delay = (1/attr.attackSpeed)-(latency/1000f);
@@ -478,6 +488,14 @@ public class Component {
                hitTarget.cancel();
 
             target.hitCount = 0;
+
+            if(!target.isAlive) { // if target is not alive anymore
+                // reset state and attack info
+                if(state == GameRegister.EntityState.ATTACKING) state = GameRegister.EntityState.FREE;
+                if(attackType != null) attackType = null;
+                return; // return
+            }
+
             if(!hitTarget.isScheduled()) {
                 lastHitSchedule = System.currentTimeMillis();
                 interactionTimer.scheduleTask(hitTarget, delay, GameRegister.clientTickrate());
@@ -485,16 +503,29 @@ public class Component {
         }
 
         public long lastHitSchedule = System.currentTimeMillis();
+
         public Timer.Task hitTarget = new Timer.Task() {
             @Override
             public void run() {
+                // there is an obfuscator (blocking) wall between player and target blocking the attack
+                if(!aoIEntities.isTargetOnAttackRange(position.getDrawPos(GameRegister.EntityType.CHARACTER), target.getPosition())) return;
+                if(state != GameRegister.EntityState.ATTACKING && target.isAlive) {
+                    state = GameRegister.EntityState.ATTACKING;
+                    attackType = GameRegister.AttackType.MAGIC_PRISMA;
+                }
                 target.hit(tag.id, ENTITY_TYPE, attr);
-//                if(stopInteraction.get()) {
-//                    stopInteraction.set(false);
-//                }
+
+                if(!target.isAlive) { // if target is not alive anymore
+                    // reset state and attack info
+                    if(state == GameRegister.EntityState.ATTACKING) state = GameRegister.EntityState.FREE;
+                    if(attackType != null) attackType = null;
+                    target.id = -1;
+                    target.type = null;
+                    target.entity = null;
+                }
             }
         };
-        AtomicBoolean stopInteraction = new AtomicBoolean(false);
+;
         public void stopInteraction() {
 //            if (interactionTimer != null) {
 //                interactionTimer.stop();
@@ -509,13 +540,32 @@ public class Component {
                 float timeLeft = (hitTargetMillisToExec - System.nanoTime()/1000000) / 1000f;
 
                 // if hits are misaligned, send one last one delayed with last task remaining time to trigger as a delay
-                if(correctHits > target.hitCount)
-                    target.hitDelayed(timeLeft, tag.id, ENTITY_TYPE, attr, e, type);
+                if(correctHits > target.hitCount) {
+                    // hit only if there isn't an obfuscator (blocking) wall between player and target blocking the attack
+                    if(aoIEntities.isTargetOnAttackRange(position.getDrawPos(GameRegister.EntityType.CHARACTER), target.getPosition())) {
+                        if(state != GameRegister.EntityState.ATTACKING && target.isAlive) state = GameRegister.EntityState.ATTACKING;
+                        target.hitDelayed(timeLeft, tag.id, ENTITY_TYPE, attr, e, type);
+
+                        if(!target.isAlive) { // if target is not alive anymore
+                            // reset state and attack info
+                            if(state == GameRegister.EntityState.ATTACKING) state = GameRegister.EntityState.FREE;
+                            if(attackType != null) attackType = null;
+                            target.id = -1;
+                            target.type = null;
+                            target.entity = null;
+                            return; // return
+                        }
+                    }
+                }
 
                 // reset target for this player
                 target.id = -1;
                 target.type = null;
                 target.entity = null;
+
+                // reset state and attack info
+                if(state == GameRegister.EntityState.ATTACKING) state = GameRegister.EntityState.FREE;
+                if(attackType != null) attackType = null;
 
 //                interactionTimer.scheduleTask(new Timer.Task() {
 //                    @Override
@@ -585,11 +635,12 @@ public class Component {
     }
 
     public static class Target {
-        public int id;
+        public int id = -1;
         public GameRegister.EntityType type;
         public Object entity;
         public long timestamp;
         public int hitCount = 0;
+        public boolean isAlive = true;
         private long lastAttack = System.currentTimeMillis();
 
         /**
@@ -610,10 +661,11 @@ public class Component {
                     case CHARACTER:
                         Component.Character targetCharacter = (Component.Character) entity;
                         targetCharacter.hit(attackerId, attackerType, attacker);
+                        if(targetCharacter.attr.health <= 0) isAlive = false;
                         break;
                     case TREE:
                         GameRegister.Tree tree = (GameRegister.Tree) entity;
-                        if(tree.health <= 0) return; // tree is dead
+                        if(tree.health <= 0) {isAlive = false; return;} // tree is dead
                         GameRegister.Damage dmg = new GameRegister.Damage();
                         dmg.attackerId = attackerId;
                         dmg.attackerType = attackerType;
@@ -626,6 +678,7 @@ public class Component {
                     case CREATURE:
                         Entity targetCreature = (Entity) entity;
                         targetCreature.get(Component.AI.class).hit(attackerId, attackerType, attacker);
+                        if(targetCreature.get(Attributes.class).health <= 0) isAlive = false;
                         break;
                     default:
                         break;
@@ -662,10 +715,11 @@ public class Component {
                         case CHARACTER:
                             Component.Character targetCharacter = (Component.Character) e;
                             targetCharacter.hit(attackerId, attackerType, attacker);
+                            if(targetCharacter.attr.health <= 0) isAlive = false;
                             break;
                         case TREE:
                             GameRegister.Tree tree = (GameRegister.Tree) e;
-                            if(tree.health <= 0) return; // tree is dead
+                            if(tree.health <= 0) {isAlive = false; return;} ; // tree is dead
                             GameRegister.Damage dmg = new GameRegister.Damage();
                             dmg.attackerId = attackerId;
                             dmg.attackerType = attackerType;
@@ -678,6 +732,7 @@ public class Component {
                         case CREATURE:
                             Entity targetCreature = (Entity) e;
                             targetCreature.get(Component.AI.class).hit(attackerId, attackerType, attacker);
+                            if(targetCreature.get(Attributes.class).health <= 0) isAlive = false;
                             break;
                         default:
                             break;
@@ -692,11 +747,13 @@ public class Component {
          */
         public Vector2 getPosition() {
             Vector2 position = null;
+            if(type == null) return null;
+
             switch (type) {
                 case CHARACTER:
                     Component.Character targetCharacter = (Component.Character) entity;
                     if(targetCharacter == null) return null;
-                    position = new Vector2(targetCharacter.position.x, targetCharacter.position.y);
+                    position = targetCharacter.position.getDrawPos(GameRegister.EntityType.CHARACTER);
                     break;
                 case TREE:
                     GameRegister.Tree tree = (GameRegister.Tree) entity;
@@ -712,7 +769,7 @@ public class Component {
                 case CREATURE:
                     Entity targetCreature = (Entity) entity;
                     if(targetCreature == null) return null;
-                    position = new Vector2(targetCreature.get(Component.Position.class).x, targetCreature.get(Component.Position.class).y);
+                    position = targetCreature.get(Component.Position.class).getDrawPos(GameRegister.EntityType.CHARACTER);
                     break;
                 default:
                     break;
@@ -812,6 +869,28 @@ public class Component {
         public String toString() {
             return "Position: {x=" + x + ", y=" + y + '}';
         }
+
+        public Vector2 getDrawPos(GameRegister.EntityType type) {
+            if(type == null) return new Vector2(x, y);
+
+            float tileHeight = TEX_HEIGHT * unitScale;
+            float tileWidth = TEX_WIDTH * unitScale;
+
+            Vector2 finalDrawPos = new Vector2(x,y);
+
+            switch (type) {
+                case CHARACTER:
+                    float spriteH = tileHeight*3;
+                    float spriteW = tileWidth;
+                    finalDrawPos.x = x + spriteW/12f;
+                    finalDrawPos.y = y + spriteH/12f;
+                    break;
+                default:
+                    break;
+            }
+
+            return finalDrawPos;
+        }
     }
 
     public static class Velocity {
@@ -864,14 +943,89 @@ public class Component {
     }
 
     /**
-     * Helper structure to quickly get interactive entities in AoI of client (each client saves last state AoIEntities data)
+     * Helper structure to quickly get entities in AoI of client (each client saves last state AoIEntities data)
      */
     public static class AoIEntities {
         public Map<Integer, Entity> creatures; // map of entities in AoI of client (creatures for now)
         public Map<Integer, Component.Character> characters; // map of character in AoI of client
         public Map<Integer, GameRegister.Tree> trees; // map of trees in AoI of client
+        public Map<Integer, GameRegister.Wall> obfuscatorWalls; // map of obfuscator walls in AoI of client
 
-        public AoIEntities() {creatures = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>(); trees = new ConcurrentHashMap<>();}
+        public AoIEntities() {
+            creatures = new ConcurrentHashMap<>();
+            obfuscatorWalls = new ConcurrentHashMap<>();
+            characters = new ConcurrentHashMap<>();
+            trees = new ConcurrentHashMap<>();
+        }
+
+        /**
+         * Checks if attacker is able to attack target
+         * @param attacker  the attacker position (bottom-left)
+         * @param target    the target entity (bottom-left)
+         * @return  true if its possible to attack, false otherwise
+         */
+        public boolean isTargetOnAttackRange(Vector2 attacker, Vector2 target) {
+            float tileHeight = TEX_HEIGHT * unitScale;
+            float tileWidth = TEX_WIDTH * unitScale;
+            float halfTileWidth = tileWidth * 0.5f;
+
+            if(attacker == null || target == null) return false;
+
+            // if there is a wall between player and target, do not attack
+            GameRegister.Wall hit1 = hitObfuscator(
+                    new Vector2(attacker.x + halfTileWidth, attacker.y+tileHeight*0.5f),
+                    new Vector2(target.x + halfTileWidth, target.y+tileHeight*0.5f));
+            GameRegister.Wall hit2 = hitObfuscator(
+                    new Vector2(attacker.x + halfTileWidth, attacker.y+tileHeight),
+                    new Vector2(target.x + halfTileWidth, target.y+tileHeight));
+            GameRegister.Wall hit3 = hitObfuscator(
+                    new Vector2(attacker.x + halfTileWidth, attacker.y+tileHeight*2.5f),
+                    new Vector2(target.x + halfTileWidth, target.y+tileHeight*2.5f));
+
+            return !(hit1 != null && hit2 != null && hit3 !=null);
+        }
+
+        /**
+         * Checks if a cast line between two points hits a obfuscator wall in AoI
+         *
+         * @param p1 the first point of the line to check if hits an entity
+         * @param p2 the second point of the line to check if hits an entity
+         * @return the wall hit or null if no obfuscator wall was hit
+         */
+        public GameRegister.Wall hitObfuscator(Vector2 p1, Vector2 p2) {
+            if(p1 == null || p2 == null) return null;
+
+            float tileWidth = TEX_WIDTH * unitScale;
+            float tileHeight = TEX_HEIGHT * unitScale;
+            float halfTileWidth = tileWidth * 0.5f;
+            float halfTileHeight = tileHeight * 0.5f;
+
+            synchronized (obfuscatorWalls) {
+                for (Map.Entry<Integer, GameRegister.Wall> entry : obfuscatorWalls.entrySet()) {
+                    GameRegister.Wall wall = entry.getValue();
+
+                    TiledMapTile tile = WorldMap.getInstance().getTileFromId(wall.tileId);
+                    Vector2 drawPos = new Vector2();
+                    drawPos.x = (wall.tileX * halfTileWidth) + (wall.tileY * halfTileWidth);
+                    drawPos.y = (wall.tileY * halfTileHeight) - (wall.tileX * halfTileHeight) + tileHeight; // adjust to match origin to tile origin
+
+                    Polygon hitBox = new Polygon(new float[]{
+                            0, 0,
+                            tile.getTextureRegion().getRegionWidth() * unitScale * 0.5f, 0,
+                            tile.getTextureRegion().getRegionWidth() * unitScale * 0.5f, tile.getTextureRegion().getRegionHeight() * unitScale * 0.6f,
+                            0, tile.getTextureRegion().getRegionHeight() * unitScale * 0.6f});
+
+                    hitBox.setPosition(drawPos.x + halfTileWidth * 0.5f, drawPos.y + halfTileHeight * 0.8f);
+
+                    // found a entity that hits
+                    if (Intersector.intersectSegmentPolygon(p1, p2, hitBox)) {
+                        return wall;
+                    }
+                }
+                // return null means no entity was hit by the point
+                return null;
+            }
+        }
     }
 
     public static class AI {
@@ -925,6 +1079,7 @@ public class Component {
                     target.id = event.trigger.tag.id;
                     target.type = GameRegister.EntityType.CHARACTER;
                     target.entity = event.trigger;
+                    target.isAlive = (event.trigger.attr.health > 0f);
                     break;
                 case PLAYER_LEFT_AOI:
                     if (target.entity != null && target.id == event.trigger.tag.id) {

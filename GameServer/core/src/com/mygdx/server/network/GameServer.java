@@ -537,6 +537,7 @@ public class GameServer implements CmdReceiver {
         character.target.type = interaction.entityType;
         character.target.entity = entity;
         character.target.timestamp = interaction.timestamp;
+        character.target.isAlive = true; // only receives interactions if entity is alive
 
         // new target of character
         if(interaction.type != GameRegister.Interaction.STOP_INTERACTION) {

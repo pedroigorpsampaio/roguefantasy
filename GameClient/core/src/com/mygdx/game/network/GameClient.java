@@ -306,8 +306,20 @@ public class GameClient extends DispatchServer {
      * @param uId   the unique Id of the tree entity
      * @return  the tree associated to the provided entity unique Id or null if no tree was found with this uId
      */
-    public Entity.Tree getTree(int uId) {
-        return serverController.getTree(uId);
+    public Entity.Tree getTreeByUid(int uId) {
+        return serverController.getTreeByUid(uId);
+    }
+
+    public Entity.Tree getTree(int id) {
+        return serverController.getTree(id);
+    }
+
+    public Entity.Character getCharacter(int id) {
+        return serverController.getCharacter(id);
+    }
+
+    public Entity.Creature getCreature(int id) {
+        return serverController.getCreature(id);
     }
 
     public Map<Integer, Entity.Wall> getWalls() {
@@ -498,9 +510,17 @@ public class GameClient extends DispatchServer {
 
             //if(GameClient.getInstance().clientCharId != msg.character.id) {
 
-            // updates direction if its other player
+            // updates for other players
             if(GameClient.getInstance().clientCharId != msg.character.id) {
-                character.direction = Entity.Direction.getDirection(MathUtils.round(msg.dir.x), MathUtils.round(msg.dir.y));
+                character.direction = Entity.Direction.getDirection(MathUtils.round(msg.dir.x), MathUtils.round(msg.dir.y)); // updates direction
+                if(msg.character.attackType != null)
+                    character.updateAttack(msg.character.attackType);
+                if(character.state != msg.character.state) // updates state if a change has been made
+                    character.updateState(msg.character.state);
+                if(character.state == GameRegister.EntityState.ATTACKING) {
+                    character.updateTarget(msg.character.targetId, msg.character.targetType); // updates target
+                }
+                System.out.println(character.state);
             }
 
             // if its client, discard movements while teleporting (disposable late prediction packets)
@@ -600,7 +620,7 @@ public class GameClient extends DispatchServer {
             EntityController.getInstance().entities.clear();
         }
 
-        public Entity.Tree getTree(int uId) {
+        public Entity.Tree getTreeByUid(int uId) {
             synchronized (trees) {
                 Iterator<Map.Entry<Integer, Entity.Tree>> iterator = trees.entrySet().iterator();
                 while (iterator.hasNext()) {
@@ -654,11 +674,24 @@ public class GameClient extends DispatchServer {
                 while (iterator.hasNext()) {
                     Map.Entry<Integer, Entity.Character> entry = iterator.next();
                     if(entry.getValue().uId == uId) {
+                        entry.getValue().stopInteraction(); // stop any interaction of character
                         iterator.remove();
                         return;
                     }
                 }
             }
+        }
+
+        public Entity.Tree getTree(int id) {
+            return trees.get(id);
+        }
+
+        public Entity.Character getCharacter(int id) {
+            return characters.get(id);
+        }
+
+        public Entity.Creature getCreature(int id) {
+            return creatures.get(id);
         }
     }
 }

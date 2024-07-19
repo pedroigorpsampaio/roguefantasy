@@ -900,9 +900,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
             mouseOnLabel.setText("Entity: none");
         else {
             if(WorldMap.hoverEntity.type == GameRegister.EntityType.TREE) {
-                Entity.Tree tree = GameClient.getInstance().getTree(WorldMap.hoverEntity.uId);
+                Entity.Tree tree = GameClient.getInstance().getTreeByUid(WorldMap.hoverEntity.uId);
                 if (tree != null) //{
-                    mouseOnLabel.setText("Entity: " + GameClient.getInstance().getTree(WorldMap.hoverEntity.uId).spawnId + " (" + WorldMap.hoverEntity.type.toString() + ")");
+                    mouseOnLabel.setText("Entity: " + GameClient.getInstance().getTreeByUid(WorldMap.hoverEntity.uId).spawnId + " (" + WorldMap.hoverEntity.type.toString() + ")");
 //            } else {
 //                mouseOnLabel.setText("Entity: none");
 //            }
