@@ -426,12 +426,13 @@ public class GameClient extends DispatchServer {
 
                 /** update tree attributes **/
                 tree = trees.get(treeUpdate.spawnId);
-                tree.updateHealth(treeUpdate.health);
                 tree.maxHealth = treeUpdate.maxHealth;
                 tree.name = treeUpdate.name;
 
-                /** render tree damages received since last state **/
-                tree.renderDamagePoints(treeUpdate.damages);
+                /** updates related to damage **/
+                tree.takeDamage(treeUpdate.health, treeUpdate.damages);
+//                tree.updateHealth();
+//                tree.renderDamagePoints();
             }
         }
 
@@ -452,11 +453,14 @@ public class GameClient extends DispatchServer {
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
 
                 /** update creature attributes **/
-                creature.updateHealth(creatureUpdate.health);
+//                creature.updateHealth(creatureUpdate.health);
                 creature.maxHealth = creatureUpdate.maxHealth;
 
-                /** render creature damages received since last state **/
-                creature.renderDamagePoints(creatureUpdate.damages);
+                /** updates related to damage **/
+                creature.takeDamage(creatureUpdate.health, creatureUpdate.damages);
+
+//                /** render creature damages received since last state **/
+//                creature.renderDamagePoints(creatureUpdate.damages);
             }
 
             Entity.Character target = characters.get(creatureUpdate.targetId);
@@ -497,13 +501,17 @@ public class GameClient extends DispatchServer {
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
 
                 /** updates attributes **/
-                character.updateHealth(msg.character.health);
+                character.avgLatency = msg.character.avgLatency;
+                //character.updateHealth(msg.character.health);
                 character.maxHealth = msg.character.maxHealth;
                 character.updateAtkSpeed(msg.character.attackSpeed);
                 character.updateSpeed(msg.character.speed);
 
-                /** render character damages received since last state **/
-                character.renderDamagePoints(msg.character.damages);
+                /** updates related to damage **/
+                character.takeDamage(msg.character.health, msg.character.damages);
+
+//                /** render character damages received since last state **/
+//                character.renderDamagePoints(msg.character.damages);
             }
 
             //character.state = msg.character.state;
@@ -512,6 +520,7 @@ public class GameClient extends DispatchServer {
 
             // updates for other players
             if(GameClient.getInstance().clientCharId != msg.character.id) {
+                character.avgLatency = msg.character.avgLatency;
                 character.direction = Entity.Direction.getDirection(MathUtils.round(msg.dir.x), MathUtils.round(msg.dir.y)); // updates direction
                 if(msg.character.attackType != null)
                     character.updateAttack(msg.character.attackType);
@@ -520,7 +529,7 @@ public class GameClient extends DispatchServer {
                 if(character.state == GameRegister.EntityState.ATTACKING) {
                     character.updateTarget(msg.character.targetId, msg.character.targetType); // updates target
                 }
-                System.out.println(character.state);
+                //System.out.println(character.state);
             }
 
             // if its client, discard movements while teleporting (disposable late prediction packets)

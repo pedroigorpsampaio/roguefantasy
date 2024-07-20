@@ -149,7 +149,7 @@ public class Projectile extends Entity implements Pool.Poolable {
     }
 
     /** just "kills" this projectile **/
-    private void die() {
+    public void die() {
         alive = false;
         elapsed = 0f;
         EntityController.getInstance().entities.remove(uId); // remove from entities drawing list

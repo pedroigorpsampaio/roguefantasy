@@ -785,7 +785,6 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         // render player target info if there is a target
         if(gameClient.getClientCharacter() == null) return;
-
         Entity target = gameClient.getClientCharacter().getTarget();
         if(target != null) {
             target.renderUI(batch);
@@ -796,6 +795,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         batch.setProjectionMatrix(camera.combined);
 
         if(gameClient.getClientCharacter() == null) return;
+
         // always draw client simplified ui
         gameClient.getClientCharacter().renderUI(batch);
 

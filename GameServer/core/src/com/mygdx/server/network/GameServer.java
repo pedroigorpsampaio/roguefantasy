@@ -510,7 +510,7 @@ public class GameServer implements CmdReceiver {
         // gets the correct entity
         Object entity = null;
 
-        System.out.println(interaction.type);
+        //System.out.println(interaction.type);
 
         Vector2 clientPos = new Vector2(character.position.x, character.position.y);
         Vector2 targetPos = null;
@@ -528,9 +528,11 @@ public class GameServer implements CmdReceiver {
                 break;
         }
 
+        // entity probably is out of AoI atm
         if(entity == null) {
-            System.out.println("Could not find entity to interact: " + interaction.targetId + " : " + interaction.entityType);
-            return; // could not find entity to interact with
+            //System.out.println("Could not find entity to interact: " + interaction.targetId + " : " + interaction.entityType);
+            character.stopInteraction(true); // since is out of aoi stop any interaction happening
+            return; // no entity to interact with
         }
 
         character.target.id = interaction.targetId;
@@ -548,7 +550,7 @@ public class GameServer implements CmdReceiver {
                 startTimerInteraction(connection, interaction.type);
             }
         } else { // if client has stopped interaction, stop interaction
-            character.stopInteraction();
+            character.stopInteraction(false);
         }
 
     }
@@ -562,7 +564,7 @@ public class GameServer implements CmdReceiver {
                     character.attack();
                 break;
             case STOP_INTERACTION: // THIS SHOULD NOT BE THE CASE EVER!
-                character.stopInteraction();
+                character.stopInteraction(false);
                 character.target.id = -1;
                 character.target.type = null;
                 character.target.entity = null;

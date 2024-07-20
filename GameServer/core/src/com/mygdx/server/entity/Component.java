@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.dominion.ecs.api.Entity;
 
@@ -120,6 +119,7 @@ public class Component {
             update.character.speed = attr.speed;
             update.character.role_level = role_level;
             update.character.state = state;
+            update.character.avgLatency = avgLatency;
             update.character.attackSpeed = attr.attackSpeed;
             update.dir = dir;
             update.lastRequestId = lastMoveId;
@@ -144,7 +144,7 @@ public class Component {
             // check for actions on current tile (actions that get triggered by walking on it)
             triggerWalkableActions();
             // stops any current interactions
-            stopInteraction();
+            stopInteraction(false);
         }
 
         /**
@@ -464,7 +464,7 @@ public class Component {
             this.target.type = null;
             this.target.entity = null;
             this.avgLatency = 0;
-            this.stopInteraction();
+            this.stopInteraction(false);
         }
 
         /**
@@ -473,13 +473,19 @@ public class Component {
         public void attack() {
             if(target == null || target.entity == null) return; // no target to attack
 
+            // update to attack state
+            if(state != GameRegister.EntityState.ATTACKING && target.isAlive) {
+                state = GameRegister.EntityState.ATTACKING;
+                attackType = GameRegister.AttackType.MAGIC_PRISMA;
+            }
+
             //if(isInteracting) return; // an interaction must be stopped before starting a new one
 
             // starts update timer that control user interaction
 //            interactionTimer=new Timer();
-
-            float latency = (System.currentTimeMillis() - target.timestamp)*2f;
-            float delay = (1/attr.attackSpeed)-(latency/1000f);
+//
+//            float latency = (System.currentTimeMillis() - target.timestamp)*2f;
+            float delay = (1/attr.attackSpeed)-(avgLatency/1000f);
             if(delay <= 0) delay = 0;
 
             //isInteracting = true;
@@ -491,8 +497,7 @@ public class Component {
 
             if(!target.isAlive) { // if target is not alive anymore
                 // reset state and attack info
-                if(state == GameRegister.EntityState.ATTACKING) state = GameRegister.EntityState.FREE;
-                if(attackType != null) attackType = null;
+                resetTarget();
                 return; // return
             }
 
@@ -508,28 +513,33 @@ public class Component {
             @Override
             public void run() {
                 // there is an obfuscator (blocking) wall between player and target blocking the attack
-                if(!aoIEntities.isTargetOnAttackRange(position.getDrawPos(GameRegister.EntityType.CHARACTER), target.getPosition())) return;
-                if(state != GameRegister.EntityState.ATTACKING && target.isAlive) {
-                    state = GameRegister.EntityState.ATTACKING;
-                    attackType = GameRegister.AttackType.MAGIC_PRISMA;
+                if(!aoIEntities.isTargetOnAttackRange(position.getDrawPos(GameRegister.EntityType.CHARACTER), target.getPosition())) {
+                    long delay = (long) ((1000f/attr.attackSpeed)-(avgLatency));
+                    if(delay <= 0) delay = 0;
+                    interactionTimer.delay(delay);
+                    return;
                 }
                 target.hit(tag.id, ENTITY_TYPE, attr);
 
                 if(!target.isAlive) { // if target is not alive anymore
                     // reset state and attack info
-                    if(state == GameRegister.EntityState.ATTACKING) state = GameRegister.EntityState.FREE;
-                    if(attackType != null) attackType = null;
-                    target.id = -1;
-                    target.type = null;
-                    target.entity = null;
+                    resetTarget();
                 }
             }
         };
 ;
-        public void stopInteraction() {
-//            if (interactionTimer != null) {
-//                interactionTimer.stop();
-//            }
+
+        /**
+         * Stops interaction of character
+         * @param force if this is true, it will stop asap any interaction.
+         */
+        public void stopInteraction(boolean force) {
+            if(force) {
+                interactionTimer.clear();
+                resetTarget();
+                return;
+            }
+
             if(hitTarget.isScheduled()) {
                 float hitTargetMillisToExec = hitTarget.getExecuteTimeMillis();
                 hitTarget.cancel();
@@ -541,31 +551,23 @@ public class Component {
 
                 // if hits are misaligned, send one last one delayed with last task remaining time to trigger as a delay
                 if(correctHits > target.hitCount) {
+                    if(state != GameRegister.EntityState.ATTACKING && target.isAlive) {
+                        state = GameRegister.EntityState.ATTACKING;
+                        attackType = GameRegister.AttackType.MAGIC_PRISMA;
+                    }
                     // hit only if there isn't an obfuscator (blocking) wall between player and target blocking the attack
                     if(aoIEntities.isTargetOnAttackRange(position.getDrawPos(GameRegister.EntityType.CHARACTER), target.getPosition())) {
-                        if(state != GameRegister.EntityState.ATTACKING && target.isAlive) state = GameRegister.EntityState.ATTACKING;
-                        target.hitDelayed(timeLeft, tag.id, ENTITY_TYPE, attr, e, type);
+                        target.hitDelayed(this, timeLeft, tag.id, ENTITY_TYPE, attr, e, type);
 
                         if(!target.isAlive) { // if target is not alive anymore
                             // reset state and attack info
-                            if(state == GameRegister.EntityState.ATTACKING) state = GameRegister.EntityState.FREE;
-                            if(attackType != null) attackType = null;
-                            target.id = -1;
-                            target.type = null;
-                            target.entity = null;
-                            return; // return
+                            resetTarget();
                         }
                     }
                 }
-
-                // reset target for this player
-                target.id = -1;
-                target.type = null;
-                target.entity = null;
-
-                // reset state and attack info
-                if(state == GameRegister.EntityState.ATTACKING) state = GameRegister.EntityState.FREE;
-                if(attackType != null) attackType = null;
+                else {
+                    resetTarget();
+                }
 
 //                interactionTimer.scheduleTask(new Timer.Task() {
 //                    @Override
@@ -582,6 +584,27 @@ public class Component {
 
             //interactionTimer.clear();
             //stopInteraction.set(true); // set stop interaction flag to true, so current task will be the last one
+        }
+
+        /**
+         * Resets target
+         */
+        public void resetTarget() {
+            // reset target
+            target.id = -1;
+            target.type = null;
+            target.entity = null;
+
+            // reset state and attack info
+            if (state == GameRegister.EntityState.ATTACKING)
+                state = GameRegister.EntityState.FREE;
+            if (attackType != null) attackType = null;
+        }
+
+        public void hitDelayedFinished() {
+            if(!hitTarget.isScheduled()) { // reset target for this player if its not on another attack interaction
+                resetTarget();
+            }
         }
 
         /**
@@ -688,14 +711,16 @@ public class Component {
 
         /**
          * Does a delayed hit on target (also respecting attack speed interval of attacker
-         * @param delay         the delay to consider for attack, respecting attack speed interval of attacker
-         * @param attackerId    the id of the attacker
-         * @param attackerType  the type of the attacker
-         * @param attacker      the attributes of the attacker
-         * @param e             the target entity (since its a delayed attack, target object can lose its references)
-         * @param t             the target type (since its a delayed attack, target object can lose its references)
+         *
+         * @param character    the character component that triggered this delayed hit (to callback when it is finished)
+         * @param delay        the delay to consider for attack, respecting attack speed interval of attacker
+         * @param attackerId   the id of the attacker
+         * @param attackerType the type of the attacker
+         * @param attacker     the attributes of the attacker
+         * @param e            the target entity (since its a delayed attack, target object can lose its references)
+         * @param t            the target type (since its a delayed attack, target object can lose its references)
          */
-        public void hitDelayed(float delay, int attackerId, GameRegister.EntityType attackerType, Attributes attacker, Object e, GameRegister.EntityType t) {
+        public void hitDelayed(Character character, float delay, int attackerId, GameRegister.EntityType attackerType, Attributes attacker, Object e, GameRegister.EntityType t) {
             if(t == null || e == null) return;
 
             long now = System.currentTimeMillis();
@@ -737,6 +762,7 @@ public class Component {
                         default:
                             break;
                     }
+                    character.hitDelayedFinished();
                 }
             }, delay);
         }

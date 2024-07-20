@@ -41,9 +41,7 @@ import com.mygdx.game.util.Common;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
@@ -126,6 +124,71 @@ public abstract class Entity implements Comparable<Entity> {
         return hitBox.contains(point.x, point.y);
     }
 
+    /**
+     * Updates current health and deals with the damages received
+     * synchronizing the timing if needed (in case other client is the attacker)
+     * @param healthState    the current health of this entity in server
+     * @param damages   the list of damages received since last state
+     */
+    public void takeDamage(float healthState, ArrayList<GameRegister.Damage> damages) {
+        if(damages.size() == 0 && healthState <= 0f) die(); // make sure entity is treated as dead when it should
+
+        for(int i = 0; i < damages.size() ; i++) {
+            if(damages.get(i).attackerType != GameRegister.EntityType.CHARACTER ||
+                damages.get(i).attackerId != GameClient.getInstance().getClientCharacter().id) { // attacker was not client, delay
+                float delay = 0;
+                int finalI = i;
+
+//                switch(damages.get(i).attackerType) {
+//                    case CHARACTER:
+//                        delay = 1f/GameClient.getInstance().getCharacter(damages.get(i).attackerId).attackSpeed;
+//                        break;
+//                    default:
+//                        break;
+//                }
+                //float timeLeft = (GameClient.getInstance().getCharacter(damages.get(i).attackerId).hitTarget.getExecuteTimeMillis() - System.nanoTime()/1000000) / 1000f;
+
+                //delay = GameClient.getInstance().getAvgLatency()/1000f; // compensate for current latency
+//                delay -= damages.get(i).attackerDelay/1000f;
+//                if(delay <= 0) delay = 0;
+
+                delay = GameClient.getInstance().getCharacter(damages.get(i).attackerId).avgLatency/1000f;
+
+                Timer.schedule(new Timer.Task() {
+                    @Override
+                    public void run() {
+                        updateHealth(health-damages.get(finalI).value);
+                        renderDamagePoint(damages.get(finalI));
+                        if(finalI == damages.size()-1) { // be sure we are in sync if we at last damage from list
+                            if(healthState != health)
+                                updateHealth(healthState);
+                        }
+                    }
+                }, delay);
+
+            }
+            else { // no delay needed since it was a damage from client
+                this.updateHealth(this.health-damages.get(i).value);
+                this.renderDamagePoint(damages.get(i));
+                if(i == damages.size()-1) { // be sure we are in sync if we at last damage from list
+                    if(healthState != health)
+                        updateHealth(healthState);
+                }
+            }
+        }
+
+    }
+
+    public void renderDamagePoint(GameRegister.Damage damage) {
+        Color c = (new Color(1,0.35f,0.35f,1));
+        if(this.type == GameRegister.EntityType.TREE)
+            c = Color.LIGHT_GRAY;
+
+        FloatingText dmgTxt = GameScreen.getFloatingTextPool().obtain();
+        dmgTxt.init(this, String.valueOf(damage.value), 0, spriteH/2f,  1.2f,
+                c, 1.5f, 0.75f, true);
+        GameScreen.addFloatingText(dmgTxt);
+    }
 
     public void renderDamagePoints(ArrayList<GameRegister.Damage> damages) {
         Color c = (new Color(1,0.35f,0.35f,1));
@@ -208,7 +271,13 @@ public abstract class Entity implements Comparable<Entity> {
         if(GameClient.getInstance().getClientCharacter().target != null && // if this entity is target, remove it from target and hover vars
                 GameClient.getInstance().getClientCharacter().target.uId == uId) {
             WorldMap.hoverEntity = null;
-            GameClient.getInstance().getClientCharacter().target = null;
+            // first send msg to stop targetting in server
+            GameClient.getInstance().requestInteraction(GameRegister.Interaction.STOP_INTERACTION,
+                    GameClient.getInstance().getClientCharacter().target.contextId,
+                    GameClient.getInstance().getClientCharacter().target.type);
+            // then set client target to null
+            GameClient.getInstance().getClientCharacter().setTarget(null);
+
         }
     }
 
@@ -229,6 +298,11 @@ public abstract class Entity implements Comparable<Entity> {
      * For correct health updating of entities
      */
     public abstract void updateHealth(float health);
+
+    /**
+     * Dies - deals with entity death
+     */
+    public abstract void die();
 
     public enum Direction {
         NORTHWEST(-1, 1),
@@ -481,6 +555,7 @@ public abstract class Entity implements Comparable<Entity> {
         // Constant rows and columns of the sprite sheet
         private static final int FRAME_COLS = 6, FRAME_ROWS = 24;
         private static final float ANIM_BASE_INTERVAL = 0.25175f; // the base interval between anim frames
+        public float avgLatency = 0;
         private Polygon collider = new Polygon(); // this players collider
         public AtomicLong lastRequestId;
         public boolean assetsLoaded = false;
@@ -502,6 +577,7 @@ public abstract class Entity implements Comparable<Entity> {
         private float tIntElapsed;
         private boolean isWalking = false;
         private boolean isInteracting = false; // if character is interacting with an entity atm
+        private long attackStartTs = System.currentTimeMillis();
 
         @Override
         public int compareTo(Entity entity) {
@@ -574,7 +650,14 @@ public abstract class Entity implements Comparable<Entity> {
                     break;
             }
 
-            setTarget(eTarget);
+            //setTarget(eTarget);
+
+            if(target != null && eTarget != null && eTarget.uId == target.uId) return; // same target as before, do nothing
+            if(eTarget != null && !eTarget.isTargetAble) return; // if its not targetable return
+            if(isUnmovable()) return; // in case unmovable(logging in, teleportin...) cannot interact
+
+            this.target = eTarget; // set target to an entity or null representing client has no target atm
+            startInteraction();
         }
 
         //updates state of character
@@ -584,6 +667,9 @@ public abstract class Entity implements Comparable<Entity> {
                     this.setTarget(null); // stops attacking
 
                 this.state = state;
+
+                if(state == GameRegister.EntityState.ATTACKING) // just started attacking, save timestamp
+                    this.attackStartTs = System.currentTimeMillis();
             }
         }
 
@@ -1101,14 +1187,20 @@ public abstract class Entity implements Comparable<Entity> {
         public void updateHealth(float health) {
             this.health = health;
             if(this.health<=0) {
-                this.isInteractive = false;
-                this.isTargetAble = false;
-                if(GameClient.getInstance().getClientCharacter() != null &&
-                        GameClient.getInstance().getClientCharacter().getTarget() != null &&
-                        GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
-                    GameClient.getInstance().getClientCharacter().stopInteractionTimer();
-                    GameClient.getInstance().getClientCharacter().setTarget(null);
-                }
+                die();
+            }
+        }
+
+        @Override
+        public void die() {
+            this.isAlive = false;
+            this.isInteractive = false;
+            this.isTargetAble = false;
+            if(GameClient.getInstance().getClientCharacter() != null &&
+                    GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                    GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                GameClient.getInstance().getClientCharacter().stopInteractionTimer();
+                GameClient.getInstance().getClientCharacter().setTarget(null);
             }
         }
 
@@ -1121,8 +1213,9 @@ public abstract class Entity implements Comparable<Entity> {
             animTime += Gdx.graphics.getDeltaTime(); // accumulates anim timer
             Map<Direction, Animation<TextureRegion>> currentAnimation = idle;
 
-            // predicts direction if a target is selected
-            if(target != null) {
+            // predicts direction if a target is selected and its client
+            if(target != null && GameClient.getInstance().getClientCharacter() != null &&
+                    GameClient.getInstance().getClientCharacter().id == this.id) {
                 // predict direction
                 Vector2 dir = target.centerPos.sub(this.centerPos).nor();
                 direction = Direction.getDirection(Math.round(dir.x), Math.round(dir.y));
@@ -1405,6 +1498,11 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         @Override
+        public void die() {
+
+        }
+
+        @Override
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
@@ -1591,15 +1689,21 @@ public abstract class Entity implements Comparable<Entity> {
         public void updateHealth(float health) {
             this.health = health;
             if(this.health<=0) {
-                this.tile = WorldMap.getInstance().getMap().getTileSets().getTile(this.tileId-1);
-                this.isInteractive = false;
-                this.isTargetAble = false;
-                if(GameClient.getInstance().getClientCharacter() != null &&
-                        GameClient.getInstance().getClientCharacter().getTarget() != null &&
-                        GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
-                    GameClient.getInstance().getClientCharacter().stopInteractionTimer();
-                    GameClient.getInstance().getClientCharacter().setTarget(null);
-                }
+                die();
+            }
+        }
+
+        @Override
+        public void die() {
+            this.tile = WorldMap.getInstance().getMap().getTileSets().getTile(this.tileId-1);
+            this.isAlive = false;
+            this.isInteractive = false;
+            this.isTargetAble = false;
+            if(GameClient.getInstance().getClientCharacter() != null &&
+                    GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                    GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                GameClient.getInstance().getClientCharacter().stopInteractionTimer();
+                GameClient.getInstance().getClientCharacter().setTarget(null);
             }
         }
     }
@@ -1797,14 +1901,20 @@ public abstract class Entity implements Comparable<Entity> {
         public void updateHealth(float health) {
             this.health = health;
             if(this.health<=0) {
-                this.isInteractive = false;
-                this.isTargetAble = false;
-                if(GameClient.getInstance().getClientCharacter() != null &&
-                        GameClient.getInstance().getClientCharacter().getTarget() != null &&
-                        GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
-                    GameClient.getInstance().getClientCharacter().stopInteractionTimer();
-                    GameClient.getInstance().getClientCharacter().setTarget(null);
-                }
+                die();
+            }
+        }
+
+        @Override
+        public void die() {
+            this.isAlive = false;
+            this.isInteractive = false;
+            this.isTargetAble = false;
+            if(GameClient.getInstance().getClientCharacter() != null &&
+                    GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                    GameClient.getInstance().getClientCharacter().getTarget().uId == this.uId) {
+                GameClient.getInstance().getClientCharacter().stopInteractionTimer();
+                GameClient.getInstance().getClientCharacter().setTarget(null);
             }
         }
 
