@@ -130,9 +130,10 @@ public abstract class Entity implements Comparable<Entity> {
      * @param healthState    the current health of this entity in server
      * @param damages   the list of damages received since last state
      */
-    public void takeDamage(float healthState, ArrayList<GameRegister.Damage> damages) {
+    public void updateDamage(float healthState, ArrayList<GameRegister.Damage> damages) {
         if(damages.size() == 0 && healthState <= 0f) die(); // make sure entity is treated as dead when it should
 
+        /** update damages received **/
         for(int i = 0; i < damages.size() ; i++) {
             if(damages.get(i).attackerType != GameRegister.EntityType.CHARACTER ||
                 damages.get(i).attackerId != GameClient.getInstance().getClientCharacter().id) { // attacker was not client, delay
@@ -177,6 +178,9 @@ public abstract class Entity implements Comparable<Entity> {
             }
         }
 
+        // make sure its is reset in case it respawns without recreating entity (for instance with trees and other resources
+        if(!isAlive && healthState > 0f)
+            respawn();
     }
 
     public void renderDamagePoint(GameRegister.Damage damage) {
@@ -277,7 +281,6 @@ public abstract class Entity implements Comparable<Entity> {
                     GameClient.getInstance().getClientCharacter().target.type);
             // then set client target to null
             GameClient.getInstance().getClientCharacter().setTarget(null);
-
         }
     }
 
@@ -303,6 +306,11 @@ public abstract class Entity implements Comparable<Entity> {
      * Dies - deals with entity death
      */
     public abstract void die();
+
+    /**
+     * Respawns - deals with entity respawn
+     */
+    public abstract void respawn();
 
     public enum Direction {
         NORTHWEST(-1, 1),
@@ -1205,6 +1213,14 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         @Override
+        public void respawn() {
+            this.isAlive = true;
+            this.isInteractive = true;
+            this.isTargetAble = true;
+            updateHealth(maxHealth);
+        }
+
+        @Override
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
@@ -1503,6 +1519,11 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         @Override
+        public void respawn() {
+
+        }
+
+        @Override
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
@@ -1705,6 +1726,15 @@ public abstract class Entity implements Comparable<Entity> {
                 GameClient.getInstance().getClientCharacter().stopInteractionTimer();
                 GameClient.getInstance().getClientCharacter().setTarget(null);
             }
+        }
+
+        @Override
+        public void respawn() {
+            this.tile = WorldMap.getInstance().getMap().getTileSets().getTile(this.tileId);
+            this.isAlive = true;
+            this.isInteractive = true;
+            this.isTargetAble = true;
+            updateHealth(maxHealth);
         }
     }
 
@@ -1916,6 +1946,14 @@ public abstract class Entity implements Comparable<Entity> {
                 GameClient.getInstance().getClientCharacter().stopInteractionTimer();
                 GameClient.getInstance().getClientCharacter().setTarget(null);
             }
+        }
+
+        @Override
+        public void respawn() {
+            this.isAlive = true;
+            this.isInteractive = true;
+            this.isTargetAble = true;
+            updateHealth(maxHealth);
         }
 
         @Override

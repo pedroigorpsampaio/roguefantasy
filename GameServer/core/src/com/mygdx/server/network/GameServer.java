@@ -349,7 +349,8 @@ public class GameServer implements CmdReceiver {
         character.dir = new Vector2(0, -1); // start looking south
         character.tag = new Component.Tag(character.tag.id, character.tag.name);
         character.attr = new Component.Attributes(character.attr.width, character.attr.height, character.attr.maxHealth, character.attr.health,
-                                                      character.attr.speed, character.attr.attackSpeed, character.attr.range);
+                                                      character.attr.speed, character.attr.attackSpeed, character.attr.range, character.attr.visionRange,
+                                                        character.attr.attack, character.attr.defense);
         character.position = new Component.Position(character.position.x, character.position.y);
         character.connection = c;
         character.updatePositionIn2dArray();
@@ -394,8 +395,8 @@ public class GameServer implements CmdReceiver {
         loggedIn.putIfAbsent(character.tag.id, c);
 
         // dispatch event for ai reactors
-        EntityController.getInstance().dispatchEventToAll
-                (new Component.Event(Component.Event.Type.PLAYER_ENTERED_AOI,  c.character));
+//        EntityController.getInstance().dispatchEventToAll
+//                (new Component.Event(Component.Event.Type.PLAYER_LOGGED_IN,  c.character));
 
         // sends to client his ID so he can distinguish itself from his list of characters
         GameRegister.ClientId clientId = new GameRegister.ClientId();
@@ -431,6 +432,8 @@ public class GameServer implements CmdReceiver {
             output.writeFloat(character.attr.width);
             output.writeFloat(character.attr.height);
             output.writeFloat(character.attr.attackSpeed);
+            output.writeFloat(character.attr.attack);
+            output.writeFloat(character.attr.defense);
             return true;
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -460,7 +463,6 @@ public class GameServer implements CmdReceiver {
                 else
                     charConn.sendUDP(charComp.lastState);
             }
-
         }
 
         EntityController.getInstance().clearDamageData(); // clears damage data after sending state to all for the next tick
@@ -485,6 +487,8 @@ public class GameServer implements CmdReceiver {
             character.attr.width = input.readFloat();
             character.attr.height = input.readFloat();
             character.attr.attackSpeed = input.readFloat();
+            character.attr.attack = input.readFloat();
+            character.attr.defense = input.readFloat();
             input.close();
             return character;
         } catch (IOException ex) {
@@ -589,7 +593,7 @@ public class GameServer implements CmdReceiver {
 //                targetCharacter.attr.health-=5f;
 //                break;
 //            case TREE:
-//                GameRegister.Tree tree = (GameRegister.Tree) target.entity;
+//                Component.Tree tree = (Component.Tree) target.entity;
 //                tree.health-=5f;
 //                break;
 //            case CREATURE:
@@ -683,8 +687,14 @@ public class GameServer implements CmdReceiver {
             case "attack_speed":
                 c.attr.attackSpeed = value;
                 break;
+            case "attack":
+                c.attr.attack = value;
+                break;
+            case "defense":
+                c.attr.defense = value;
+                break;
             default:
-                Log.info("cmd", "Attribute "+attrName+" is not valid to change (only speed, attack_speed and range can be changed)");
+                Log.info("cmd", "Attribute "+attrName+" is not valid to change (only speed, attack, defense, attack_speed and range can be changed)");
                 return;
         }
 
@@ -747,7 +757,7 @@ public class GameServer implements CmdReceiver {
             character.position = new Component.Position(26, 4);
             character.attr = new Component.Attributes(32f*RogueFantasyServer.world.getUnitScale(), 48f*RogueFantasyServer.world.getUnitScale(),
                                 100f, 100f, 250f*RogueFantasyServer.world.getUnitScale(),1f,
-                                10f*RogueFantasyServer.world.getUnitScale());
+                                0.5f, 10f, 10f, 0f);
             Log.debug("login-server", character.tag.name+" is NOT registered, new token generated! "+character.token);
             registeredTokens.add(character); // adds character to registered list with new token
             sendTokenAsync(conn, character.token);

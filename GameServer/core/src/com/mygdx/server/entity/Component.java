@@ -25,6 +25,7 @@ import com.mygdx.server.util.Common;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 import dev.dominion.ecs.api.Entity;
@@ -65,6 +66,43 @@ public class Component {
             return new Vector2(dir.dirX, dir.dirY);
         }
     }
+
+    public static class Tree {
+        public String name;
+        public int treeId, tileId;
+        public ArrayList<GameRegister.Damage> damages = new ArrayList<>();
+        public int tileX, tileY;
+        public float[] hitBox;
+        public Component.Attributes attr;
+        public Component.Spawn spawn;
+
+        /**
+         * Called when character is hit
+         * @param attackerId the id of the attacker
+         * @param attackerType the type of the attacker
+         * @param attacker  the attributes of the attacker
+         * @return if entity is alive after hit
+         */
+        public boolean hit(int attackerId, GameRegister.EntityType attackerType, Attributes attacker) {
+            if(attr.health > 0) {
+                GameRegister.Damage dmg = new GameRegister.Damage();
+                dmg.attackerId = attackerId;
+                dmg.attackerType = attackerType;
+                dmg.type = GameRegister.DamageType.NORMAL;
+                dmg.value = (int) attacker.attack;
+                attr.health -= dmg.value;
+                this.damages.add(dmg);
+                EntityController.getInstance().damagedEntities.trees.put(spawn.id, this);
+            }
+
+            if(attr.health <= 0) {
+                spawn.respawn(this);
+                return false;
+            }
+            return true;
+        }
+    }
+
     public static class Character {
         public String token;
         public int role_level;
@@ -393,6 +431,8 @@ public class Component {
                                             Entity entity = iterator.next();
                                             if (entity.get(Component.Position.class) == null)
                                                     continue;
+                                            // let entity know that this player is in AoI of it
+                                            entity.get(AI.class).react(new Event(Event.Type.PLAYER_IN_AOI, this));
                                             state.creatureUpdates.add(EntityController.getInstance().getCreatureData(entity));
                                             aoIEntities.creatures.put(entity.get(Component.Spawn.class).id, entity);
                                         }
@@ -428,17 +468,17 @@ public class Component {
                                     for(GameRegister.Damage dmg : EntityController.getInstance().entityWorldState[col][row].tree.damages) {
                                         tree.damages.add(dmg);
                                     }
-                                    tree.health = EntityController.getInstance().entityWorldState[col][row].tree.health;
+                                    tree.health = EntityController.getInstance().entityWorldState[col][row].tree.attr.health;
                                     tree.hitBox = EntityController.getInstance().entityWorldState[col][row].tree.hitBox;
                                     tree.tileX = EntityController.getInstance().entityWorldState[col][row].tree.tileX;
                                     tree.tileY = EntityController.getInstance().entityWorldState[col][row].tree.tileY;
                                     tree.tileId = EntityController.getInstance().entityWorldState[col][row].tree.tileId;
-                                    tree.maxHealth = EntityController.getInstance().entityWorldState[col][row].tree.maxHealth;
+                                    tree.maxHealth = EntityController.getInstance().entityWorldState[col][row].tree.attr.maxHealth;
                                     tree.name = EntityController.getInstance().entityWorldState[col][row].tree.name;
-                                    tree.spawnId = EntityController.getInstance().entityWorldState[col][row].tree.spawnId;
+                                    tree.spawnId = EntityController.getInstance().entityWorldState[col][row].tree.spawn.id;
 
                                     state.trees.add(tree);
-                                    aoIEntities.trees.put(EntityController.getInstance().entityWorldState[col][row].tree.spawnId,
+                                    aoIEntities.trees.put(EntityController.getInstance().entityWorldState[col][row].tree.spawn.id,
                                                             EntityController.getInstance().entityWorldState[col][row].tree);
                                 }
                             }
@@ -609,21 +649,25 @@ public class Component {
 
         /**
          * Called when character is hit
-         * @param attackerId the id of the attacker
+         *
+         * @param attackerId   the id of the attacker
          * @param attackerType the type of the attacker
-         * @param attacker  the attributes of the attacker
+         * @param attacker     the attributes of the attacker
+         * @return  if entity is alive after hit
          */
-        public void hit(int attackerId, GameRegister.EntityType attackerType, Attributes attacker) {
-            if(attr.health <= 0) return; // entity is dead
+        public boolean hit(int attackerId, GameRegister.EntityType attackerType, Attributes attacker) {
+            if(attr.health <= 0) return false;
 
             GameRegister.Damage dmg = new GameRegister.Damage();
             dmg.attackerId = attackerId;
             dmg.attackerType = attackerType;
             dmg.type = GameRegister.DamageType.NORMAL;
-            dmg.value = 5;
+            dmg.value = (int) attacker.attack;
             attr.health -= dmg.value;
             this.damages.add(dmg);
             EntityController.getInstance().damagedEntities.characters.put(tag.id, this);
+
+            return true;
         }
 
 //        public boolean compareStates(GameRegister.UpdateState state) {
@@ -683,25 +727,25 @@ public class Component {
                 switch (type) {
                     case CHARACTER:
                         Component.Character targetCharacter = (Component.Character) entity;
-                        targetCharacter.hit(attackerId, attackerType, attacker);
-                        if(targetCharacter.attr.health <= 0) isAlive = false;
+                        if(targetCharacter != null)
+                            isAlive = targetCharacter.hit(attackerId, attackerType, attacker);
                         break;
                     case TREE:
-                        GameRegister.Tree tree = (GameRegister.Tree) entity;
-                        if(tree.health <= 0) {isAlive = false; return;} // tree is dead
-                        GameRegister.Damage dmg = new GameRegister.Damage();
-                        dmg.attackerId = attackerId;
-                        dmg.attackerType = attackerType;
-                        dmg.type = GameRegister.DamageType.NORMAL;
-                        dmg.value = 5;
-                        tree.health -= dmg.value;
-                        tree.damages.add(dmg);
-                        EntityController.getInstance().damagedEntities.trees.put(tree.spawnId, tree);
+                        Component.Tree tree = (Component.Tree) entity;
+//                        GameRegister.Damage dmg = new GameRegister.Damage();
+//                        dmg.attackerId = attackerId;
+//                        dmg.attackerType = attackerType;
+//                        dmg.type = GameRegister.DamageType.NORMAL;
+//                        dmg.value = 5;
+                        if(tree != null)
+                            isAlive = tree.hit(attackerId, attackerType, attacker);
+//                        tree.damages.add(dmg);
+//                        EntityController.getInstance().damagedEntities.trees.put(tree.spawnId, tree);
                         break;
                     case CREATURE:
                         Entity targetCreature = (Entity) entity;
-                        targetCreature.get(Component.AI.class).hit(attackerId, attackerType, attacker);
-                        if(targetCreature.get(Attributes.class).health <= 0) isAlive = false;
+                        if(targetCreature != null && targetCreature.get(Component.AI.class) != null)
+                            isAlive = targetCreature.get(Component.AI.class).hit(attackerId, attackerType, attacker);
                         break;
                     default:
                         break;
@@ -739,25 +783,18 @@ public class Component {
                     switch (t) {
                         case CHARACTER:
                             Component.Character targetCharacter = (Component.Character) e;
-                            targetCharacter.hit(attackerId, attackerType, attacker);
-                            if(targetCharacter.attr.health <= 0) isAlive = false;
+                            if(targetCharacter != null)
+                                isAlive = targetCharacter.hit(attackerId, attackerType, attacker);
                             break;
                         case TREE:
-                            GameRegister.Tree tree = (GameRegister.Tree) e;
-                            if(tree.health <= 0) {isAlive = false; return;} ; // tree is dead
-                            GameRegister.Damage dmg = new GameRegister.Damage();
-                            dmg.attackerId = attackerId;
-                            dmg.attackerType = attackerType;
-                            dmg.type = GameRegister.DamageType.NORMAL;
-                            dmg.value = 5;
-                            tree.health -= dmg.value;
-                            tree.damages.add(dmg);
-                            EntityController.getInstance().damagedEntities.trees.put(tree.spawnId, tree);
+                            Component.Tree tree = (Component.Tree) e;
+                            if(tree != null)
+                                isAlive = tree.hit(attackerId, attackerType, attacker);
                             break;
                         case CREATURE:
                             Entity targetCreature = (Entity) e;
-                            targetCreature.get(Component.AI.class).hit(attackerId, attackerType, attacker);
-                            if(targetCreature.get(Attributes.class).health <= 0) isAlive = false;
+                            if(targetCreature != null && targetCreature.get(Component.AI.class) != null)
+                                isAlive = targetCreature.get(Component.AI.class).hit(attackerId, attackerType, attacker);
                             break;
                         default:
                             break;
@@ -778,11 +815,11 @@ public class Component {
             switch (type) {
                 case CHARACTER:
                     Component.Character targetCharacter = (Component.Character) entity;
-                    if(targetCharacter == null) return null;
+                    if(targetCharacter == null || targetCharacter.position == null) return null;
                     position = targetCharacter.position.getDrawPos(GameRegister.EntityType.CHARACTER);
                     break;
                 case TREE:
-                    GameRegister.Tree tree = (GameRegister.Tree) entity;
+                    Component.Tree tree = (Component.Tree) entity;
                     if(tree == null) return null;
                     float tileWidth = TEX_WIDTH * unitScale;
                     float tileHeight = TEX_HEIGHT * unitScale;
@@ -794,7 +831,7 @@ public class Component {
                     break;
                 case CREATURE:
                     Entity targetCreature = (Entity) entity;
-                    if(targetCreature == null) return null;
+                    if(targetCreature == null || targetCreature.get(Component.Position.class) == null) return null;
                     position = targetCreature.get(Component.Position.class).getDrawPos(GameRegister.EntityType.CHARACTER);
                     break;
                 default:
@@ -829,7 +866,7 @@ public class Component {
             if(tPos.x > TILES_WIDTH) tPos.x = TILES_WIDTH-1;
             if(tPos.y > TILES_HEIGHT) tPos.y = TILES_HEIGHT-1;
 
-            int id = entity.get(Tag.class).id;
+            int id = entity.get(Spawn.class).id;
 
             // if it has no last tile (null tilepos) just add to the 2d array
             if(lastTilePos == null) {
@@ -849,6 +886,24 @@ public class Component {
                 // update last position
                 lastTilePos.x = tPos.x; lastTilePos.y = tPos.y;
             }
+        }
+
+        /**
+         * Removes entity from the 2d array of entities
+         */
+        public void removeFrom2dArray(Entity entity) {
+//            Vector2 tPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(x, y));
+//
+//            // makes sure its within world state bounds
+//            if(tPos.x < 0) tPos.x = 0;
+//            if(tPos.y < 0) tPos.y = 0;
+//            if(tPos.x > TILES_WIDTH) tPos.x = TILES_WIDTH-1;
+//            if(tPos.y > TILES_HEIGHT) tPos.y = TILES_HEIGHT-1;
+//
+//            int id = entity.get(Tag.class).id;
+//
+//            EntityController.getInstance().entityWorldState[(int)tPos.x][(int)tPos.y].entities.remove(id);
+            EntityController.getInstance().entityWorldState[(int)lastTilePos.x][(int)lastTilePos.y].entities.remove(entity.get(Spawn.class).id);
         }
 
         /**
@@ -938,29 +993,106 @@ public class Component {
     }
 
     public static class Attributes {
-        public float width, height, speed, attackSpeed, range;
+        public float width, height, speed, attackSpeed, range, attack, defense, visionRange;
         public float health, maxHealth;
-        public Attributes(float width, float height, float maxHealth, float health, float speed, float attackSpeed, float range) {
-            this.width = width; this.height = height; this.attackSpeed = attackSpeed;
+
+        public Attributes() {
+        }
+
+        public Attributes(float width, float height, float maxHealth, float health, float speed, float attackSpeed,
+                          float range, float visionRange, float attack, float defense) {
+            this.width = width; this.height = height; this.attackSpeed = attackSpeed; this.visionRange = visionRange;
             this.speed = speed; this.range = range; this.health = health; this.maxHealth = maxHealth;
+            this.attack = attack; this.defense = defense;
         }
     }
 
     public static class Spawn {
         public int id; // spawn id
-        public Position position; // spawn position
+        public final Position position; // spawn position
         public float respawnTime; // time between respawns in seconds
+        public float respawnRange; // range of possible respawn position offset
 
-        public Spawn(long id, Position position, float respawnTime) {
+        public Spawn() {
+            position = new Position(0,0);
+        }
+
+        public Spawn(int id, Position position, float respawnTime, float respawnRange) {
+            this.id = id; this.respawnRange = respawnRange;
             this.position = position; this.respawnTime = respawnTime;
         }
+
+        /**
+         * Respawns entities respecting its respawn time and peculiarities
+         * @param entity    the entity to be respawn
+         */
+        public void respawn(Object entity) {
+            if(entity instanceof Tree) { // for trees we just need to set health back to max health
+                Timer.schedule(new Timer.Task() {
+                    @Override
+                    public void run() {
+                        Component.Tree tree = (Component.Tree) entity;
+                        tree.attr.health = tree.attr.maxHealth;
+                    }
+                }, respawnTime);
+            }
+            else if(entity instanceof Entity) { // for now creatures are the only entities
+                final Entity e = (Entity) entity;
+                final int cId = e.get(Tag.class).id;
+                //EntityController.getInstance().damagedEntities.creatures.remove();
+                e.get(Position.class).removeFrom2dArray(e); // removes from world 2d array
+                EntityController.getInstance().removeEntity(e); // makes sure to remove it from world dominion before respawning a new one
+
+                Timer.schedule(new Timer.Task() {
+                    @Override
+                    public void run() {
+                        Entity prefab = EntityController.loadCreaturePrefab(cId);
+
+                        Entity newSpawn = EntityController.getInstance().getDominion().createEntity(
+                                "Herr Wolfgang IV",
+                                new Component.Tag(prefab.get(Component.Tag.class).id, prefab.get(Component.Tag.class).name),
+                                new Component.Position(position.x, position.y),
+                                new Component.Velocity(0, 0),
+                                new Component.Attributes(prefab.get(Component.Attributes.class).width,
+                                        prefab.get(Component.Attributes.class).height,
+                                        prefab.get(Attributes.class).maxHealth, prefab.get(Attributes.class).health,
+                                        prefab.get(Component.Attributes.class).speed,
+                                        prefab.get(Attributes.class).attackSpeed,
+                                        prefab.get(Attributes.class).range,
+                                        prefab.get(Attributes.class).visionRange,
+                                        prefab.get(Attributes.class).attack, prefab.get(Attributes.class).defense),
+                                new Component.Spawn(id, new Component.Position(position.x, position.y),
+                                        prefab.get(Spawn.class).respawnTime, prefab.get(Spawn.class).respawnRange)
+                        ).setState(Component.AI.State.IDLE);
+                        newSpawn.add(new Component.AI(newSpawn));
+
+                        //Entity creature = EntityController.spawnCreature(cId);
+//                        Entity creature = EntityController.spawnCreature(cId); // spawns creature
+//
+//                        creature.get(Position.class).x = position.x;
+//                        creature.get(Position.class).y = position.y;
+//                        System.out.println(id);
+//                        creature.get(Spawn.class).id = id;
+//                        creature.get(Spawn.class).position.x = position.x;
+//                        creature.get(Spawn.class).position.y = position.y;
+
+//                        creature.add(new Component.AI(creature));  // adds ai brain
+//                        creature.add(new Component.Spawn(id, new Component.Position(position.x, position.y),
+//                                5,
+//                                5));
+//                        creature.setEnabled(true);
+                    }
+                }, respawnTime);
+            }
+        }
+
     }
 
     public static class Event {
 
         public enum Type { // types of events
-            PLAYER_ENTERED_AOI,
-            TARGET_IN_RANGE, TARGET_OUT_OF_RANGE, PLAYER_LEFT_AOI
+            PLAYER_IN_AOI,
+            TARGET_IN_RANGE, TARGET_OUT_OF_RANGE, PLAYER_LEFT_VISION_RANGE, PLAYER_DIED, PLAYER_LEFT_AOI
         }
         private Type type; // the type of this event
         public Character trigger; // the character responsible for triggering the event
@@ -974,7 +1106,7 @@ public class Component {
     public static class AoIEntities {
         public Map<Integer, Entity> creatures; // map of entities in AoI of client (creatures for now)
         public Map<Integer, Component.Character> characters; // map of character in AoI of client
-        public Map<Integer, GameRegister.Tree> trees; // map of trees in AoI of client
+        public Map<Integer, Component.Tree> trees; // map of trees in AoI of client
         public Map<Integer, GameRegister.Wall> obfuscatorWalls; // map of obfuscator walls in AoI of client
 
         public AoIEntities() {
@@ -1096,10 +1228,28 @@ public class Component {
 
         }
 
+
+
         // responsible for reacting to events
         public void react(Event event) {
             switch(event.type) {
-                case PLAYER_ENTERED_AOI:
+                case PLAYER_IN_AOI:
+                    if(target.entity == null) {// does not have a target
+                        if (isInVisionRange(event.trigger)) {
+                            this.state = State.FOLLOWING;
+                            target.id = event.trigger.tag.id;
+                            target.type = GameRegister.EntityType.CHARACTER;
+                            target.entity = event.trigger;
+                            target.isAlive = (event.trigger.attr.health > 0f);
+                        }
+                    } else {
+                        // lost vision range of target
+                        if (target.id == event.trigger.tag.id && !isInVisionRange(event.trigger)) {
+                            this.state = State.IDLE;
+                            target.entity = null;
+                        }
+                    }
+                    break;
                 case TARGET_OUT_OF_RANGE:
                     this.state = State.FOLLOWING;
                     target.id = event.trigger.tag.id;
@@ -1108,14 +1258,12 @@ public class Component {
                     target.isAlive = (event.trigger.attr.health > 0f);
                     break;
                 case PLAYER_LEFT_AOI:
+                case PLAYER_LEFT_VISION_RANGE:
+                case PLAYER_DIED:
                     if (target.entity != null && target.id == event.trigger.tag.id) {
                         // TODO: SEARCH FOR OTHER TARGET IN AOI RANGE
                         // if there is no target close, idle walk or do nothing?
-                        this.state = State.IDLE_WALKING;
-                        Component.Position position = body.get(Component.Position.class);
-                        Component.Spawn spawn = body.get(Component.Spawn.class);
-                        spawn.position.x = position.x;
-                        spawn.position.y = position.y;
+                        this.state = State.IDLE;
                         target.entity = null;
                     }
                     break;
@@ -1127,11 +1275,24 @@ public class Component {
             }
         }
 
+        private boolean isInVisionRange(Character character) {
+            float dist = character.position.getDrawPos(GameRegister.EntityType.CHARACTER).
+                    dst(body.get(Component.Position.class).getDrawPos(GameRegister.EntityType.CREATURE));
+
+            if(dist <= body.get(Attributes.class).visionRange)
+                return true;
+
+            return false;
+        }
+
         // responsible for controlling the AI in the loop
         public void act() {
             switch(state) {
                 case IDLE_WALKING:
                     idleWalk();
+                    break;
+                case IDLE:
+                    idle();
                     break;
                 case FOLLOWING:
                     follow();
@@ -1144,23 +1305,36 @@ public class Component {
             }
         }
 
+        private void idle() {
+            this.body.get(Velocity.class).x = 0;
+            this.body.get(Velocity.class).y = 0;
+        }
+
         /**
          * Called when creature is hit
          * @param attackerId the id of the attacker
          * @param attackerType the type of the attacker
          * @param attacker  the attributes of the attacker
+         * @return if entity is alive after hit
          */
-        public void hit(int attackerId, GameRegister.EntityType attackerType, Attributes attacker) {
-            if(body.get(Attributes.class).health <= 0) return; // entity is dead
+        public boolean hit(int attackerId, GameRegister.EntityType attackerType, Attributes attacker) {
+            if(body.get(Attributes.class).health > 0) { // entity is alive
+                GameRegister.Damage dmg = new GameRegister.Damage();
+                dmg.attackerId = attackerId;
+                dmg.attackerType = attackerType;
+                dmg.type = GameRegister.DamageType.NORMAL;
+                dmg.value = (int) attacker.attack;
+                body.get(Attributes.class).health -= dmg.value;
+                this.damages.add(dmg);
+                EntityController.getInstance().damagedEntities.creatures.put(body.get(Spawn.class).id, body);
+            }
 
-            GameRegister.Damage dmg = new GameRegister.Damage();
-            dmg.attackerId = attackerId;
-            dmg.attackerType = attackerType;
-            dmg.type = GameRegister.DamageType.NORMAL;
-            dmg.value = 5;
-            body.get(Attributes.class).health -= dmg.value;
-            this.damages.add(dmg);
-            EntityController.getInstance().damagedEntities.creatures.put(body.get(Spawn.class).id, body);
+            if(body.get(Attributes.class).health <= 0f) {
+                body.get(Spawn.class).respawn(body);
+                return false;
+            }
+
+            return true;
         }
 
         // attack if in range
@@ -1227,26 +1401,35 @@ public class Component {
 
         private void idleWalk() {
             Component.Position position = body.get(Component.Position.class);
-            Component.Velocity velocity = body.get(Component.Velocity.class);
             Component.Spawn spawn = body.get(Component.Spawn.class);
+            Component.Velocity velocity = body.get(Component.Velocity.class);
             Component.Attributes attributes = body.get(Component.Attributes.class);
             if(target.entity == null) { // move aimlessly if there is no target
-                if(position.x <= spawn.position.x && position.y <= spawn.position.y) {
-                    velocity.x = 1 * attributes.speed * GameRegister.clientTickrate();
-                    velocity.y = 0;
-                }
-                if (position.x >= spawn.position.x + 5 && position.y <= spawn.position.y) {
-                    velocity.x = 0;
-                    velocity.y = 1 * attributes.speed * GameRegister.clientTickrate();
-                }
-                if(position.x >= spawn.position.x + 5 && position.y >= spawn.position.y + 5) {
-                    velocity.x = -1 * attributes.speed * GameRegister.clientTickrate();
-                    velocity.y = 0;
-                }
-                if(position.x <= spawn.position.x && position.y >= spawn.position.y + 5){
-                    velocity.x = 0;
-                    velocity.y = -1 * attributes.speed * GameRegister.clientTickrate();
-                }
+//                if(position.x <= spawn.position.x && position.y <= spawn.position.y) {
+//                    velocity.x = 1 * attributes.speed * GameRegister.clientTickrate();
+//                    velocity.y = 0;
+//                }
+//                if (position.x >= spawn.position.x + 5 && position.y <= spawn.position.y) {
+//                    velocity.x = 0;
+//                    velocity.y = 1 * attributes.speed * GameRegister.clientTickrate();
+//                }
+//                if(position.x >= spawn.position.x + 5 && position.y >= spawn.position.y + 5) {
+//                    velocity.x = -1 * attributes.speed * GameRegister.clientTickrate();
+//                    velocity.y = 0;
+//                }
+//                if(position.x <= spawn.position.x && position.y >= spawn.position.y + 5){
+//                    velocity.x = 0;
+//                    velocity.y = -1 * attributes.speed * GameRegister.clientTickrate();
+//                }
+                Vector2 move = new Vector2(new Random().nextInt(-1, 2) * attributes.speed * GameRegister.clientTickrate(),
+                        new Random().nextInt(-1, 2) * attributes.speed * GameRegister.clientTickrate());
+                Vector2 futurePos = new Vector2(move.x, move.y).add(position.x, position.y);
+
+                if(futurePos.dst(new Vector2(position.x, position.y)) > spawn.respawnRange) // dont walk too far away from where it last saw player
+                    return;
+
+                velocity.x = move.x;
+                velocity.y = move.y;
             }
         }
     }

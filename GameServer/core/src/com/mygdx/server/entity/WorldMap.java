@@ -45,6 +45,7 @@ import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.TiledMapTileSets;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
+import com.badlogic.gdx.maps.tiled.objects.TiledMapTileMapObject;
 import com.badlogic.gdx.maps.tiled.renderers.IsometricTiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.tiles.AnimatedTiledMapTile;
 import com.badlogic.gdx.math.MathUtils;
@@ -86,6 +87,8 @@ public class WorldMap implements InputProcessor {
     public static float WORLD_WIDTH, WORLD_HEIGHT;
     public static int TILES_WIDTH, TILES_HEIGHT, TEX_WIDTH, TEX_HEIGHT;
     private TiledMap map;
+    private int nCreatures = 0;
+
     public TiledMap getMap() {return map;}
     private Vector3 screenPos = new Vector3();
     private SpriteBatch batch;
@@ -163,6 +166,7 @@ public class WorldMap implements InputProcessor {
      * @param layer   the object layer of the floor
      */
     private void loadObjects(MapLayer layer) {
+        nCreatures = 0;
         for (MapObject object : layer.getObjects()) {
             if (object instanceof RectangleMapObject) {
                 RectangleMapObject rectangleMapObject = (RectangleMapObject) object;
@@ -208,15 +212,65 @@ public class WorldMap implements InputProcessor {
                             portal.hitBox = rectangle;
                             EntityController.getInstance().entityWorldState[j][i].portal = portal;
                             break;
-                        case SPAWN:  // one spawn per tile max
-                            break;
                         default:
                             Log.info("map", "Unknown action can't be loaded");
                             break;
                     }
                 }
-            }
+            } else if(object instanceof TiledMapTileMapObject) {
+                TiledMapTileMapObject tiledMapTileMapObject = (TiledMapTileMapObject) object;
 
+                String actionStr = tiledMapTileMapObject.getProperties().get("action_type", String.class);
+                if(actionStr != null) {
+                    Action action = Action.getAction(actionStr);
+                    switch(action) {
+                        case SPAWN: // spawns creature
+                            // convert tiled coordinates to world coordinates
+                            Vector3 sPos = new Vector3(tiledMapTileMapObject.getX(), tiledMapTileMapObject.getY(), 0);
+                            sPos.mul(isoTransform); // tiled coordinates are iso projected- unproject it for game world coordinates
+                            Vector2 worldPos = new Vector2(
+                                    (sPos.x / (WorldMap.TEX_WIDTH * 0.5f)) - WorldMap.TEX_WIDTH*unitScale + layer.getOffsetX()*unitScale + 0.1f,
+                                    (sPos.y / (WorldMap.TEX_WIDTH * 0.5f)) + layer.getOffsetY()*unitScale - 0.15f);
+
+                            // spawns creature in world dominion
+                            Entity creaturePrefab = EntityController.getInstance().getDominion().createEntity(
+                                    tiledMapTileMapObject.getName(),
+                                    new Component.Tag(tiledMapTileMapObject.getProperties().get("creature_id", Integer.class),
+                                                        tiledMapTileMapObject.getName()),
+                                    new Component.Position(worldPos.x, worldPos.y),
+                                    new Component.Velocity(0, 0),
+                                    new Component.Attributes(
+                                            tiledMapTileMapObject.getProperties().get("creature_width", Integer.class)
+                                                    * RogueFantasyServer.world.getUnitScale(),
+                                            tiledMapTileMapObject.getProperties().get("creature_height", Integer.class)
+                                                    * RogueFantasyServer.world.getUnitScale(),
+                                            tiledMapTileMapObject.getProperties().get("creature_max_health", Integer.class),
+                                            tiledMapTileMapObject.getProperties().get("creature_max_health", Integer.class),
+                                            tiledMapTileMapObject.getProperties().get("creature_speed", Integer.class)
+                                                    * RogueFantasyServer.world.getUnitScale(),
+                                            tiledMapTileMapObject.getProperties().get("creature_attack_speed", Integer.class),
+                                            tiledMapTileMapObject.getProperties().get("creature_range", Float.class),
+                                            tiledMapTileMapObject.getProperties().get("creature_vision_range", Float.class),
+                                            tiledMapTileMapObject.getProperties().get("creature_attack", Integer.class),
+                                            tiledMapTileMapObject.getProperties().get("creature_defense", Integer.class)),
+                                    new Component.Spawn(nCreatures, new Component.Position(worldPos.x, worldPos.y),
+                                            tiledMapTileMapObject.getProperties().get("respawn_time", Integer.class),
+                                            tiledMapTileMapObject.getProperties().get("respawn_range", Integer.class))
+                            ).setState(Component.AI.State.IDLE);
+
+                            // save each unique creature prefab in prefab bank
+                            EntityController.saveCreaturePrefab(creaturePrefab);
+
+                            // adds ai brain
+                            creaturePrefab.add(new Component.AI(creaturePrefab));
+
+                            nCreatures++;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
         }
     }
 
@@ -262,14 +316,17 @@ public class WorldMap implements InputProcessor {
                         String type = cell.getTile().getProperties().get("type", String.class);
                         switch(type) {
                             case "tree":
-                                GameRegister.Tree tree = new GameRegister.Tree();
-                                tree.health = 100f; // initial health
-                                tree.maxHealth = 100f; // max health
+                                Component.Tree tree = new Component.Tree();
+                                tree.attr = new Component.Attributes();
+                                tree.attr.health = 100f; // initial health
+                                tree.attr.maxHealth = 100f; // max health
                                 tree.name = cell.getTile().getProperties().get("name", String.class);
                                 tree.tileId = cell.getTile().getId();
                                 tree.treeId = cell.getTile().getProperties().get("tree_id", Integer.class);
                                 tree.tileX = j; tree.tileY = i;
-                                tree.spawnId = treeSpawnId;
+                                tree.spawn = new Component.Spawn();
+                                tree.spawn.id = treeSpawnId;
+                                tree.spawn.respawnTime = cell.getTile().getProperties().get("respawn_time", Integer.class);
                                 for(MapObject object : cell.getTile().getObjects()) {
                                     if (object instanceof PolygonMapObject) {
                                         Polygon polygon = ((PolygonMapObject)object).getPolygon();

@@ -430,7 +430,7 @@ public class GameClient extends DispatchServer {
                 tree.name = treeUpdate.name;
 
                 /** updates related to damage **/
-                tree.takeDamage(treeUpdate.health, treeUpdate.damages);
+                tree.updateDamage(treeUpdate.health, treeUpdate.damages);
 //                tree.updateHealth();
 //                tree.renderDamagePoints();
             }
@@ -457,7 +457,7 @@ public class GameClient extends DispatchServer {
                 creature.maxHealth = creatureUpdate.maxHealth;
 
                 /** updates related to damage **/
-                creature.takeDamage(creatureUpdate.health, creatureUpdate.damages);
+                creature.updateDamage(creatureUpdate.health, creatureUpdate.damages);
 
 //                /** render creature damages received since last state **/
 //                creature.renderDamagePoints(creatureUpdate.damages);
@@ -508,7 +508,7 @@ public class GameClient extends DispatchServer {
                 character.updateSpeed(msg.character.speed);
 
                 /** updates related to damage **/
-                character.takeDamage(msg.character.health, msg.character.damages);
+                character.updateDamage(msg.character.health, msg.character.damages);
 
 //                /** render character damages received since last state **/
 //                character.renderDamagePoints(msg.character.damages);

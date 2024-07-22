@@ -155,6 +155,11 @@ public class Projectile extends Entity implements Pool.Poolable {
         EntityController.getInstance().entities.remove(uId); // remove from entities drawing list
     }
 
+    @Override
+    public void respawn() {
+
+    }
+
     /**
      * Renders this projectile
      * @param batch

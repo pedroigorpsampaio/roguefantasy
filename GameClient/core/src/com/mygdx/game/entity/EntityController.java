@@ -65,6 +65,8 @@ public class EntityController {
         // creates a sorted list version of entities and iterates it to draw in correct order
         synchronized (entities) {
             for (Map.Entry<Integer, Entity> entry : entriesSortedByValues(entities)) {
+                if(GameClient.getInstance().getClientCharacter() == null) return;
+
                 Entity e = entry.getValue();
 
                 if(GameClient.getInstance().getClientCharacter() == null) break;
@@ -96,7 +98,8 @@ public class EntityController {
                 }
 
                 // if entity is target of client player, render selected target circle
-                if(GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                if(GameClient.getInstance().getClientCharacter() != null &&
+                        GameClient.getInstance().getClientCharacter().getTarget() != null &&
                         GameClient.getInstance().getClientCharacter().getTarget().uId == e.uId)
                     e.renderTargetUI(batch);
 

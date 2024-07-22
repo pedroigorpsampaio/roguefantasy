@@ -27,7 +27,7 @@ class Tile {
     Map<Integer, Component.Character> characters; // map of characters of this tile
     GameRegister.Wall wall; //  if there is a wall on this tile (walls are treated as entities to render them in order client-side)
     WorldMap.Portal portal; // if there is a portal on this tile, will act accordingly
-    GameRegister.Tree tree; // if there is a tree on this tile
+    Component.Tree tree; // if there is a tree on this tile
 
     public Tile() {entities = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>(); wall = null; portal = null; tree = null;}
 }
@@ -38,7 +38,7 @@ class Tile {
 class DamagedEntities {
     public Map<Integer, Entity> creatures; // map of recent damaged entities in world (creatures for now)
     public Map<Integer, Component.Character> characters; // map of recent damaged characters in world
-    public Map<Integer, GameRegister.Tree> trees; // map of recent damaged trees in world
+    public Map<Integer, Component.Tree> trees; // map of recent damaged trees in world
     public DamagedEntities() {creatures = new ConcurrentHashMap<>(); characters = new ConcurrentHashMap<>(); trees = new ConcurrentHashMap<>();}
 }
 
@@ -48,6 +48,7 @@ public class EntityController {
     private static EntityController instance = null;
     public Tile[][] entityWorldState;
     public DamagedEntities damagedEntities = new DamagedEntities();
+    private Map<Integer, Entity> creaturePrefabs; // prefabs of creatures
 
     public static EntityController getInstance() {
         if(instance == null)
@@ -55,9 +56,61 @@ public class EntityController {
         return instance;
     }
 
+    /**
+     * Saves creature prefab by its creature id (tag id)
+     * OBS: One prefab per id
+     * @param prefab    the creature prefab to be saved
+     */
+    public static void saveCreaturePrefab(Entity prefab) {
+        if(prefab != null && prefab.get(Component.Tag.class) != null) {
+            int cId = prefab.get(Component.Tag.class).id;
+
+            if(getInstance().creaturePrefabs.containsKey(cId)) return; // prefab already loaded
+
+            //Entity e = getInstance().dominion.createEntityAs(prefab); // create prefab that will persist throughout execution
+            Entity e = EntityController.getInstance().getDominion().createEntity(
+                    new Component.Tag(prefab.get(Component.Tag.class).id, prefab.get(Component.Tag.class).name),
+                    new Component.Position(prefab.get(Component.Position.class).x, prefab.get(Component.Position.class).y),
+                    new Component.Velocity(0, 0),
+                    new Component.Attributes(prefab.get(Component.Attributes.class).width,
+                            prefab.get(Component.Attributes.class).height,
+                            prefab.get(Component.Attributes.class).maxHealth, prefab.get(Component.Attributes.class).maxHealth,
+                            prefab.get(Component.Attributes.class).speed,
+                            prefab.get(Component.Attributes.class).attackSpeed,
+                            prefab.get(Component.Attributes.class).range,
+                            prefab.get(Component.Attributes.class).visionRange,
+                            prefab.get(Component.Attributes.class).attack, prefab.get(Component.Attributes.class).defense),
+                    new Component.Spawn(0, new Component.Position(prefab.get(Component.Position.class).x, prefab.get(Component.Position.class).y),
+                            prefab.get(Component.Spawn.class).respawnTime, prefab.get(Component.Spawn.class).respawnRange)
+            ).setState(Component.AI.State.IDLE);
+            e.setEnabled(false); // prefabs are not enabled as they are only for creation of other entities
+
+            getInstance().creaturePrefabs.putIfAbsent(cId, e);
+        }
+    }
+
+    /**
+     * Spawns a creature by its creature id (tag id) using a prefab
+     * @param creatureId    the creature id to spawn
+     * @return  the spawned entity associated with the creature id
+     */
+    public static Entity spawnCreature(int creatureId) {
+        return getInstance().dominion.createEntityAs(getInstance().creaturePrefabs.get(creatureId));
+    }
+
+    /**
+     * Loads creature prefab by its creature id (tag id)
+     * @return the creature prefab associated with received creature id
+     */
+    public static Entity loadCreaturePrefab(int id) {
+        return getInstance().creaturePrefabs.get(id);
+    }
+
     private EntityController() {
         // create ecs world
         dominion  = Dominion.create();
+        // initialize creature prefab map
+        creaturePrefabs = new ConcurrentHashMap<>();
         // initializes entities state array
         entityWorldState = new Tile[RogueFantasyServer.world.TILES_HEIGHT][RogueFantasyServer.world.TILES_WIDTH];
         for (int i = 0; i < RogueFantasyServer.world.TILES_HEIGHT; i++) {
@@ -67,18 +120,18 @@ public class EntityController {
         }
 
         // spawn one wolf for testing
-        Entity wolfPrefab = dominion.createEntity(
-                "Herr Wolfgang IV",
-                new Component.Tag(0, "Herr Wolfgang IV"),
-                new Component.Position(26, 4),
-                new Component.Velocity(0, 0),
-                new Component.Attributes(64f*RogueFantasyServer.world.getUnitScale(), 64f*RogueFantasyServer.world.getUnitScale(),
-                        100f, 100f,
-                        100f*RogueFantasyServer.world.getUnitScale(), 1f,
-                        14f*RogueFantasyServer.world.getUnitScale()),
-                new Component.Spawn(0, new Component.Position(0, 0), 15)
-        ).setState(Component.AI.State.IDLE);
-        wolfPrefab.add(new Component.AI(wolfPrefab));
+//        Entity wolfPrefab = dominion.createEntity(
+//                "Herr Wolfgang IV",
+//                new Component.Tag(0, "Herr Wolfgang IV"),
+//                new Component.Position(26, 4),
+//                new Component.Velocity(0, 0),
+//                new Component.Attributes(64f*RogueFantasyServer.world.getUnitScale(), 64f*RogueFantasyServer.world.getUnitScale(),
+//                        100f, 100f,
+//                        100f*RogueFantasyServer.world.getUnitScale(), 1f,
+//                        14f*RogueFantasyServer.world.getUnitScale(), 5f, 5f),
+//                new Component.Spawn(0, new Component.Position(0, 0), 5)
+//        ).setState(Component.AI.State.IDLE);
+//        wolfPrefab.add(new Component.AI(wolfPrefab));
 
         // create systems
         scheduler = createSystems();
@@ -98,9 +151,9 @@ public class EntityController {
 
     public void clearDamageData() {
         synchronized (damagedEntities.trees) {
-            Iterator<Map.Entry<Integer, GameRegister.Tree>> i = damagedEntities.trees.entrySet().iterator();
+            Iterator<Map.Entry<Integer, Component.Tree>> i = damagedEntities.trees.entrySet().iterator();
             while (i.hasNext()) {
-                Map.Entry<Integer, GameRegister.Tree> entry = i.next();
+                Map.Entry<Integer, Component.Tree> entry = i.next();
                 entry.getValue().damages.clear();
                 i.remove();
             }
@@ -117,7 +170,8 @@ public class EntityController {
             Iterator<Map.Entry<Integer, Entity>> i = damagedEntities.creatures.entrySet().iterator();
             while (i.hasNext()) {
                 Map.Entry<Integer, Entity> entry = i.next();
-                entry.getValue().get(Component.AI.class).damages.clear();
+                if( entry.getValue().get(Component.AI.class) != null)
+                    entry.getValue().get(Component.AI.class).damages.clear();
                 i.remove();
             }
         }
@@ -155,17 +209,19 @@ public class EntityController {
         // applies velocities to all entities with position and velocity components (not players)
         scheduler.schedule(() -> {
             //find entities
-            dominion.findEntitiesWith(Component.Position.class, Component.Velocity.class, Component.Tag.class)
+            dominion.findEntitiesWith(Component.Position.class, Component.Velocity.class, Component.Tag.class, Component.Spawn.class)
                     // stream the results
                     .stream().forEach(result -> {
                         Component.Position position = result.comp1();
                         Component.Velocity velocity = result.comp2();
                         Component.Tag tag = result.comp3();
+                        Component.Spawn spawn = result.comp4();
                         position.x += velocity.x;
                         position.y += velocity.y;
                         position.lastVelocityX = velocity.x;
                         position.lastVelocityY = velocity.y;
                         position.updatePositionIn2dArray(result.entity()); // updates position in 2d entities state array
+
 //                        System.out.printf("Entity %s moved with %s to %s\n",
 //                                tag.name, velocity, position);
                     });
@@ -280,4 +336,7 @@ public class EntityController {
         dominion.deleteEntity(entity);
     }
 
+    public Dominion getDominion() {
+        return dominion;
+    }
 }
