@@ -77,7 +77,7 @@ public class Component {
         public Component.Spawn spawn;
 
         /**
-         * Called when character is hit
+         * Called when tree is hit
          * @param attackerId the id of the attacker
          * @param attackerType the type of the attacker
          * @param attacker  the attributes of the attacker
@@ -183,6 +183,8 @@ public class Component {
             triggerWalkableActions();
             // stops any current interactions
             stopInteraction(false);
+            // send teleport event to Aoi ai
+            dispatchEventToAOI(new Component.Event(Component.Event.Type.PLAYER_TELEPORTED,  this));
         }
 
         /**
@@ -203,6 +205,7 @@ public class Component {
          */
         private void triggerWalkableActions() {
             if(position.lastTilePos == null) return; // player tile not set yet
+            if(isDead()) return; // if is dead do not trigger teleport
 
             // current tile
             Tile tileCenter = EntityController.getInstance().entityWorldState[(int) position.lastTilePos.x][(int) position.lastTilePos.y];
@@ -367,6 +370,23 @@ public class Component {
             EntityController.getInstance().entityWorldState[(int)tPos.x][(int)tPos.y].characters.remove(tag.id);
         }
 
+
+        /**
+         * Dispatch event to AoI entities with AI
+         * @param event the event to be dispatched
+         */
+        public void dispatchEventToAOI  (Component.Event event) {
+            // send to all AoI AI entities the event
+            synchronized (aoIEntities.trees) {
+                Iterator<Map.Entry<Integer, Entity>> i = aoIEntities.creatures.entrySet().iterator();
+                while (i.hasNext()) {
+                    Map.Entry<Integer, Entity> entry = i.next();
+                    entry.getValue().get(AI.class).react(event);
+                }
+            }
+
+        }
+
         /**
          * Method responsible for building the message containing the state of AoI of player
          * which includes visible tilemap and entities such as other players, creatures, npcs etc...
@@ -375,7 +395,9 @@ public class Component {
         public GameRegister.UpdateState buildStateAoI() {
             GameRegister.UpdateState state = new GameRegister.UpdateState(); // the state message
             // reset aoi entities helper data
-            aoIEntities = new AoIEntities();
+            synchronized (aoIEntities) {
+                aoIEntities.clear();
+            }
             // get this players position in isometric tile map
             Vector2 tPos = RogueFantasyServer.world.toIsoTileCoordinates(new Vector2(this.position.x, this.position.y));
             float pX = tPos.x;
@@ -511,7 +533,7 @@ public class Component {
          * Proceeds to attack current target in intervals based on attack speed and avg ping
          */
         public void attack() {
-            if(target == null || target.entity == null) return; // no target to attack
+            if(target == null || target.entity == null || !target.isTargetAble()) return; // no target to attack
 
             // update to attack state
             if(state != GameRegister.EntityState.ATTACKING && target.isAlive) {
@@ -656,18 +678,51 @@ public class Component {
          * @return  if entity is alive after hit
          */
         public boolean hit(int attackerId, GameRegister.EntityType attackerType, Attributes attacker) {
-            if(attr.health <= 0) return false;
+            if(attr.health > 0) {
+                GameRegister.Damage dmg = new GameRegister.Damage();
+                dmg.attackerId = attackerId;
+                dmg.attackerType = attackerType;
+                dmg.type = GameRegister.DamageType.NORMAL;
+                dmg.value = (int) attacker.attack;
+                attr.health -= dmg.value;
+                this.damages.add(dmg);
+                EntityController.getInstance().damagedEntities.characters.put(tag.id, this);
+            }
 
-            GameRegister.Damage dmg = new GameRegister.Damage();
-            dmg.attackerId = attackerId;
-            dmg.attackerType = attackerType;
-            dmg.type = GameRegister.DamageType.NORMAL;
-            dmg.value = (int) attacker.attack;
-            attr.health -= dmg.value;
-            this.damages.add(dmg);
-            EntityController.getInstance().damagedEntities.characters.put(tag.id, this);
+            if(attr.health <= 0) { // died
+                dispatchEventToAOI(new Component.Event(Event.Type.PLAYER_DIED,  this)); // tell AoI AIs that died
+                state = GameRegister.EntityState.DEAD;
+                return false;
+            }
 
             return true;
+        }
+
+        /**
+         * Respawns player with max life at respawn point
+         */
+        public void respawn() {
+            attr.health = attr.maxHealth;
+            position.set(26, 4);
+            dir.set(0, -1);
+            updatePositionIn2dArray();
+            state = GameRegister.EntityState.RESPAWNED;
+        }
+
+        /**
+         * Returns if this player is able to be a target at the moment
+         * @return true if its able to be target, false otherwise
+         */
+        public boolean isTargetAble() {
+            return attr.health > 0f && !isTeleporting;
+        }
+
+        /**
+         * Returns if this player is dead or alive
+         * @return true if its dead, false otherwise
+         */
+        public boolean isDead() {
+            return attr.health <= 0f;
         }
 
 //        public boolean compareStates(GameRegister.UpdateState state) {
@@ -839,6 +894,27 @@ public class Component {
             }
             return position;
         }
+
+        public boolean isTargetAble() {
+            if(type == null) return false;
+
+            switch (type) {
+                case CHARACTER:
+                    Component.Character targetCharacter = (Component.Character) entity;
+                    if(entity == null) return false;
+                    return targetCharacter.isTargetAble();
+                case TREE:
+                    Component.Tree tree = (Component.Tree) entity;
+                    if(tree == null) return false;
+                    return tree.attr.health>0f;
+                case CREATURE:
+                    Entity targetCreature = (Entity) entity;
+                    if(targetCreature == null || targetCreature.get(Component.Attributes.class) == null) return false;
+                    return targetCreature.get(Attributes.class).health > 0f;
+                default:
+                    return false;
+            }
+        }
     }
 
     public static class Position {
@@ -972,6 +1048,10 @@ public class Component {
 
             return finalDrawPos;
         }
+
+        public void set(int x, int y) {
+            this.x = x; this.y = y;
+        }
     }
 
     public static class Velocity {
@@ -1092,7 +1172,7 @@ public class Component {
 
         public enum Type { // types of events
             PLAYER_IN_AOI,
-            TARGET_IN_RANGE, TARGET_OUT_OF_RANGE, PLAYER_LEFT_VISION_RANGE, PLAYER_DIED, PLAYER_LEFT_AOI
+            TARGET_IN_RANGE, TARGET_OUT_OF_RANGE, PLAYER_LEFT_VISION_RANGE, PLAYER_DIED, PLAYER_TELEPORTED, PLAYER_LEFT_AOI
         }
         private Type type; // the type of this event
         public Character trigger; // the character responsible for triggering the event
@@ -1114,6 +1194,13 @@ public class Component {
             obfuscatorWalls = new ConcurrentHashMap<>();
             characters = new ConcurrentHashMap<>();
             trees = new ConcurrentHashMap<>();
+        }
+
+        public void clear() {
+            creatures.clear();
+            obfuscatorWalls.clear();
+            characters.clear();
+            trees.clear();
         }
 
         /**
@@ -1235,7 +1322,7 @@ public class Component {
             switch(event.type) {
                 case PLAYER_IN_AOI:
                     if(target.entity == null) {// does not have a target
-                        if (isInVisionRange(event.trigger)) {
+                        if (isInVisionRange(event.trigger) && event.trigger.isTargetAble()) { // only valid targets
                             this.state = State.FOLLOWING;
                             target.id = event.trigger.tag.id;
                             target.type = GameRegister.EntityType.CHARACTER;
@@ -1260,6 +1347,7 @@ public class Component {
                 case PLAYER_LEFT_AOI:
                 case PLAYER_LEFT_VISION_RANGE:
                 case PLAYER_DIED:
+                case PLAYER_TELEPORTED:
                     if (target.entity != null && target.id == event.trigger.tag.id) {
                         // TODO: SEARCH FOR OTHER TARGET IN AOI RANGE
                         // if there is no target close, idle walk or do nothing?
@@ -1337,10 +1425,12 @@ public class Component {
             return true;
         }
 
+//        long lastAttack = System.currentTimeMillis();
         // attack if in range
         private void attack() {
-            if(target.entity == null) return; // no target to attack
+            if(target.entity == null || !target.isAlive) return; // no alive target to attack
 
+            Component.Spawn spawn = body.get(Component.Spawn.class);
             Component.Position position = body.get(Component.Position.class);
             Component.Attributes attributes = body.get(Component.Attributes.class);
 
@@ -1350,6 +1440,14 @@ public class Component {
 
             Component.Position targetPos = character.position;
             Component.Attributes targetAttr = character.attr;
+
+//            long now = System.currentTimeMillis();
+//            System.out.println(attributes.attackSpeed);
+//            if(now - lastAttack >= 1000f/attributes.attackSpeed ) { // if its time to attack again, deal damage
+//                lastAttack = System.currentTimeMillis();
+//                System.out.println("ENTERED");
+           target.hit(spawn.id, GameRegister.EntityType.CREATURE, attributes); // if its time to attack again, will deal damage to target
+           // }
 
             Vector2 goalPos = new Vector2(targetPos.x + targetAttr.width/2f, targetPos.y + targetAttr.height/12f);
             Vector2 aiPos = new Vector2(position.x + attributes.width/2f, position.y + attributes.height/3f);

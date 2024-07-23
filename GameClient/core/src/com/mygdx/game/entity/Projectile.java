@@ -143,8 +143,11 @@ public class Projectile extends Entity implements Pool.Poolable {
             }
         }
 
-        // if target of projectile is dead die also
-        if(target.health <= 0f) die();
+        // if target of projectile is dead or teleporting, die
+        if(target.health <= 0f || target.isTeleporting ||
+                target.state == GameRegister.EntityState.TELEPORTING_IN ||
+                target.state == GameRegister.EntityState.TELEPORTING_OUT)
+            die();
 
     }
 

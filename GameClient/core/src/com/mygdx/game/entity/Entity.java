@@ -91,6 +91,7 @@ public abstract class Entity implements Comparable<Entity> {
     protected TextureRegion currentFrame = null;
     protected Vector2 center = new Vector2();
     private GameRegister.AttackType attackType = null; // current attack type if any
+    public boolean isRespawning = false;
 
     public Entity() {
         /**
@@ -131,29 +132,25 @@ public abstract class Entity implements Comparable<Entity> {
      * @param damages   the list of damages received since last state
      */
     public void updateDamage(float healthState, ArrayList<GameRegister.Damage> damages) {
-        if(damages.size() == 0 && healthState <= 0f) die(); // make sure entity is treated as dead when it should
+        if(this.uId != GameClient.getInstance().getClientUid()) {
+            if (damages.size() == 0 && healthState <= 0f && isAlive)
+                die(); // make sure entity is treated as dead when it should (if its not client)
+        }
 
         /** update damages received **/
         for(int i = 0; i < damages.size() ; i++) {
-            if(damages.get(i).attackerType != GameRegister.EntityType.CHARACTER ||
-                damages.get(i).attackerId != GameClient.getInstance().getClientCharacter().id) { // attacker was not client, delay
+            if(damages.get(i).attackerType == GameRegister.EntityType.CHARACTER &&
+                damages.get(i).attackerId != GameClient.getInstance().getClientCharacter().id) { // character attacker and was not client, delay
                 float delay = 0;
                 int finalI = i;
 
-//                switch(damages.get(i).attackerType) {
-//                    case CHARACTER:
-//                        delay = 1f/GameClient.getInstance().getCharacter(damages.get(i).attackerId).attackSpeed;
-//                        break;
-//                    default:
-//                        break;
-//                }
-                //float timeLeft = (GameClient.getInstance().getCharacter(damages.get(i).attackerId).hitTarget.getExecuteTimeMillis() - System.nanoTime()/1000000) / 1000f;
-
-                //delay = GameClient.getInstance().getAvgLatency()/1000f; // compensate for current latency
-//                delay -= damages.get(i).attackerDelay/1000f;
-//                if(delay <= 0) delay = 0;
+                if(GameClient.getInstance().getCharacter(damages.get(i).attackerId) == null) { // could not find attacker character in list
+                    System.out.println("could not find character in map of characters: " + damages.get(i).attackerId);
+                    continue;
+                }
 
                 delay = GameClient.getInstance().getCharacter(damages.get(i).attackerId).avgLatency/1000f;
+
 
                 Timer.schedule(new Timer.Task() {
                     @Override
@@ -168,7 +165,7 @@ public abstract class Entity implements Comparable<Entity> {
                 }, delay);
 
             }
-            else { // no delay needed since it was a damage from client
+            else { // no delay needed since it was a damage triggered from client or from a non-character entity
                 this.updateHealth(this.health-damages.get(i).value);
                 this.renderDamagePoint(damages.get(i));
                 if(i == damages.size()-1) { // be sure we are in sync if we at last damage from list
@@ -178,9 +175,15 @@ public abstract class Entity implements Comparable<Entity> {
             }
         }
 
-        // make sure its is reset in case it respawns without recreating entity (for instance with trees and other resources
-        if(!isAlive && healthState > 0f)
-            respawn();
+        // make sure its is reset in case it respawns without recreating entity
+        if(!isAlive && healthState > 0f) {
+            if(type != GameRegister.EntityType.CHARACTER) // if its not player respawn immediately
+                respawn();
+            else if(!isRespawning) { // respawn player after respawn animation is done
+                respawn();
+            }
+        }
+
     }
 
     public void renderDamagePoint(GameRegister.Damage damage) {
@@ -256,8 +259,12 @@ public abstract class Entity implements Comparable<Entity> {
             batch.setColor(c.r, c.g, c.b, alpha); //set alpha interpolated
             alpha -= fadeSpeed * Gdx.graphics.getDeltaTime();
             if (alpha <= 0f) {
-                this.fadeOut = false;
-                remove(); // after fade out, remove entity from world
+                // only remove if its not client, else let client handle end of fade out also
+                if(this.uId != GameClient.getInstance().getClientUid()) {
+                    remove();
+                    this.fadeOut = false;
+                }
+
                 alpha = 0f;
             }
         }
@@ -270,7 +277,9 @@ public abstract class Entity implements Comparable<Entity> {
      */
     public void remove() {
         // remove from lists
-        EntityController.getInstance().entities.remove(uId); // remove from list of entities to draw
+        synchronized (EntityController.getInstance().entities) {
+            EntityController.getInstance().entities.remove(uId); // remove from list of entities to draw
+        }
         GameClient.getInstance().removeEntity(uId); // remove from data list of entities
         if(GameClient.getInstance().getClientCharacter().target != null && // if this entity is target, remove it from target and hover vars
                 GameClient.getInstance().getClientCharacter().target.uId == uId) {
@@ -615,6 +624,8 @@ public abstract class Entity implements Comparable<Entity> {
             if(target != null && e != null && e.uId == target.uId) return; // same target as before, do nothing
             if(e != null && !e.isTargetAble) return; // if its not targetable return
             if(isUnmovable()) return; // in case unmovable(logging in, teleportin...) cannot interact
+            if(e != null && (e.isUnmovable() || e.state == GameRegister.EntityState.TELEPORTING_IN
+                    || e.state == GameRegister.EntityState.TELEPORTING_OUT)) return; // in case target cannot move, do not target it
 
             if(e != null) e.resetYoYoAnim(); // if a entity is selected, reset its yo yo target animation
 
@@ -669,12 +680,16 @@ public abstract class Entity implements Comparable<Entity> {
         }
 
         //updates state of character
-        public void updateState(GameRegister.EntityState state) {
-            if(this.state != state) {
+        public void updateState(GameRegister.UpdateCharacter msg) {
+            GameRegister.EntityState newState = msg.character.state;
+            if(this.state != newState) {
                 if(this.state == GameRegister.EntityState.ATTACKING) // new state and player was attacking
                     this.setTarget(null); // stops attacking
 
-                this.state = state;
+                this.state = newState;
+
+                if(state == GameRegister.EntityState.RESPAWNED) // just respawned server-side, update pos
+                    this.spawnPlayer(msg.character.x, msg.character.y);
 
                 if(state == GameRegister.EntityState.ATTACKING) // just started attacking, save timestamp
                     this.attackStartTs = System.currentTimeMillis();
@@ -827,7 +842,7 @@ public abstract class Entity implements Comparable<Entity> {
                 // reset the elapsed animation time
                 animTime = 0f;
 
-                centerPos = new Vector2(this.interPos.x + spriteW/2f, this.interPos.y + spriteH/2f);
+                centerPos = new Vector2(this.interPos.x + spriteW/2f, this.interPos.y + spriteH/2.5f);
                 nameLabel.setBounds(this.centerPos.x - nameLabel.getWidth()/2f,
                         this.centerPos.y + spriteH/2f,
                         nameLabel.getWidth(), nameLabel.getHeight());
@@ -880,7 +895,7 @@ public abstract class Entity implements Comparable<Entity> {
             if(!Common.entityInterpolation) {
                 Gdx.app.postRunnable(() -> {
                     centerPos.x = this.position.x + spriteW/2f;
-                    centerPos.y = this.position.y + spriteH/2f;
+                    centerPos.y = this.position.y + spriteH/2.5f;
                     nameLabel.setBounds(this.centerPos.x - nameLabel.getWidth()/2f,
                             this.centerPos.y + spriteH/2f,
                             nameLabel.getWidth(), nameLabel.getHeight());
@@ -888,7 +903,28 @@ public abstract class Entity implements Comparable<Entity> {
             }
         }
 
+        public void spawnPlayer(float x, float y) {
+            this.interPos.x = x;
+            this.interPos.y = y;
+            this.drawPos = new Vector2(x, y);
+            this.position.x = x;
+            this.position.y = y;
+            this.finalDrawPos.x = this.interPos.x + spriteW/12f;
+            this.finalDrawPos.y = this.interPos.y + spriteH/12f;
+            //this.collider.setPosition(x, y);
+            this.updateStage(x, y, true);
+            this.x = x;
+            this.y = y;
+            centerPos.x = this.interPos.x + spriteW / 2f;
+            centerPos.y = this.interPos.y + spriteH / 2.5f;
+            nameLabel.setBounds(this.centerPos.x - nameLabel.getWidth() / 2f,
+                    this.centerPos.y + spriteH / 2f,
+                    nameLabel.getWidth(), nameLabel.getHeight());
+        }
+
         public void teleport(float x, float y) {
+            if(!isAlive) return; // do not teleport if dead
+
             if(!teleportInAnim) { // server detected collision and sent it before client (can happen on low latencies)
                 this.isTeleporting = true;
                 this.teleportInAnim = true;
@@ -914,7 +950,7 @@ public abstract class Entity implements Comparable<Entity> {
                 this.x = x;
                 this.y = y;
                 centerPos.x = this.interPos.x + spriteW / 2f;
-                centerPos.y = this.interPos.y + spriteH / 2f;
+                centerPos.y = this.interPos.y + spriteH / 2.5f;
                 nameLabel.setBounds(this.centerPos.x - nameLabel.getWidth() / 2f,
                         this.centerPos.y + spriteH / 2f,
                         nameLabel.getWidth(), nameLabel.getHeight());
@@ -928,7 +964,7 @@ public abstract class Entity implements Comparable<Entity> {
             if(!Common.entityInterpolation) {
                 Gdx.app.postRunnable(() -> {
                     centerPos.x = this.position.x + spriteW/2f;
-                    centerPos.y = this.position.y + spriteH/2f;
+                    centerPos.y = this.position.y + spriteH/2.5f;
                     nameLabel.setBounds(this.centerPos.x - nameLabel.getWidth()/2f,
                             this.centerPos.y + spriteH/2f,
                             nameLabel.getWidth(), nameLabel.getHeight());;
@@ -947,7 +983,7 @@ public abstract class Entity implements Comparable<Entity> {
                 this.y = y;
             }
             centerPos.x = this.interPos.x + spriteW/2f;
-            centerPos.y = this.interPos.y + spriteH/2f;
+            centerPos.y = this.interPos.y + spriteH/2.5f;
             nameLabel.setBounds(this.centerPos.x - nameLabel.getWidth()/2f,
                     this.centerPos.y + spriteH/2f,
                     nameLabel.getWidth(), nameLabel.getHeight());
@@ -980,6 +1016,8 @@ public abstract class Entity implements Comparable<Entity> {
 
         // predict walkable actions for client
         private void triggerWalkableActions() {
+            if(!isAlive) return; // do not trigger if dead
+
             // check for portal collisions
             for(Rectangle portal : WorldMap.portals) {
                 if (Common.intersects(collider, portal)) {
@@ -1210,14 +1248,28 @@ public abstract class Entity implements Comparable<Entity> {
                 GameClient.getInstance().getClientCharacter().stopInteractionTimer();
                 GameClient.getInstance().getClientCharacter().setTarget(null);
             }
+            if(GameClient.getInstance().getClientCharacter() != null &&
+                    this.id == GameClient.getInstance().getClientCharacter().id) { // if its client
+                // shows button to respawn
+                GameScreen.showDeathUI();
+                this.direction = Direction.SOUTH;
+                WorldMap.hoverEntity = null;
+                stopInteraction(); // stop interaction of player
+            }
+            // starts fading out effect
+            fadeOut(5f);
         }
 
         @Override
         public void respawn() {
+            // TODO: show button, to respawn and on click call back do the following, PLUS SEND MESSAGE TO SERVER  TCPTCP!1 (OR SEND MSG FIRST AND WAIT FOR RESPONSE TO RESPAWN):
+            fadeOut  = false; // makes sure fade out is over
+            fadeIn(10f); //starts fading in
+            /** sets flags back to true **/
             this.isAlive = true;
             this.isInteractive = true;
             this.isTargetAble = true;
-            updateHealth(maxHealth);
+            updateHealth(maxHealth); // makes sure health is back to max
         }
 
         @Override
@@ -1225,6 +1277,10 @@ public abstract class Entity implements Comparable<Entity> {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
             isWalking = false;
+
+            if(!isAlive && !fadeOut) return; // make sure we do not render dead players after they faded out
+
+            if(isRespawning) return; // we do not render respawning players
 
             animTime += Gdx.graphics.getDeltaTime(); // accumulates anim timer
             Map<Direction, Animation<TextureRegion>> currentAnimation = idle;
@@ -1989,6 +2045,8 @@ public abstract class Entity implements Comparable<Entity> {
 
             if(interPos.dst(position) != 0f && Common.entityInterpolation) {
                 interpolate2();
+                if(target == null) // if there is no target and there is interpolation, walk
+                    currentAnimation = walk;
             }
 
             animTime += Gdx.graphics.getDeltaTime(); // Accumulate elapsed animation time
@@ -2100,6 +2158,10 @@ public abstract class Entity implements Comparable<Entity> {
                 // predict state (only if it is the target)
                 if(target != null  && target.id == GameClient.getInstance().getClientCharacter().id)
                     state = State.ATTACKING;
+
+                if(target == null) // if there is no target we can stop at goal position without worrying for range of attack
+                    interPos.set(position.x, position.y);
+
                 return;
             } // if not, interpolate
 

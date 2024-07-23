@@ -37,6 +37,7 @@ import dev.dominion.ecs.api.Entity;
  * The server that manages game interactions between players and the game world
  */
 public class GameServer implements CmdReceiver {
+    private static final float MAX_HEALTH_ALLOWED = 10000000;
     private static GameServer instance;
     private WorldMap world;
     Server server;
@@ -132,6 +133,14 @@ public class GameServer implements CmdReceiver {
                             break;
                         case TELEPORT_FINISHED:
                             character.isTeleporting = false;
+                            character.state = GameRegister.EntityState.FREE;
+                            break;
+                        case RESPAWN: // respawns player if player requested respawn (clicked on respawn button after death)
+                            // if character is dead, respawn it
+                            if(character.attr.health <= 0f) // makes sure it is dead - no reason to respawn if its not dead
+                                character.respawn();
+                            break;
+                        case RESPAWN_FINISHED:
                             character.state = GameRegister.EntityState.FREE;
                             break;
                         default:
@@ -353,44 +362,13 @@ public class GameServer implements CmdReceiver {
                                                         character.attr.attack, character.attr.defense);
         character.position = new Component.Position(character.position.x, character.position.y);
         character.connection = c;
+
+        // if character is dead, respawn it
+        if(character.attr.health <= 0f)
+            character.respawn();
+
         character.updatePositionIn2dArray();
         c.character = character;
-        //c.character.remove(charComp);
-        //charComp.lastMoveTs = character.lastMoveTs;
-        //c.character.add(character);
-//        charComp.lastTilePos = character.lastTilePos;
-//        charComp.attr = character.attr;
-//        charComp.dir = character.dir;
-//        charComp.position = character.position;
-//        charComp.role_level = character.role_level;
-//        charComp.lastMoveTs = character.lastMoveTs;
-//        charComp.lastMoveId = character.lastMoveId;
-//        charComp.tag = character.tag;
-//        charComp.token = character.token;
-//        charComp.updatePositionIn2dArray();
-
-        //character.lastTilePos = EntityController.getInstance().placeEntity(c.character, character.position);
-        //c.character.get(Component.Character.class).updatePositionIn2dArray(); // updates position in 2d entities array if needed
-
-        // Add existing characters to new logged in connection.
-//        Iterator<Map.Entry<Integer, CharacterConnection>> i = loggedIn.entrySet().iterator();
-//        while (i.hasNext()) {
-//            Map.Entry<Integer, CharacterConnection> entry = i.next();
-//            CharacterConnection other = entry.getValue();
-//            GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
-//            // translate to safe to send character data
-//            Component.Character comp = other.character;
-//            addCharacter.character = comp.toSendToClient();
-//            c.sendTCP(addCharacter);
-//        }
-
-//        for (CharacterConnection other : loggedIn) {
-//            GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
-//            // translate to safe to send character data
-//            Component.Character comp = other.character.get(Component.Character.class);
-//            addCharacter.character = comp.toSendToClient();
-//            c.sendTCP(addCharacter);
-//        }
 
         loggedIn.putIfAbsent(character.tag.id, c);
 
@@ -402,11 +380,6 @@ public class GameServer implements CmdReceiver {
         GameRegister.ClientId clientId = new GameRegister.ClientId();
         clientId.id = character.tag.id;
         c.sendTCP(clientId);
-
-        // Add logged in character to all connections.
-//        GameRegister.AddCharacter addCharacter = new GameRegister.AddCharacter();
-//        addCharacter.character = character.toSendToClient();
-//        server.sendToAllTCP(addCharacter);
     }
 
     boolean saveCharacter (Component.Character character) {
@@ -693,8 +666,16 @@ public class GameServer implements CmdReceiver {
             case "defense":
                 c.attr.defense = value;
                 break;
+            case "health_max":
+                if (value < 1 || value > MAX_HEALTH_ALLOWED) {
+                    Log.info("cmd", "Attribute " + attrName + " value should be between 1.0 and MAX_HEALTH_ALLOWED");
+                    return;
+                }
+                c.attr.maxHealth = value;
+                c.attr.health = value;
+                break;
             default:
-                Log.info("cmd", "Attribute "+attrName+" is not valid to change (only speed, attack, defense, attack_speed and range can be changed)");
+                Log.info("cmd", "Attribute "+attrName+" is not valid to change (only speed, attack, defense, health_max, attack_speed and range can be changed)");
                 return;
         }
 

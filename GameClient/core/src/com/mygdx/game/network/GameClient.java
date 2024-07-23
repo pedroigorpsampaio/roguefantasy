@@ -274,8 +274,23 @@ public class GameClient extends DispatchServer {
             client.sendTCP(iReq);
     }
 
+    /**
+     * Respawns client by sending a message to server
+     */
+    public void respawnClient() {
+        // if lag simulation is on, add to queue with a timer to be sent
+//        if(lagNetwork != null && GameRegister.lagSimulation)
+//            lagNetwork.send(new GameRegister.Response(GameRegister.Response.Type.RESPAWN), 1);
+//        else
+//            client.sendTCP(new GameRegister.Response(GameRegister.Response.Type.RESPAWN));
+        sendResponse(new GameRegister.Response(GameRegister.Response.Type.RESPAWN));
+    }
+
     public void sendResponse (GameRegister.Response response) {
-        client.sendTCP(response);
+        if(lagNetwork != null && GameRegister.lagSimulation)
+            lagNetwork.send(response, 1);
+        else
+            client.sendTCP(response);
     }
 
 
@@ -329,6 +344,7 @@ public class GameClient extends DispatchServer {
     public Map<Integer, Entity.Tree> getTrees() {
         return serverController.trees;
     }
+
 
     static class ServerController {
 
@@ -500,6 +516,18 @@ public class GameClient extends DispatchServer {
                 //EntityController.getInstance().removeEntity(creature.uId); // remove to reorder list correctly
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
 
+                /** If dead client is respawned set flags accordingly **/
+                if(GameClient.getInstance().clientCharId == msg.character.id && msg.character.state == GameRegister.EntityState.RESPAWNED) {
+                    character.spawnPlayer(msg.character.x, msg.character.y);
+                    getInstance().sendResponse(new GameRegister.Response(GameRegister.Response.Type.RESPAWN_FINISHED));
+                }
+
+                if(character.isRespawning && msg.character.state == GameRegister.EntityState.FREE) { // if it was respawning, and its not anymore
+                    GameScreen.pointCameraTo(character.getEntityCenter());
+                    character.isRespawning = false; // free respawning flag lock
+                    GameScreen.hideDeathUI(); // hides death ui
+                }
+
                 /** updates attributes **/
                 character.avgLatency = msg.character.avgLatency;
                 //character.updateHealth(msg.character.health);
@@ -525,12 +553,15 @@ public class GameClient extends DispatchServer {
                 if(msg.character.attackType != null)
                     character.updateAttack(msg.character.attackType);
                 if(character.state != msg.character.state) // updates state if a change has been made
-                    character.updateState(msg.character.state);
+                    character.updateState(msg);
                 if(character.state == GameRegister.EntityState.ATTACKING) {
                     character.updateTarget(msg.character.targetId, msg.character.targetType); // updates target
                 }
                 //System.out.println(character.state);
             }
+
+            // no need to update position, it has been updated by spawned method
+            if(msg.character.state == GameRegister.EntityState.RESPAWNED) return;
 
             // if its client, discard movements while teleporting (disposable late prediction packets)
             if(GameClient.getInstance().clientCharId == msg.character.id && character.isTeleporting) return;
@@ -572,7 +603,7 @@ public class GameClient extends DispatchServer {
          * @param destination   the destination to teleport client character to
          */
         public void teleportCharacter(GameRegister.Teleport destination) {
-            instance.getClientCharacter().teleport(destination.x, destination.y);
+            getInstance().getClientCharacter().teleport(destination.x, destination.y);
         }
 
         /**

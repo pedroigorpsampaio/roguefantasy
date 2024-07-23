@@ -36,6 +36,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Stack;
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.Touchpad;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
@@ -78,6 +79,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private final InputMultiplexer inputMultiplexer;
     private final Touchpad touchPad;
     private final TextureAtlas uiAtlas;
+    private static TextButton respawnBtn;
+    private static TypingLabel deathMsgLabel;
     private Image closestEntityImg, targetImg;
     private Button selectTargetBtn, nextTargetBtn, lastTargetBtn;
     private FitViewport uiViewport;
@@ -85,7 +88,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Timer updateTimer;
     private Texture mapTexture;
     private Skin skin;
-    private Stage stage;
+    private static Stage stage;
     private Label fpsLabel;
     private Label pingLabel;
     private Label ramLabel;
@@ -165,6 +168,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
         Entity.assetManager = manager;
         entityController = EntityController.getInstance();
 
+        // gets language bundle from asset manager
+        langBundle = manager.get("lang/langbundle", I18NBundle.class);
+        // loads game chosen skin
+        skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
+
         batch = new SpriteBatch();
         resW = Gdx.graphics.getWidth();
         resH = Gdx.graphics.getHeight();
@@ -187,9 +195,6 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         camera.update();
         uiCam.update();
-
-        // loads game chosen skin
-        skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
 
         // loads world map
         TiledMap map = manager.get("world/novaterra.tmx");
@@ -304,6 +309,15 @@ public class GameScreen implements Screen, PropertyChangeListener {
         nextTargetBtn.setY(targetStack.getHeight() * 0.25f);
 
         touchPad = new Touchpad(1f, skin);
+
+        /**
+         * Death UI
+         */
+        respawnBtn = new TextButton(langBundle.format("respawn"), skin);
+        deathMsgLabel = new TypingLabel( "{SIZE=220%}{COLOR=LIGHTGRAY}[+skull and crossbones] "+langBundle.format("deathMessage")+" [+skull and crossbones]{ENDCOLOR}{STYLE=%}", font);
+
+        respawnBtn.setPosition(stage.getWidth()/2f - respawnBtn.getWidth()/2f, stage.getHeight()/2.75f - respawnBtn.getHeight()/2f);
+        deathMsgLabel.setPosition(stage.getWidth()/2f - deathMsgLabel.getWidth()/2f, stage.getHeight()/1.45f - deathMsgLabel.getHeight()/2f);
 
         stage.addActor(fpsLabel);
         stage.addActor(pingLabel);
@@ -469,6 +483,16 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 update();
             }
         },0,GameRegister.clientTickrate());
+    }
+
+    public static void showDeathUI() {
+        stage.addActor(deathMsgLabel);
+        // let the respawn btn be shown by render method after animation
+    }
+
+    public static void hideDeathUI() {
+        respawnBtn.remove();
+        deathMsgLabel.remove();
     }
 
     /**
@@ -703,8 +727,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         Entity.Character player = gameClient.getClientCharacter();
         if(player != null && player.assetsLoaded) {
             if(playerIsTarget) {
-                float playerX = player.interPos.x + player.spriteW/2f;
-                float playerY = player.interPos.y + player.spriteH/2f;
+                float playerX = player.getEntityCenter().x;
+                float playerY = player.getEntityCenter().y;
 
                 Vector3 target = new Vector3(playerX,playerY,0);
                 final float speed=Gdx.graphics.getDeltaTime()*9.0f,ispeed=1.0f-speed;
@@ -714,10 +738,15 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 cameraPosition.add(target);
                 camera.position.set(cameraPosition);
             } else {
-                camera.position.x = player.getCenter().x;
-                camera.position.y = player.getCenter().y;
+                camera.position.x = player.getCenter().x + player.spriteW/12f;
+                camera.position.y = player.getCenter().y + player.spriteH/12f;
                 playerIsTarget = true; // sets player as camera target
             }
+
+//            if(gameClient.getClientCharacter().isRespawning) {
+//                camera.position.x = player.getEntityCenter().x;
+//                camera.position.y = player.getEntityCenter().y;
+//            }
         }
 
         // clamp values for camera //TODO: CORRECTLY CLAMP ISO WORLD!
@@ -729,11 +758,22 @@ public class GameScreen implements Screen, PropertyChangeListener {
         camera.update();
     }
 
+    /**
+     * Points camera to received point
+     * @param target    the point to point camera to
+     */
+    public static void pointCameraTo(Vector2 target) {
+        camera.position.x = target.x;
+        camera.position.y = target.y;
+    }
+
     float timeElapsed = 0f;
     boolean startDelay = true;
 
     FrameBuffer fbo = new FrameBuffer(Pixmap.Format.RGBA8888, 1280, 720, false);
 
+    float timeDead = 0f;
+    float blackOutLifeTime = 2f;
     @Override
     public void render(float delta) {
         if(gameClient.getClientCharacter() == null) return;
@@ -770,6 +810,27 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         batch.totalRenderCalls = 0;
 
+        Color bColor = new Color(batch.getColor());
+
+        if(!gameClient.getClientCharacter().isAlive) {
+            timeDead+=delta;
+            float progress = Math.min(1f, timeDead/blackOutLifeTime);   // 0 -> 1
+            batch.setColor(bColor.cpy().lerp(Color.BLACK, progress));
+
+            // adds respawn button after finishing the animation
+            if(progress >= 1f) {
+                if(respawnBtn.getStage() == null) { // only adds if its not in stage yet
+                    stage.addActor(respawnBtn);
+                }
+            }
+        }
+        else {
+            batch.setColor(bColor.r, bColor.g, bColor.b, bColor.a);
+            timeDead = 0f;
+            if(respawnBtn.getStage() != null) // if player is alive, remove respawn button from stage if its on
+                respawnBtn.remove();
+        }
+
         batch.begin();
 
         world.render(); // render world
@@ -799,24 +860,30 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // always draw client simplified ui
         gameClient.getClientCharacter().renderUI(batch);
 
-        // renders hover entity information
-        if((Gdx.app.getType() == Application.ApplicationType.Desktop &&
-                WorldMap.hoverEntity != null)) {
-            if(target == null
-                || target.uId !=
-            WorldMap.hoverEntity.uId) { // only renders if target is not the one being hovered, as info is already being rendered by being a target
-                WorldMap.hoverEntity.renderUI(batch);
-                if(ENABLE_TARGET_UI)
-                    showEntityTargetUI(WorldMap.hoverEntity);
+        // renders hover entity information if player exists and is alive
+        if(GameClient.getInstance().getClientCharacter() != null // only look for hover entity if player exists and is alive
+                && GameClient.getInstance().getClientCharacter().isAlive) {
+            if ((Gdx.app.getType() == Application.ApplicationType.Desktop &&
+                    WorldMap.hoverEntity != null)) {
+                if (target == null
+                        || target.uId !=
+                        WorldMap.hoverEntity.uId) { // only renders if target is not the one being hovered, as info is already being rendered by being a target
+                    WorldMap.hoverEntity.renderUI(batch);
+                    if (ENABLE_TARGET_UI)
+                        showEntityTargetUI(WorldMap.hoverEntity);
+                }
             }
         }
 
         if(ENABLE_TARGET_UI && target == null && WorldMap.hoverEntity == null)
             hideEntityTargetUI(); // makes sure to hide target ui when no target nor hover exists
 
+
         renderFloatingTexts(); // updates and renders floating texts alive
 
         batch.end();
+        batch.setColor(bColor.r, bColor.g, bColor.b, bColor.a);
+
         batch.setBlendFunction(srcFunc, dstFunc);
 
         if(WorldMap.portals != null && CommonUI.enableDebugTex) {
@@ -937,7 +1004,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
         Iterator<FloatingText> iter = floatingTexts.iterator();
         while (iter.hasNext()) {
             FloatingText floatingText = iter.next();
-            floatingText.render(batch, Gdx.graphics.getDeltaTime());
+
+            // only render floating texts if client player is alive or floating text is from dying client
+            if(gameClient.getClientCharacter().isAlive || floatingText.creator.uId == gameClient.getClientUid())
+                floatingText.render(batch, Gdx.graphics.getDeltaTime());
 
             // if floating text is dead removes it and free pool
             if (floatingText.alive == false) {
@@ -967,7 +1037,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
      * Updates cursor based on current hovered entity
      */
     private void updateCursor() {
-        if(WorldMap.hoverEntity == null) {
+        if(WorldMap.hoverEntity == null || !gameClient.getClientCharacter().isAlive) {
             Gdx.graphics.setCursor(CommonUI.cursorBank.get("Cursor Default"));
             return;
         }
@@ -1193,6 +1263,17 @@ public class GameScreen implements Screen, PropertyChangeListener {
             /**
              * ALL UI CONTROLS
              */
+            respawnBtn.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    onStageActor = true;
+                    GameClient.getInstance().getClientCharacter().isRespawning = true; // sets flag that informs that player is respawning
+                    GameClient.getInstance().respawnClient(); // inform server that client player requested respawn
+                    event.stop();
+                    event.handle();
+                    event.cancel();
+                }
+            });
         }
     }
 
