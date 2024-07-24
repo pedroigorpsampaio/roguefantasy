@@ -5,6 +5,7 @@ import static com.badlogic.gdx.graphics.Texture.TextureFilter.MipMapLinearNeares
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeOut;
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.run;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.Screen;
@@ -14,6 +15,7 @@ import com.badlogic.gdx.assets.loaders.I18NBundleLoader;
 import com.badlogic.gdx.assets.loaders.TextureAtlasLoader;
 import com.badlogic.gdx.assets.loaders.resolvers.InternalFileHandleResolver;
 import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Cursor;
 import com.badlogic.gdx.graphics.Pixmap;
@@ -51,8 +53,10 @@ import com.kotcrab.vis.ui.VisUI;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.util.Common;
 import com.mygdx.game.util.Encoder;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Random;
@@ -259,11 +263,34 @@ public class LoadScreen implements Screen {
         stage = new Stage(new ScreenViewport());
         Gdx.input.setInputProcessor(stage);
 
-        // load game specific assets
-        skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
+        /** load game specific assets **/
+
+        // create dir catalogs
+        ArrayList<String> creatureSounds = new ArrayList<>();
+        ArrayList<String> weaponSounds = new ArrayList<>();
+        if(Gdx.app.getType() == Application.ApplicationType.Desktop) {
+            creatureSounds = Common.createDirCatalog("assets/sounds/creatures");
+            weaponSounds = Common.createDirCatalog("assets/sounds/weapons");
+        } else if(Gdx.app.getType() == Application.ApplicationType.Android) {
+            creatureSounds = Common.createDirCatalogAndroid("sounds/creatures");
+            weaponSounds = Common.createDirCatalogAndroid("sounds/weapons");
+        }
+
+        // load sounds
+        for(int i = 0; i < creatureSounds.size(); i++) {
+            manager.load("sounds/creatures/" + creatureSounds.get(i), Sound.class);
+        }
+        for(int i = 0; i < weaponSounds.size(); i++) {
+            manager.load("sounds/weapons/" + weaponSounds.get(i), Sound.class);
+        }
+
+        // load music
         manager.load("bgm/maps/bgm_0.mp3", Music.class);
         manager.load("bgm/maps/bgm_1.mp3", Music.class);
         manager.load("bgm/maps/bgm_2.mp3", Music.class);
+
+        skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
+
         // only needed once
         manager.setLoader(TiledMap.class, new AtlasTmxMapLoader(new InternalFileHandleResolver()));
         AtlasTmxMapLoader.AtlasTiledMapLoaderParameters params = new AtlasTmxMapLoader.AtlasTiledMapLoaderParameters();

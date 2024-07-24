@@ -156,5 +156,6 @@ project(":core") {
         implementation 'com.github.crykn:libgdx-screenmanager:v0.7.0'
         implementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
         implementation("at.favre.lib:bcrypt:0.10.2")
+        implementation 'commons-io:commons-io:2.16.1'
     }
 }

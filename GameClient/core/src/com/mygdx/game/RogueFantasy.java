@@ -1,5 +1,7 @@
 package com.mygdx.game;
 
+import static com.mygdx.game.entity.Entity.assetManager;
+
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;

@@ -57,6 +57,7 @@ import com.mygdx.game.entity.WorldMap;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.util.Common;
+import com.mygdx.game.util.Jukebox;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -69,6 +70,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * Implements the game screen
  */
 public class GameScreen implements Screen, PropertyChangeListener {
+    public static boolean lockWorldRender = true;
     private static GameScreen instance;
     private static GameClient gameClient;
     private final WorldMap world;
@@ -80,9 +82,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private final Touchpad touchPad;
     private final TextureAtlas uiAtlas;
     private static TextButton respawnBtn;
-    private static TypingLabel deathMsgLabel;
+    private static TypingLabel deathMsgLabel, mapNameLabel, zoneNameLabel;
+    private static Stack targetStack;
     private Image closestEntityImg, targetImg;
-    private Button selectTargetBtn, nextTargetBtn, lastTargetBtn;
+    private Button selectTargetBtn;
+    private static Button nextTargetBtn;
+    private static Button lastTargetBtn;
     private FitViewport uiViewport;
     private Font font;
     private Timer updateTimer;
@@ -166,6 +171,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         this.manager = manager;
         this.gameClient = gameClient;
         Entity.assetManager = manager;
+        Jukebox.manager = manager;
         entityController = EntityController.getInstance();
 
         // gets language bundle from asset manager
@@ -279,7 +285,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         //.setOrigin(targetStack.getWidth()/2f,targetStack.getHeight()/2f);
 
 
-        Stack targetStack = new Stack();
+        targetStack = new Stack();
         //selectTargetBtn.setX(Gdx.graphics.getWidth() - selectTargetBtn.getWidth() * 2f);
         //selectTargetBtn.setY(selectTargetBtn.getHeight() * 0.1f);
 
@@ -309,6 +315,14 @@ public class GameScreen implements Screen, PropertyChangeListener {
         nextTargetBtn.setY(targetStack.getHeight() * 0.25f);
 
         touchPad = new Touchpad(1f, skin);
+
+        /**
+         * Map and zone Label
+         */
+        mapNameLabel = new TypingLabel( "{SIZE=250%}{COLOR=WHITE}Nova Terra{ENDCOLOR}{STYLE=%}", font);
+        zoneNameLabel = new TypingLabel( "{SIZE=170%}{COLOR=LIGHTGRAY}Initium{ENDCOLOR}{STYLE=%}", font);
+        mapNameLabel.setPosition(stage.getWidth()/2f - mapNameLabel.getWidth()/2f, stage.getHeight()/1.45f - mapNameLabel.getHeight()/2f);
+        zoneNameLabel.setPosition(stage.getWidth()/2f - zoneNameLabel.getWidth()/2f, stage.getHeight()/1.75f - zoneNameLabel.getHeight()/2f);
 
         /**
          * Death UI
@@ -486,13 +500,35 @@ public class GameScreen implements Screen, PropertyChangeListener {
     }
 
     public static void showDeathUI() {
+        hideAndroidTargetInteraction();
+//        deathMsgLabel.setText(deathMsgLabel.storedText);
+        if(deathMsgLabel.hasEnded())
+            deathMsgLabel.restart(); // restart if it has ended
         stage.addActor(deathMsgLabel);
+
         // let the respawn btn be shown by render method after animation
     }
 
     public static void hideDeathUI() {
         respawnBtn.remove();
         deathMsgLabel.remove();
+        showAndroidTargetInteraction();
+    }
+
+    public static void showAndroidTargetInteraction() {
+        if(Gdx.app.getType() == Application.ApplicationType.Android) {
+            stage.addActor(lastTargetBtn);
+            stage.addActor(nextTargetBtn);
+            stage.addActor(targetStack);
+        }
+    }
+
+    public static void hideAndroidTargetInteraction() {
+        if(Gdx.app.getType() == Application.ApplicationType.Android) {
+            lastTargetBtn.remove();
+            nextTargetBtn.remove();
+            targetStack.remove();
+        }
     }
 
     /**
@@ -602,6 +638,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         if(player.isTeleporting) {
             return;
         }
+        if(respawnAnimOn) return; // don't move while respawn anim is on
 
         GameRegister.MoveCharacter msg = new GameRegister.MoveCharacter();
         msg.x = movement.x;
@@ -772,8 +809,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
     FrameBuffer fbo = new FrameBuffer(Pixmap.Format.RGBA8888, 1280, 720, false);
 
-    float timeDead = 0f;
-    float blackOutLifeTime = 2f;
+    float timeDead = 0f, timeRespawning = 0f;
+    float blackOutLifeTime = 2f, recolorLifeTime = 1f;
+    public static boolean respawnAnimOn = false;
     @Override
     public void render(float delta) {
         if(gameClient.getClientCharacter() == null) return;
@@ -812,23 +850,48 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         Color bColor = new Color(batch.getColor());
 
-        if(!gameClient.getClientCharacter().isAlive) {
+        if(lockWorldRender)
+            batch.setColor(Color.BLACK);
+        else
+            batch.setColor(bColor);
+
+        Entity.Character clientChar = gameClient.getClientCharacter();
+        if(!clientChar.isAlive && !clientChar.isRespawning) {
             timeDead+=delta;
             float progress = Math.min(1f, timeDead/blackOutLifeTime);   // 0 -> 1
             batch.setColor(bColor.cpy().lerp(Color.BLACK, progress));
 
             // adds respawn button after finishing the animation
             if(progress >= 1f) {
+                lockWorldRender = true;
+                respawnAnimOn = true;
                 if(respawnBtn.getStage() == null) { // only adds if its not in stage yet
                     stage.addActor(respawnBtn);
                 }
+                clearPools(); // clear all pool objects
             }
-        }
-        else {
-            batch.setColor(bColor.r, bColor.g, bColor.b, bColor.a);
+        } else {
             timeDead = 0f;
             if(respawnBtn.getStage() != null) // if player is alive, remove respawn button from stage if its on
                 respawnBtn.remove();
+            if(deathMsgLabel.getStage() != null) { // also remove death msg if its on
+                deathMsgLabel.remove();
+            }
+        }
+
+        if(respawnAnimOn && !lockWorldRender) {
+            timeRespawning+=delta;
+            float progress = Math.min(1f, timeRespawning/recolorLifeTime);   // 0 -> 1
+            batch.setColor(Color.BLACK.cpy().lerp(bColor, progress));
+
+            if(progress >= 0.1f) { // finishes respawn
+                clientChar.isRespawning = false;
+            }
+            if(progress >= 1.0f) { // finishes animation
+                respawnAnimOn = false;
+                timeRespawning = 0f;
+                showMapAndZoneLabel();
+            }
         }
 
         batch.begin();
@@ -998,6 +1061,30 @@ public class GameScreen implements Screen, PropertyChangeListener {
     }
 
     /**
+     * Show map and zone label on ui for a short period of time
+     */
+    private void showMapAndZoneLabel() {
+        mapNameLabel.setText("{SIZE=230%}{COLOR=WHITE}"+gameClient.getClientCharacter().map+"{ENDCOLOR}{STYLE=%}");
+        zoneNameLabel.setText("{SIZE=120%}{COLOR=LIGHTGRAY}"+gameClient.getClientCharacter().zone+"{ENDCOLOR}{STYLE=%}");
+        mapNameLabel.setPosition(stage.getWidth()/2f - mapNameLabel.getWidth()/2f, stage.getHeight()/1.12f - mapNameLabel.getHeight()/2f);
+        zoneNameLabel.setPosition(stage.getWidth()/2f - zoneNameLabel.getWidth()/2f, mapNameLabel.getY()*0.9f - zoneNameLabel.getHeight()/2f);
+        if(mapNameLabel.hasEnded())
+            mapNameLabel.restart();
+        if(zoneNameLabel.hasEnded())
+            zoneNameLabel.restart();
+        stage.addActor(mapNameLabel);
+        stage.addActor(zoneNameLabel);
+
+        Timer.schedule(new Timer.Task() {
+            @Override
+            public void run() {
+                mapNameLabel.remove();
+                zoneNameLabel.remove();
+            }
+        },CommonUI.MAP_INFO_LABEL_LIFETIME);
+    }
+
+    /**
      * Update current alive floating texts
      */
     private void renderFloatingTexts() {
@@ -1015,6 +1102,25 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 floatingTextPool.free(floatingText);
             }
         }
+    }
+
+    /** clears pool objects  **/
+    private void clearPools() {
+        Iterator<FloatingText> iter = floatingTexts.iterator();
+        while (iter.hasNext()) {
+            FloatingText floatingText = iter.next();
+            iter.remove();
+            floatingTextPool.free(floatingText);
+        }
+        floatingTextPool.clear();
+        floatingTexts.clear();
+
+//        Iterator<Projectile> iter2 = projectiles.iterator();
+//        while (iter2.hasNext()) {
+//            Projectile projectile = iter2.next();
+//            iter2.remove();
+//            projectilePool.free(projectile);
+//        }
     }
 
     /**

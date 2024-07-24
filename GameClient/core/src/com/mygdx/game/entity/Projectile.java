@@ -13,6 +13,7 @@ import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Pool;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
+import com.mygdx.game.util.Jukebox;
 
 public class Projectile extends Entity implements Pool.Poolable {
 
@@ -27,6 +28,8 @@ public class Projectile extends Entity implements Pool.Poolable {
     Interpolation interpolation;
     float lifeTime;
     float elapsed;
+    private String soundName;
+    private boolean soundPlayed;
 
     /**
      * Projectile constructor. Just initialize variables.
@@ -40,6 +43,8 @@ public class Projectile extends Entity implements Pool.Poolable {
         this.animation = null;
         this.creator = null;
         this.target = null;
+        this.soundName = null;
+        this.soundPlayed = false;
         this.move = new Vector2();
         this.alive = false;
         this.animTime = 0f;
@@ -51,7 +56,7 @@ public class Projectile extends Entity implements Pool.Poolable {
      * Initialize the Projectile. Call this method after getting a Projectile from the pool.
      */
     public void init(Array<TextureAtlas.AtlasRegion> frames, float width, float height, float lifeTime,
-                     float animSpeed, Entity creator, Entity target, boolean followCreator, boolean followTarget, Interpolation interpolation) {
+                     float animSpeed, Entity creator, Entity target, boolean followCreator, boolean followTarget, Interpolation interpolation, String soundName) {
         this.initPos.set(creator.getEntityCenter().x,  creator.getEntityCenter().y);
         this.position.set(creator.getEntityCenter().x,  creator.getEntityCenter().y);
         this.goalPos.set(target.getEntityCenter().x, target.getEntityCenter().x);
@@ -64,11 +69,13 @@ public class Projectile extends Entity implements Pool.Poolable {
         this.height = height;
         this.creator = creator;
         this.target = target;
+        this.soundPlayed = false;
         this.lifeTime = lifeTime;
         this.move.set(direction.x*Gdx.graphics.getDeltaTime()*speed, direction.y*Gdx.graphics.getDeltaTime()*speed);
         this.alive = true;
         this.uId = EntityController.getInstance().generateUid();
         this.type = GameRegister.EntityType.PROJECTILE;
+        this.soundName = soundName;
         EntityController.getInstance().entities.put(uId, this);
     }
 
@@ -101,10 +108,12 @@ public class Projectile extends Entity implements Pool.Poolable {
         interpolation = Interpolation.exp5In;
         followCreator = false;
         followTarget = false;
+        soundPlayed = false;
         targetPosNotSet = true;
         animation = null;
         creator = null;
         target = null;
+        soundName = null;
         alive = false;
         animTime = 0f;
     }
@@ -121,6 +130,14 @@ public class Projectile extends Entity implements Pool.Poolable {
         if(followTarget || targetPosNotSet) {
             this.goalPos.set(target.getEntityCenter().x, target.getEntityCenter().y);
             targetPosNotSet = false;
+        }
+
+        // plays sound (if target still is reachable)
+        if(progress > 0.1f && !soundPlayed) {
+            soundPlayed = true;
+            if(target.isTargetAble()) {
+                Jukebox.playSound(Jukebox.SoundType.WEAPON, soundName);
+            }
         }
 
         // update bullet position
@@ -144,9 +161,7 @@ public class Projectile extends Entity implements Pool.Poolable {
         }
 
         // if target of projectile is dead or teleporting, die
-        if(target.health <= 0f || target.isTeleporting ||
-                target.state == GameRegister.EntityState.TELEPORTING_IN ||
-                target.state == GameRegister.EntityState.TELEPORTING_OUT)
+        if(!target.isTargetAble())
             die();
 
     }

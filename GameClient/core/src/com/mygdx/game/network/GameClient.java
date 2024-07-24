@@ -303,6 +303,7 @@ public class GameClient extends DispatchServer {
 
     public Entity.Character getClientCharacter() {return serverController.characters.get(clientCharId);}
     public int getClientUid() {return clientUid;}
+    public int getClientId() {return clientCharId;}
 
     public void setUpdateDelta(float delta) {
         this.updateDelta = delta;
@@ -390,6 +391,16 @@ public class GameClient extends DispatchServer {
             }
             if(state.characterUpdates != null) { // there are character updates
                 for (UpdateCharacter charUpdate : state.characterUpdates) {
+                    // ignore update of dead characters that are not client player, only setting necessary updates not set yet
+                    if(charUpdate.character.state == GameRegister.EntityState.DEAD &&
+                        charUpdate.character.id != getInstance().clientCharId) {
+                        Entity.Character character = characters.get(charUpdate.character.id);
+                        if(character != null) { // not removed yet
+                            character.updateDamage(charUpdate.character.health, charUpdate.character.damages);
+                        }
+                        continue;
+                    }
+
                     updateCharacter(charUpdate);
                     Entity.Character character = characters.get(charUpdate.character.id);
                     EntityController.getInstance().lastAoIEntities.add(character.uId);
@@ -509,23 +520,30 @@ public class GameClient extends DispatchServer {
                 characters.put(msg.character.id, character);
                 //System.out.println("second add to draw list: " + character.uId + " / " + character.name + " / " + character.drawPos);
                 EntityController.getInstance().entities.put(character.uId, character); // put on list of entities (which will manage if its visible or not)
-                if(character.id == instance.clientCharId)
+                if(character.id == instance.clientCharId) {
                     instance.clientUid = character.uId;
+                    GameScreen.lockWorldRender = false;
+                    GameScreen.respawnAnimOn = true;
+                }
             } else { // if its already on list, get it to update it
                 character = characters.get(msg.character.id);
                 //EntityController.getInstance().removeEntity(creature.uId); // remove to reorder list correctly
                 //EntityController.getInstance().entities.add(creature); // put on list of entities (which will manage if its visible or not)
 
                 /** If dead client is respawned set flags accordingly **/
-                if(GameClient.getInstance().clientCharId == msg.character.id && msg.character.state == GameRegister.EntityState.RESPAWNED) {
+                if(getInstance().clientCharId == msg.character.id && msg.character.state == GameRegister.EntityState.RESPAWNED) {
                     character.spawnPlayer(msg.character.x, msg.character.y);
+                    character.direction = Entity.Direction.SOUTH; // spawns at south direction
+                    GameScreen.pointCameraTo(character.getEntityCenter());
+                    GameScreen.hideDeathUI(); // hides death ui
+                    GameScreen.lockWorldRender = false;
                     getInstance().sendResponse(new GameRegister.Response(GameRegister.Response.Type.RESPAWN_FINISHED));
                 }
 
                 if(character.isRespawning && msg.character.state == GameRegister.EntityState.FREE) { // if it was respawning, and its not anymore
-                    GameScreen.pointCameraTo(character.getEntityCenter());
-                    character.isRespawning = false; // free respawning flag lock
-                    GameScreen.hideDeathUI(); // hides death ui
+//                    GameScreen.pointCameraTo(character.getEntityCenter());
+//                    GameScreen.hideDeathUI(); // hides death ui
+//                    GameScreen.lockWorldRender = false;
                 }
 
                 /** updates attributes **/
@@ -538,8 +556,7 @@ public class GameClient extends DispatchServer {
                 /** updates related to damage **/
                 character.updateDamage(msg.character.health, msg.character.damages);
 
-//                /** render character damages received since last state **/
-//                character.renderDamagePoints(msg.character.damages);
+
             }
 
             //character.state = msg.character.state;
@@ -703,6 +720,7 @@ public class GameClient extends DispatchServer {
                 while (iterator.hasNext()) {
                     Map.Entry<Integer, Entity.Creature> entry = iterator.next();
                     if(entry.getValue().uId == uId) {
+                        entry.getValue().dispose();
                         iterator.remove();
                         return;
                     }

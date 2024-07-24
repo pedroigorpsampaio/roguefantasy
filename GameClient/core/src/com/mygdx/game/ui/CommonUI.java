@@ -31,6 +31,7 @@ public class CommonUI {
     public static final float TARGET_UI_HEIGHT = 105;
     public static final float TARGET_UI_BG_ALPHA = 1.00f;
     public static final boolean ENABLE_TARGET_UI = false;
+    public static final float MAP_INFO_LABEL_LIFETIME = 3f;
     public static boolean enableDebugTex = false;
     public static HashMap<String, Cursor> cursorBank;
 

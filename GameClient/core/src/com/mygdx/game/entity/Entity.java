@@ -37,6 +37,7 @@ import com.mygdx.game.ui.CommonUI;
 import com.mygdx.game.ui.FloatingText;
 import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
+import com.mygdx.game.util.Jukebox;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -112,6 +113,13 @@ public abstract class Entity implements Comparable<Entity> {
 
     public abstract Vector2 getEntityCenter();
 
+    public boolean isTargetAble() {
+        return (health > 0f && !isTeleporting &&
+                state != GameRegister.EntityState.TELEPORTING_IN &&
+                state != GameRegister.EntityState.TELEPORTING_OUT &&
+                !fadeOut && !fadeIn);
+    }
+
     /**
      * Checks if point hits this entity
      *
@@ -182,8 +190,11 @@ public abstract class Entity implements Comparable<Entity> {
             else if(!isRespawning) { // respawn player after respawn animation is done
                 respawn();
             }
+            return;
         }
 
+        if(damages.size() == 0) // no damage nor respawn
+            updateHealth(healthState); // just updates health
     }
 
     public void renderDamagePoint(GameRegister.Damage damage) {
@@ -568,6 +579,28 @@ public abstract class Entity implements Comparable<Entity> {
      */
     public abstract void renderTargetUI(SpriteBatch batch);
 
+    protected Jukebox.SoundType sfxAttackType;
+    protected String sfxAttackName = "";
+    private long lastAttackSFX = System.currentTimeMillis();
+
+    /**
+     *
+     */
+    public Timer.Task attackSFX = new Timer.Task() {
+        @Override
+        public void run() {
+            if(sfxAttackName.equals("")) {
+                this.cancel();
+                return;
+            }
+            long now = System.currentTimeMillis();
+            if(now - lastAttackSFX >= 1000f/attackSpeed ) {
+                Jukebox.playSound(sfxAttackType, sfxAttackName);
+                lastAttackSFX = System.currentTimeMillis();
+            }
+        }
+    };
+
     public static class Character extends Entity {
         // Constant rows and columns of the sprite sheet
         private static final int FRAME_COLS = 6, FRAME_ROWS = 24;
@@ -580,7 +613,7 @@ public abstract class Entity implements Comparable<Entity> {
         Map<Direction, Animation<TextureRegion>> walk, idle, attack; // animations
         private Entity target = null; // the current character target - selected entity
         float animTime; // A variable for tracking elapsed time for the animation
-        public String name;
+        public String name, map, zone;
         public int id, role_level, outfitId;
         public Vector2 position, interPos;
         public Direction direction;
@@ -616,11 +649,11 @@ public abstract class Entity implements Comparable<Entity> {
                 return 1;
         }
 
-        public Entity getTarget() {
+        public synchronized Entity getTarget() {
             return target;
         }
 
-        public void setTarget(Entity e) {
+        public synchronized void setTarget(Entity e) {
             if(target != null && e != null && e.uId == target.uId) return; // same target as before, do nothing
             if(e != null && !e.isTargetAble) return; // if its not targetable return
             if(isUnmovable()) return; // in case unmovable(logging in, teleportin...) cannot interact
@@ -696,6 +729,25 @@ public abstract class Entity implements Comparable<Entity> {
             }
         }
 
+        /**
+         * Checks if there are the necessity to update server state for clients
+         * in case of loss of synchronization - for clients only
+         */
+        public void stateCheck(GameRegister.UpdateCharacter msg) {
+            if(this.state != msg.character.state) {
+                if(GameClient.getInstance().getClientId() == this.id) {
+                    //System.out.println(this.state + " sv: " + msg.character.state);
+                    if(this.state == GameRegister.EntityState.ATTACKING) {
+                        if(target != null && target.isAlive && target.isTargetAble && !target.isTeleporting)
+                            GameClient.getInstance().requestInteraction(GameRegister.Interaction.ATTACK_ENTITY, target.contextId, target.type);
+                    } else if (this.state == GameRegister.EntityState.FREE) {
+                        if(target != null)
+                            GameClient.getInstance().requestInteraction(GameRegister.Interaction.STOP_INTERACTION, target.contextId, target.type);
+                    }
+                }
+            }
+        }
+
         public static class EntityInterPos {
             public long timestamp;
             public Vector2 position;
@@ -718,6 +770,8 @@ public abstract class Entity implements Comparable<Entity> {
             this.type = GameRegister.EntityType.CHARACTER;
             this.isInteractive = true;
             this.isTargetAble = true;
+            this.map = "Nova Terra";
+            this.zone = "Initium";
             //this.bufferedPos.putIfAbsent(System.currentTimeMillis(), new Vector2(this.x, this.y));
             startPos = new Vector2(this.x, this.y);
             if(role_level == 0)
@@ -1195,8 +1249,8 @@ public abstract class Entity implements Comparable<Entity> {
                         }
                     }
 
-                    // do not attack if target is already dead
-                    if(target.health <= 0)
+                    // do not attack if target is already dead or dying
+                    if(target.health <= 0 || target.fadeOut)
                         return;
                     spawnMagicProjectile();
                 }
@@ -1207,7 +1261,7 @@ public abstract class Entity implements Comparable<Entity> {
         private void spawnMagicProjectile() {
             Projectile projectile = GameScreen.getProjectilePool().obtain();
             projectile.init(sfxAtlas.findRegions("PrismaWand"), 0.7f, 0.7f, 1.0f/attackSpeed,
-                            1/30f,this, target, true, true, Interpolation.bounce);
+                            1/30f,this, target, true, true, Interpolation.bounce, "prisma_wand");
             GameScreen.addProjectile(projectile);
         }
 
@@ -1232,7 +1286,7 @@ public abstract class Entity implements Comparable<Entity> {
         @Override
         public void updateHealth(float health) {
             this.health = health;
-            if(this.health<=0) {
+            if(this.health<=0 && isAlive) {
                 die();
             }
         }
@@ -1252,12 +1306,11 @@ public abstract class Entity implements Comparable<Entity> {
                     this.id == GameClient.getInstance().getClientCharacter().id) { // if its client
                 // shows button to respawn
                 GameScreen.showDeathUI();
-                this.direction = Direction.SOUTH;
                 WorldMap.hoverEntity = null;
                 stopInteraction(); // stop interaction of player
+                // starts fading out effect
+                fadeOut(5f);
             }
-            // starts fading out effect
-            fadeOut(5f);
         }
 
         @Override
@@ -1842,6 +1895,12 @@ public abstract class Entity implements Comparable<Entity> {
             nameLabel.skipToTheEnd();
             outlineLabel = new TypingLabel("{SIZE=55%}{COLOR=black}"+this.name+"[%]", font);
             outlineLabel.skipToTheEnd();
+            // sfx vars
+            sfxAttackType = Jukebox.SoundType.CREATURE;
+            StringBuilder sb = new StringBuilder();
+            sb.append(name.toLowerCase());
+            sb.append("_attack");
+            sfxAttackName = String.valueOf(sb);
             // initialize animators
             walk = new ConcurrentHashMap<>();
             attack = new ConcurrentHashMap<>();
@@ -1993,6 +2052,7 @@ public abstract class Entity implements Comparable<Entity> {
 
         @Override
         public void die() {
+            System.out.println("WTF");
             this.isAlive = false;
             this.isInteractive = false;
             this.isTargetAble = false;
@@ -2002,6 +2062,7 @@ public abstract class Entity implements Comparable<Entity> {
                 GameClient.getInstance().getClientCharacter().stopInteractionTimer();
                 GameClient.getInstance().getClientCharacter().setTarget(null);
             }
+            if(attackSFX.isScheduled()) attackSFX.cancel(); // makes sure to cancel attack sfx
         }
 
         @Override
@@ -2020,6 +2081,8 @@ public abstract class Entity implements Comparable<Entity> {
 
             Map<Direction, Animation<TextureRegion>> currentAnimation = walk; // only walk anim for now
 
+            if(isAlive && health <= 0f) die(); // makes sure to die when needed
+
             switch (state) {
                 case IDLE:
                     currentAnimation = idle;
@@ -2030,10 +2093,16 @@ public abstract class Entity implements Comparable<Entity> {
                     break;
                 case ATTACKING:
                     currentAnimation = attack;
+                    if(!attackSFX.isScheduled()) { // if not running, schedule sound effects of attack
+                        Timer.schedule(attackSFX, 0f, GameRegister.clientTickrate());
+                    }
                     break;
                 default:
                     break;
             }
+
+            // makes sure to cancel attack sfx when not attacking or when dying
+            if((state != State.ATTACKING || fadeOut) && attackSFX.isScheduled()) attackSFX.cancel();
 
             // try to predict position if its following this player
             if(target != null && target.id == GameClient.getInstance().getClientCharacter().id) {
@@ -2181,6 +2250,7 @@ public abstract class Entity implements Comparable<Entity> {
             spriteSheet.dispose();
             debugTex.dispose();
             debugCircle.dispose();
+            if(attackSFX.isScheduled()) attackSFX.cancel();
         }
 
         // transform a creature update from server into a creature object from client

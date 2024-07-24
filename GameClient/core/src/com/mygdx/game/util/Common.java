@@ -1,11 +1,18 @@
 package com.mygdx.game.util;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.math.Circle;
 import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 
+import org.apache.commons.io.FileUtils;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 
 public class Common {
@@ -63,5 +70,38 @@ public class Common {
             }
         }
         return false;
+    }
+
+    //directories within assets that you want a catalog of
+//    static final String[] directories = {
+//            "assets/sounds/weapons",
+//            "assets/sounds/creatures"
+//    };
+    public static ArrayList<String> createDirCatalog(String dir) {
+        String workingDir = System.getProperty("user.dir");
+        ArrayList<String> dirFileNames = new ArrayList<>();
+
+        //for (String dir : directories){
+        File directory = new File(workingDir + "/" + dir);
+//        File outputFile = new File(directory, "catalog.txt");
+//        FileUtils.deleteQuietly(outputFile); //delete previous catalog
+        File[] files = directory.listFiles();
+
+        for (int i = 0; i < files.length; i++) {
+            //FileUtils.write(outputFile, files[i].getName() + (i == files.length - 1 ? "" : "\n"), Charset.forName("UTF-8"), true);
+            dirFileNames.add(files[i].getName());
+        }
+        //}
+
+        return dirFileNames;
+    }
+
+    public static ArrayList<String> createDirCatalogAndroid(String dir) {
+        FileHandle dirHandle = Gdx.files.internal(dir);
+        ArrayList<String> dirFileNames = new ArrayList<>();
+        for (FileHandle entry: dirHandle.list()) {
+            dirFileNames.add(entry.name());
+        }
+        return dirFileNames;
     }
 }
