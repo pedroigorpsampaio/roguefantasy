@@ -188,7 +188,9 @@ public class OptionWindow extends GameWindow {
 
             // calls parent update method to properly reload volume according to the type of screen this window is on
             if(parent instanceof MainMenuScreen)
-                ((MainMenuScreen) parent).update(getInstance(), false, MainMenuScreen.ScreenCommands.RELOAD_VOLUME);
+                ((MainMenuScreen) parent).update(getInstance(), false, CommonUI.ScreenCommands.RELOAD_VOLUME);
+            else if(parent instanceof  GameScreen)
+                ((GameScreen) parent).processWindowCmd(getInstance(), false, CommonUI.ScreenCommands.RELOAD_VOLUME);
 
             // calls screen parent resume method to update needed vars
             //parent.resume();
@@ -235,7 +237,9 @@ public class OptionWindow extends GameWindow {
 
             // calls parent update method to properly reload language according to the type of screen this window is on
             if(parent instanceof MainMenuScreen)
-                ((MainMenuScreen) parent).update(getInstance(), true, MainMenuScreen.ScreenCommands.RELOAD_LANGUAGE);
+                ((MainMenuScreen) parent).update(getInstance(), true, CommonUI.ScreenCommands.RELOAD_LANGUAGE);
+            else if(parent instanceof  GameScreen)
+                ((GameScreen) parent).processWindowCmd(getInstance(), true, CommonUI.ScreenCommands.RELOAD_LANGUAGE);
 
         }
 

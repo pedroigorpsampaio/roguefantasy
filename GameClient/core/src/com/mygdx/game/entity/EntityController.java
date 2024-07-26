@@ -99,11 +99,13 @@ public class EntityController {
 
                 if(e == null) continue;
 
+                Entity target = GameClient.getInstance().getClientCharacter().getTarget();
+                
                 // if entity is target of client player, render selected target circle
                 if(GameClient.getInstance().getClientCharacter() != null &&
-                        GameClient.getInstance().getClientCharacter().getTarget() != null &&
+                        target != null &&
                         e != null &&
-                        GameClient.getInstance().getClientCharacter().getTarget().uId == e.uId)
+                        target.uId == e.uId)
                     e.renderTargetUI(batch);
 
                 if(e == null) continue;

@@ -245,7 +245,7 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
                 if(encoder == null) encoder = Encoder.getInstance();
                 String decryptedToken = encoder.decryptSignedData(token.token);
                 if(parent instanceof MainMenuScreen) { // perform change screen from menu to game screen
-                    ((MainMenuScreen) parent).update(getInstance(), false, MainMenuScreen.ScreenCommands.DISPOSE);
+                    ((MainMenuScreen) parent).update(getInstance(), false, CommonUI.ScreenCommands.DISPOSE);
                     game.setScreen(new LoadScreen("game", manager, decryptedToken));
                 }
             }
@@ -342,7 +342,7 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
         private void registerLinkOnClick(InputEvent event, float x, float y) {
             // calls parent screen update method to properly switch to register window
             if(parent instanceof MainMenuScreen) {
-                ((MainMenuScreen) parent).update(getInstance(), false, MainMenuScreen.ScreenCommands.LOAD_REGISTER_WINDOW);
+                ((MainMenuScreen) parent).update(getInstance(), false, CommonUI.ScreenCommands.LOAD_REGISTER_WINDOW);
             }
         }
 

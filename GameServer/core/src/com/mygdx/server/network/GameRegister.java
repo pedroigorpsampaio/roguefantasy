@@ -17,7 +17,7 @@ public class GameRegister {
     static public final int udp_port = 38572; // GAME SERVER UDP PORT
     static public final int serverTickrate = 15; // the amount of communication updates per second in server
     static public final int clientTickrate = 20; // the amount of communication updates per second in client
-    static public boolean lagSimulation = false; // simulate lag
+    static public boolean lagSimulation = true; // simulate lag
     static public int lag = 240; // simulated lag value in ms
     static public final int N_ROWS = 45; // number of rows to be sent to player in state (AoI)
     static public final int N_COLS = 45; // number of cols to be sent to player in state (AoI)

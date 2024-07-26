@@ -248,7 +248,7 @@ public class MainMenuScreen implements Screen {
     /**
      * Updates this screen based on commands received via opened windows
      */
-    public void update(GameWindow window, boolean rebuild, ScreenCommands cmd) {
+    public void update(GameWindow window, boolean rebuild, CommonUI.ScreenCommands cmd) {
         // commands received through option window
         if(window.equals(optionWindow)) {
             // execute desired command
@@ -325,15 +325,6 @@ public class MainMenuScreen implements Screen {
         optionWindow.remove();
         loginWindow.remove();
         registerWindow.remove();
-    }
-
-    // possible screen commands to receive from windows
-    enum ScreenCommands {
-        RELOAD_LANGUAGE,
-        RELOAD_VOLUME,
-        LOAD_REGISTER_WINDOW,
-        DISPOSE,
-        LOAD_LOGIN_WINDOW
     }
 
     /**

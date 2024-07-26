@@ -552,8 +552,9 @@ public class Component {
 
             //isInteracting = true;
 //
-            if(hitTarget.isScheduled())
-               hitTarget.cancel();
+            if(hitTarget.isScheduled()) {
+                hitTarget.cancel();
+            }
 
             target.hitCount = 0;
 
@@ -581,6 +582,7 @@ public class Component {
                     interactionTimer.delay(delay);
                     return;
                 }
+
                 target.hit(tag.id, ENTITY_TYPE, attr);
 
                 if(!target.isAlive) { // if target is not alive anymore
@@ -763,7 +765,11 @@ public class Component {
         public long timestamp;
         public int hitCount = 0;
         public boolean isAlive = true;
-        private long lastAttack = System.currentTimeMillis();
+        private long lastAttack = 0;
+
+        public void resetLastAttack() {
+            lastAttack = 0;
+        }
 
         /**
          * called when this target is hit
@@ -776,9 +782,11 @@ public class Component {
             if(type == null || entity == null) return;
 
             long now = System.currentTimeMillis();
+
             if(now - lastAttack >= 1000f/attacker.attackSpeed ) { // only attacks respecting attack speed of attacker
                 hitCount++;
                 lastAttack = System.currentTimeMillis();
+
                 switch (type) {
                     case CHARACTER:
                         Component.Character targetCharacter = (Component.Character) entity;
@@ -805,6 +813,9 @@ public class Component {
                     default:
                         break;
                 }
+
+                if(!isAlive)
+                    resetLastAttack();
             }
         }
 
@@ -854,6 +865,8 @@ public class Component {
                         default:
                             break;
                     }
+                    if(!isAlive)
+                        resetLastAttack();
                     character.hitDelayedFinished();
                 }
             }, delay);
@@ -1418,7 +1431,13 @@ public class Component {
             }
 
             if(body.get(Attributes.class).health <= 0f) {
-                body.get(Spawn.class).respawn(body);
+                this.state = State.DYING;
+                Timer.schedule(new Timer.Task() {
+                    @Override
+                    public void run() {
+                        body.get(Spawn.class).respawn(body);
+                    }
+                }, GameRegister.clientTickrate()*2f); // delays so players can get dead state update before respawning it
                 return false;
             }
 

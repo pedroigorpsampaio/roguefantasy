@@ -705,7 +705,7 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
         // called when back button is pressed
         private void backBtnOnClick() {
             if(parent instanceof MainMenuScreen) {  // goes back to login screen
-                ((MainMenuScreen) parent).update(getInstance(), false, MainMenuScreen.ScreenCommands.LOAD_LOGIN_WINDOW);
+                ((MainMenuScreen) parent).update(getInstance(), false, CommonUI.ScreenCommands.LOAD_LOGIN_WINDOW);
             }
         }
     }

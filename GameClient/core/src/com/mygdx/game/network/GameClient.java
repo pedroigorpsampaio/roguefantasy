@@ -1,5 +1,7 @@
 package com.mygdx.game.network;
 
+import static com.mygdx.game.entity.Entity.State.DYING;
+
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
@@ -486,6 +488,9 @@ public class GameClient extends DispatchServer {
                 /** updates related to damage **/
                 creature.updateDamage(creatureUpdate.health, creatureUpdate.damages);
 
+                if(creatureUpdate.state.equals("DYING"))
+                    creature.state = DYING;
+
 //                /** render creature damages received since last state **/
 //                creature.renderDamagePoints(creatureUpdate.damages);
             }
@@ -540,10 +545,17 @@ public class GameClient extends DispatchServer {
                     getInstance().sendResponse(new GameRegister.Response(GameRegister.Response.Type.RESPAWN_FINISHED));
                 }
 
-                if(character.isRespawning && msg.character.state == GameRegister.EntityState.FREE) { // if it was respawning, and its not anymore
-//                    GameScreen.pointCameraTo(character.getEntityCenter());
-//                    GameScreen.hideDeathUI(); // hides death ui
-//                    GameScreen.lockWorldRender = false;
+//                if(character.isRespawning && msg.character.state == GameRegister.EntityState.FREE) { // if it was respawning, and its not anymore
+////                    GameScreen.pointCameraTo(character.getEntityCenter());
+////                    GameScreen.hideDeathUI(); // hides death ui
+////                    GameScreen.lockWorldRender = false;
+//                }
+
+                // desynch attack TODO: AVOID THIS BEHAVIOUR - WHY IS IT HAPPENING?
+                if(msg.character.state == GameRegister.EntityState.FREE && character.state == GameRegister.EntityState.ATTACKING) {
+                    if (getInstance().clientCharId ==  msg.character.id) {
+                        GameClient.getInstance().requestInteraction(GameRegister.Interaction.ATTACK_ENTITY, character.getTarget().contextId,  character.getTarget().type);
+                    }
                 }
 
                 /** updates attributes **/
@@ -633,11 +645,12 @@ public class GameClient extends DispatchServer {
 
         public void removeCharacter (int id) {
             synchronized (characters) {
-                Entity.Character character = characters.remove(id); // remove from list of logged chars
+                Entity.Character character = characters.get(id); // get from list of logged chars
                 if (character != null) { // only proceeds if remove is made, meaning id was found in list still
-                    EntityController.getInstance().removeEntity(character.uId); // remove from list of drawn entities
-                    character.dispose();
-                    System.out.println(character.name + " removed");
+//                    EntityController.getInstance().removeEntity(character.uId); // remove from list of drawn entities
+//                    character.dispose();
+//                    System.out.println(character.name + " removed");
+                    character.fadeOut(5f); // let fade out effect remove after effect
                 }
             }
         }
@@ -733,6 +746,7 @@ public class GameClient extends DispatchServer {
                     Map.Entry<Integer, Entity.Character> entry = iterator.next();
                     if(entry.getValue().uId == uId) {
                         entry.getValue().stopInteraction(); // stop any interaction of character
+                        entry.getValue().dispose();
                         iterator.remove();
                         return;
                     }

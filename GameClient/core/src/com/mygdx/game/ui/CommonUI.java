@@ -35,6 +35,15 @@ public class CommonUI {
     public static boolean enableDebugTex = false;
     public static HashMap<String, Cursor> cursorBank;
 
+    // possible screen commands to receive from windows
+    enum ScreenCommands {
+        RELOAD_LANGUAGE,
+        RELOAD_VOLUME,
+        LOAD_REGISTER_WINDOW,
+        DISPOSE,
+        LOAD_LOGIN_WINDOW
+    }
+
     // creates a dialog from the parameters provided
     public static Dialog createDialog(Stage stage, Skin skin, I18NBundle langBundle,
                                       Font iconFont, String title, String content, boolean anim, boolean closeable) {

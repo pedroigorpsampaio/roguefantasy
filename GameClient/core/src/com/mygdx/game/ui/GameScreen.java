@@ -27,6 +27,7 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -84,10 +85,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private static TextButton respawnBtn;
     private static TypingLabel deathMsgLabel, mapNameLabel, zoneNameLabel;
     private static Stack targetStack;
+    private static ChatWindow chatWindow;
     private Image closestEntityImg, targetImg;
     private Button selectTargetBtn;
-    private static Button nextTargetBtn;
-    private static Button lastTargetBtn;
+    private static Button lastTargetBtn, nextTargetBtn, optionsBtn;
     private FitViewport uiViewport;
     private Font font;
     private Timer updateTimer;
@@ -106,7 +107,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Music bgm;
     private RogueFantasy game;
     private Preferences prefs;
-    private RegisterWindow registerWindow;
+    private OptionWindow optionWindow;
     private I18NBundle langBundle;
     private Texture bgTexture;
     private Image bg;
@@ -127,7 +128,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     ShapeRenderer uiDebug;
     public static ShapeRenderer shapeDebug;
     private float aimZoom;
-    public static boolean onStageActor = false;
+    public static boolean onStageActor = false, onStageActorDown = false;
     private static boolean isInputHappening = false;
     public static Vector3 unprojectedMouse = new Vector3();
     private Vector3 screenMouse = new Vector3();
@@ -138,6 +139,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
     // array containing the active projectiles.
     private static final Array<Projectile> projectiles = new Array<Projectile>();
+    private Actor onActor = null; // actor that mouse is currently on (null if none)
+
     public static void addProjectile(Projectile projectile) {projectiles.add(projectile);}
     // projectile pool.
     private static final Pool<Projectile> projectilePool = new Pool<Projectile>() {
@@ -206,12 +209,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
         TiledMap map = manager.get("world/novaterra.tmx");
         world = WorldMap.getInstance();
         world.init(map, batch, camera);
-        
+
         // ui atlas
         uiAtlas = manager.get("ui/packed_textures/ui.atlas");
 
         /**
-         * Load entity ui assets
+         * Load ui assets
          */
         uiBg = new Image(uiAtlas.findRegion("panel"));
         healthBarBg = new Image(uiAtlas.findRegion("healthBarBg"));
@@ -225,13 +228,17 @@ public class GameScreen implements Screen, PropertyChangeListener {
         TextureRegionDrawable up = new TextureRegionDrawable(new TextureRegion(new Sprite(region)));
         selectTargetBtn = new Button(up, up.tint(Color.GRAY));
         // ui buttons
-        region = uiAtlas.findRegion("tile041");
+        region = uiAtlas.findRegion("forwardIcon");
         up = new TextureRegionDrawable(new TextureRegion(new Sprite(region)));
         nextTargetBtn = new Button(up, up.tint(Color.GRAY));
 
-        region = uiAtlas.findRegion("tile040");
+        region = uiAtlas.findRegion("backwardIcon");
         up = new TextureRegionDrawable(new TextureRegion(new Sprite(region)));
         lastTargetBtn = new Button(up, up.tint(Color.GRAY));
+
+        region = uiAtlas.findRegion("optionsIcon");
+        up = new TextureRegionDrawable(new TextureRegion(new Sprite(region)));
+        optionsBtn = new Button(up, up.tint(Color.GRAY));
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
@@ -243,7 +250,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         bgm.setVolume(prefs.getFloat("bgmVolume", 1.0f));
         bgm.play();
 
-        stage = new Stage(new StretchViewport(1280, 720));
+        stage = new Stage(new StretchViewport(1920, 1080));
+
         gestureDetector = new GestureDetector(20, 0.4f,
                                     0.2f, Integer.MAX_VALUE, new GameGestureListener());
         inputMultiplexer = new InputMultiplexer(gestureDetector, stage);
@@ -252,25 +260,56 @@ public class GameScreen implements Screen, PropertyChangeListener {
         //Gdx.input.setInputProcessor(stage);
         font = skin.get("emojiFont", Font.class); // gets typist font with icons
 
+
+        /**
+         * Create windows
+         */
+        chatWindow = new ChatWindow(game, stage, this, manager, "", skin, "newWindowStyle");
+        buildChatWindow();
+
+        optionWindow = new OptionWindow(game, stage, this, manager, " "+langBundle.format("option"),
+                skin, "newWindowStyle");
+
+        /**
+         * Menu buttons
+         */
+        optionsBtn.setTransform(true);
+        optionsBtn.setScale(4f, 4f);
+        optionsBtn.setX(stage.getWidth() - optionsBtn.getWidth()*optionsBtn.getScaleX());
+        optionsBtn.setY(stage.getHeight() - optionsBtn.getHeight()*optionsBtn.getScaleY());
+
+        /**
+         * debug
+         */
+
         fpsLabel = new Label("fps: 1441", skin, "fontMedium", Color.WHITE);
         fpsLabel.setAlignment(Align.left);
         fpsLabel.setX(12);
+        fpsLabel.setY(stage.getHeight()-fpsLabel.getHeight());
 
         pingLabel = new Label("ping: 3334", skin, "fontMedium", Color.WHITE);
         pingLabel.setAlignment(Align.left);
         pingLabel.setX(fpsLabel.getX()+fpsLabel.getWidth()+22);
+        pingLabel.setY(stage.getHeight()-fpsLabel.getHeight());
 
         ramLabel = new Label("RAM: 00MB"+Common.getRamUsage(), skin, "fontMedium", Color.WHITE);
         ramLabel.setAlignment(Align.left);
         ramLabel.setX(pingLabel.getX()+pingLabel.getWidth()+22);
+        ramLabel.setY(stage.getHeight()-fpsLabel.getHeight());
 
         bCallsLabel = new Label("batch calls: 110", skin, "fontMedium", Color.WHITE);
         bCallsLabel.setAlignment(Align.left);
         bCallsLabel.setX(ramLabel.getX()+ramLabel.getWidth()+22);
+        bCallsLabel.setY(stage.getHeight()-fpsLabel.getHeight());
 
         mouseOnLabel = new Label("Entity: none", skin, "fontMedium", Color.WHITE);
         mouseOnLabel.setAlignment(Align.left);
         mouseOnLabel.setX(bCallsLabel.getX()+bCallsLabel.getWidth()+22);
+        mouseOnLabel.setY(stage.getHeight()-fpsLabel.getHeight());
+
+        /**
+         * Android UI for target interaction
+         */
 
         targetUiStack = new Stack();
         float x = stage.getWidth()/2f;
@@ -338,6 +377,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         stage.addActor(ramLabel);
         stage.addActor(bCallsLabel);
         stage.addActor(mouseOnLabel);
+        stage.addActor(optionsBtn);
         /**
          * Android UI only
          */
@@ -359,6 +399,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
             @Override
             public boolean keyDown(InputEvent event, int keycode) {
                 if( Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor) return false; // ignore if there is clicking/touching
+                if(chatWindow.hasFocus()) return false; // dont walk if chat window has focus
 
                 if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) movement.y += 1;
                 else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) movement.y += 1;
@@ -382,22 +423,39 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 /**
                  * NON-MOVEMENT INTERACTIONS
                  */
-                if(keycode == Input.Keys.ESCAPE)
-                    GameClient.getInstance().getClientCharacter().setTarget(null);
+                if(keycode == Input.Keys.ESCAPE) {
+                    if(chatWindow.hasFocus())
+                        chatWindow.clearMessageField(false);
+                    else
+                        GameClient.getInstance().getClientCharacter().setTarget(null);
+                }
+
+                if(keycode == Input.Keys.ENTER) {
+                    if(chatWindow.hasFocus())
+                        chatWindow.sendMessage();
+                    else
+                        chatWindow.setFocus();
+                }
 
                 if(keycode == Input.Keys.TAB && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {// tab targeting
-                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), false);
-                    GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
+                    if(!chatWindow.hasFocus()) {
+                        Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), false);
+                        GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
+                    }
                 }
 
                 if(keycode == Input.Keys.TAB && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {// tab targeting in reverse
-                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), true);
-                    GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
+                    if(!chatWindow.hasFocus()) {
+                        Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), true);
+                        GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
+                    }
                 }
 
                 if(keycode == Input.Keys.SPACE) {// closest interactive entity targeting
-                    Entity nextTarget = EntityController.getInstance().getNextTargetEntity();
-                    GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
+                    if(!chatWindow.hasFocus()) {
+                        Entity nextTarget = EntityController.getInstance().getNextTargetEntity();
+                        GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
+                    }
                 }
 
                 if(keycode == Input.Keys.L && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT))
@@ -407,10 +465,15 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     CommonUI.enableDebugTex = !CommonUI.enableDebugTex;
                 }
 
+                if(keycode == Input.Keys.O && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
+                    loadWindow(optionWindow, true, true);
+                }
+
                 /**
                  * MOVEMENT INTERACTIONS
                  */
                 if( Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor) return false; // ignore if there is clicking/touching in world
+                if(chatWindow.hasFocus()) return false; // dont walk if chat window has focus
 
                 if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) movement.y -= 1;
                 else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) movement.y -= 1;
@@ -431,6 +494,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
             @Override
             public boolean scrolled(InputEvent event, float x, float y, float amountX, float amountY) {
+                if(onStageActor) {
+                    return super.scrolled(event, x, y, amountX, amountY); // do not zoom world if mouse is on stage actor
+                }
+                // change world zoom
                 aimZoom = camera.zoom + amountY * 0.1f;
                 //world.zoom(amountY);
                 //camera.zoom += amountY;
@@ -501,6 +568,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
     public static void showDeathUI() {
         hideAndroidTargetInteraction();
+        chatWindow.remove();
 //        deathMsgLabel.setText(deathMsgLabel.storedText);
         if(deathMsgLabel.hasEnded())
             deathMsgLabel.restart(); // restart if it has ended
@@ -509,9 +577,24 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // let the respawn btn be shown by render method after animation
     }
 
+    public static Stage getStage() {
+        return stage;
+    }
+
+    private void buildChatWindow() {
+        chatWindow.build();
+        //chatWindow.setScale(0.7f, 0.7f);
+        //chatWindow.setWidth(stage.getWidth()/2f);
+        chatWindow.setX(stage.getWidth() /2f - chatWindow.getWidth() * chatWindow.getScaleX() /2f);
+        chatWindow.setY(1f);
+        chatWindow.updateHitBox();
+        stage.addActor(chatWindow);
+    }
+
     public static void hideDeathUI() {
         respawnBtn.remove();
         deathMsgLabel.remove();
+        stage.addActor(chatWindow);
         showAndroidTargetInteraction();
     }
 
@@ -692,8 +775,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         // update whether mouse is on actor of stage
         screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
-        if (Gdx.app.getType() == Application.ApplicationType.Desktop) // gets hit with actor on mouse position
-            onStageActor = isActorHit(screenMouse.x, screenMouse.y);
+        if (Gdx.app.getType() == Application.ApplicationType.Desktop) { // gets hit with actor on mouse position
+            onActor = isActorHit(screenMouse.x, screenMouse.y);
+            onStageActor = onActor == null ? false : true;
+
+            // update scroll focus if on chat window
+            if(chatWindow.isPointOn(screenMouse.x, screenMouse.y)) { // on chat window
+                chatWindow.setScrollFocus();
+            } else {
+                chatWindow.removeScrollFocus();
+            }
+
+        }
 
         // correct velocity
         if(!Gdx.input.isKeyPressed(Input.Keys.W) && !Gdx.input.isKeyPressed(Input.Keys.UP) &&
@@ -715,7 +808,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 movement.x = joystickDir.x;
                 movement.y = joystickDir.y;
             } else if (Gdx.app.getType() == Application.ApplicationType.Desktop) {    // if its on pc move accordingly
-                if (Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor) { // only left mouse button walks and if not on ui stage actor
+                if (Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor && !onStageActorDown) { // only left mouse button walks and if not on ui stage actor
                     touchPos = new Vector2(unprojectedMouse.x - gameClient.getClientCharacter().spriteW / 2f,  // compensate to use center of char sprite as anchor
                             unprojectedMouse.y - gameClient.getClientCharacter().spriteH / 2f);
                     movement.xEnd = touchPos.x;
@@ -739,11 +832,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
         }
     }
 
-    private boolean isActorHit(float x, float y) {
-        if(stage.hit(x, y, false) == null)
-            return false;
-        else
-            return true;
+    private Actor isActorHit(float x, float y) {
+//        if(stage.hit(x, y, false) == null)
+//            return false;
+//        else
+//            return true;
+        return stage.hit(x, y, false);
     }
 
     private void updateCamera() {
@@ -774,10 +868,19 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 target.scl(speed);
                 cameraPosition.add(target);
                 camera.position.set(cameraPosition);
+
+                if(player.teleportOutAnim) {
+                    camera.position.x = player.getEntityCenter().x;
+                    camera.position.y = player.getEntityCenter().y;
+                }
             } else {
                 camera.position.x = player.getCenter().x + player.spriteW/12f;
                 camera.position.y = player.getCenter().y + player.spriteH/12f;
-                playerIsTarget = true; // sets player as camera target
+                if(player.finalDrawPosSet) {
+                    camera.position.x = player.getEntityCenter().x;
+                    camera.position.y = player.getEntityCenter().y;
+                    playerIsTarget = true; // sets player as camera target
+                }
             }
 
 //            if(gameClient.getClientCharacter().isRespawning) {
@@ -822,7 +925,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         updateCamera(); // updates camera
         updateProjectiles(); // update alive projectiles
-        
+
         batch.setProjectionMatrix(camera.combined); // sets camera for projection
 
         Gdx.gl.glClearColor(0, 0, 0, 1);
@@ -959,6 +1062,16 @@ public class GameScreen implements Screen, PropertyChangeListener {
             }
             shapeDebug.end();
         }
+
+//        shapeDebug.setProjectionMatrix(stage.getCamera().combined);
+//        shapeDebug.begin(ShapeRenderer.ShapeType.Filled);
+//        shapeDebug.setColor(Color.BLUE);
+//        //shapeDebug.circle(unprojectedMouse.x, unprojectedMouse.y, 1);
+////        for(Rectangle portal : WorldMap.portals) {
+////            shapeDebug.rect(portal.x, portal.y, portal.width, portal.height);
+////        }
+//        shapeDebug.rect(chatWindow.getHitBox().getX(), chatWindow.getHitBox().getY(), chatWindow.getHitBox().width, chatWindow.getHitBox().getHeight());
+//        shapeDebug.end();
 
         // line between player and target debug
         if(gameClient.getClientCharacter() != null && gameClient.getClientCharacter().getTarget() != null  && CommonUI.enableDebugTex) {
@@ -1172,17 +1285,16 @@ public class GameScreen implements Screen, PropertyChangeListener {
         camera.viewportHeight = 32f * height/width;
         camera.update();
 
-//        uiCam.viewportWidth = resW;
-//        uiCam.viewportHeight = resW * height/width;
-//        uiCam.position.set(width / 2f, height/ 2f, 0);
-//        uiCam.update();
-
         uiCam.viewportWidth = width;
         uiCam.viewportHeight = height;
         uiCam.position.set(width / 2, height / 2, 0);
         uiCam.update();
 
-        //world.resize(width, height);
+        /**
+         * Update windows
+         */
+        optionWindow.setPosition(stage.getWidth() / 2.0f , stage.getHeight() / 2.0f, Align.center);
+        optionWindow.resize(width, height);
     }
 
     @Override
@@ -1244,7 +1356,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         public boolean touchDown(float x, float y, int pointer, int button) {
             if (Gdx.app.getType() == Application.ApplicationType.Android) { // gets if an actor is hit on touchdown
                 screenMouse = stage.getViewport().getCamera().unproject(new Vector3(x, y, 0f));
-                onStageActor = isActorHit(screenMouse.x, screenMouse.y);
+                onActor = isActorHit(screenMouse.x, screenMouse.y);
+                onStageActor = onActor == null ? false : true;
 
                 if(!onStageActor) {
                     vec3 = new Vector3(x, y,0); //  use second touch for interactions instead, first touch is movement
@@ -1324,6 +1437,84 @@ public class GameScreen implements Screen, PropertyChangeListener {
     }
 
     /**
+     * Clear any opened windows that can be closed
+     */
+    private void clearWindows() {
+        if(optionWindow.getStage() != null)
+            optionWindow.remove();
+    }
+
+    /**
+     * Should reload texts to update to new language settings
+     */
+    private void reloadLanguage() {
+
+    }
+
+    /**
+     * Process commands received via opened windows
+     */
+    public void processWindowCmd(GameWindow window, boolean rebuild, CommonUI.ScreenCommands cmd) {
+        // commands received through option window
+        if(window.equals(optionWindow)) {
+            // execute desired command
+            switch(cmd) {
+                case RELOAD_VOLUME:
+                    bgm.setVolume(prefs.getFloat("bgmVolume", 1.0f)); // update volumes
+                    break;
+                case RELOAD_LANGUAGE:
+                    reloadLanguage(); // call method that reloads language and update texts
+                    break;
+                default:
+                    Gdx.app.error("Unknown Window Command", "Current screen received an unknown command from option window");
+                    break;
+            }
+
+            // reloads option window if requested (only if its opened) - updates language changes
+            if(rebuild && optionWindow.getStage().equals(stage))
+                loadWindow(optionWindow, true, true);
+        }
+    }
+
+    /**
+     * Loads a game window into stage
+     * @param gameWindow the game window to be loaded
+     * @param single if window should be the only one opened, if so close all other windows
+     * @param centered if this window should be centered
+     */
+    private void loadWindow(GameWindow gameWindow, boolean single, boolean centered) {
+        // clear all windows to make sure only one is going to be opened at the same time
+        if(single)
+            clearWindows();
+        // builds game window - builds make sure that this window is not opened already and that it is clear for rebuilding
+        gameWindow.build();
+        // centers game window if centered is set to true
+        if(centered)
+            gameWindow.setPosition(stage.getWidth() / 2.0f , stage.getHeight() / 2.0f, Align.center);
+
+        if(gameWindow.getCaptureListeners().size == 0) {
+            gameWindow.addCaptureListener(new InputListener() {
+                @Override
+                public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+                    onStageActor = true;
+                    onStageActorDown = true;
+                    return true;
+                }
+
+                @Override
+                public void touchUp(InputEvent event, float x, float y, int pointer, int button) {
+                    onStageActorDown = false;
+                }
+
+            });
+        }
+
+        // adds built game window to the stage to display it
+        stage.addActor(gameWindow);
+        stage.draw();
+    }
+
+    /**
      * Controls UI interactions of game screen
      */
     class GameController {
@@ -1367,7 +1558,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
             });
 
             /**
-             * ALL UI CONTROLS
+             * ALL PLATFORM UI CONTROLS
              */
             respawnBtn.addListener(new ClickListener() {
                 @Override
@@ -1378,6 +1569,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     event.stop();
                     event.handle();
                     event.cancel();
+                }
+            });
+            optionsBtn.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    onStageActor = true;
+                    loadWindow(optionWindow, true, true);
                 }
             });
         }

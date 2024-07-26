@@ -6,84 +6,84 @@ filter: MipMap, MipMap
 repeat: none
 Cursor Attack Green
   rotate: false
-  xy: 262, 78
+  xy: 96, 27
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Cannot Use
   rotate: false
-  xy: 60, 27
+  xy: 130, 27
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Chop Green
   rotate: false
-  xy: 262, 44
+  xy: 298, 42
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Default
   rotate: false
-  xy: 296, 78
+  xy: 334, 78
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Blue
   rotate: false
-  xy: 94, 27
+  xy: 262, 6
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Green
   rotate: false
-  xy: 296, 44
+  xy: 368, 78
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Red
   rotate: false
-  xy: 330, 78
+  xy: 402, 88
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Magic Use Violet
   rotate: false
-  xy: 330, 44
+  xy: 436, 88
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Move Down
   rotate: false
-  xy: 262, 10
+  xy: 470, 88
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Move Up
   rotate: false
-  xy: 296, 10
+  xy: 402, 54
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Pickaxe Green
   rotate: false
-  xy: 330, 10
+  xy: 436, 54
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
   index: -1
 Cursor Scythe Green
   rotate: false
-  xy: 364, 78
+  xy: 470, 54
   size: 32, 32
   orig: 32, 32
   offset: 0, 0
@@ -102,6 +102,34 @@ UiBg
   orig: 56, 57
   offset: 0, 0
   index: -1
+backwardIcon
+  rotate: false
+  xy: 132, 61
+  size: 16, 16
+  orig: 16, 16
+  offset: 0, 0
+  index: -1
+bagIcon
+  rotate: false
+  xy: 262, 76
+  size: 34, 34
+  orig: 34, 34
+  offset: 0, 0
+  index: -1
+characterIcon
+  rotate: false
+  xy: 60, 25
+  size: 34, 34
+  orig: 34, 34
+  offset: 0, 0
+  index: -1
+forwardIcon
+  rotate: false
+  xy: 60, 7
+  size: 15, 16
+  orig: 15, 16
+  offset: 0, 0
+  index: -1
 healthBar
   rotate: false
   xy: 262, 112
@@ -116,24 +144,24 @@ healthBarBg
   orig: 128, 16
   offset: 0, 0
   index: -1
+mapIcon
+  rotate: false
+  xy: 262, 40
+  size: 34, 34
+  orig: 34, 34
+  offset: 0, 0
+  index: -1
+optionsIcon
+  rotate: false
+  xy: 298, 76
+  size: 34, 34
+  orig: 34, 34
+  offset: 0, 0
+  index: -1
 panel
   rotate: false
   xy: 2, 79
   size: 160, 41
   orig: 160, 41
-  offset: 0, 0
-  index: -1
-tile040
-  rotate: false
-  xy: 132, 61
-  size: 16, 16
-  orig: 16, 16
-  offset: 0, 0
-  index: -1
-tile041
-  rotate: false
-  xy: 60, 9
-  size: 15, 16
-  orig: 15, 16
   offset: 0, 0
   index: -1
