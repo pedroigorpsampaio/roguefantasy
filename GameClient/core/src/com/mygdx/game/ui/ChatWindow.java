@@ -1,12 +1,14 @@
 package com.mygdx.game.ui;
 
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Preferences;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -14,6 +16,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.Stack;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
@@ -21,8 +24,10 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.entity.Entity;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.util.Common;
 import com.mygdx.game.util.Encoder;
 
 import java.util.ArrayList;
@@ -34,16 +39,31 @@ import java.util.List;
  * A class that encapsulates the chat window
  */
 public class ChatWindow extends GameWindow {
-    private static final int MAX_CHAT_LOG_DISPLAY_SIZE = 30;
+    private static final int MAX_CHAT_LOG_DISPLAY_SIZE = 50;
+    private static final int MAX_CHAT_MSG_CHARACTERS = 255;
+    public static final Color DEFAULT_CHAT_MESSAGE_COLOR = new Color(0.95f, 0.99f, 0.75f, 1f);
+    public static final Color SERVER_CHAT_MESSAGE_COLOR = new Color(0.77f, 0.77f, 1f, 1f);
+    public static final Color DEBUG_CHAT_MESSAGE_COLOR = new Color(0.97f, 0.67f, 0.3f, 1f);
+    private static final float CHAT_WIDTH = GameScreen.getStage().getWidth()*0.5f;
     private Table uiTable;
-    private List<String> defaultChatLog, worldChatLog, mapChatMap, guildChatLog, partyChatLog, helpChatLog, privateChatLog; // contain logs from each chat log
+    private List<ChatMessage> defaultChatLog, worldChatLog, mapChatMap, guildChatLog, partyChatLog, helpChatLog, privateChatLog; // contain logs from each chat log
     private TextButton defaultChatTabBtn, worldChatTabBtn, mapChatTabBtn, guildChatTabBtn, partyChatTabBtn, helpChatTabBtn, privateChatTabBtn; // chat tab buttons
-    private ChatChannel currentChannel; // current chat channel
+    private ChatChannel currentChannel; // current chat channelf
     private TextButton sendBtn;
     private TextField msgField; // message field
-    private Label chatHistoryLabel;
+    private final Label chatHistoryLabel, tmpLabel;
     private ScrollPane chatScrollPane;
     private Rectangle hitBox;
+
+    public static class ChatMessage {
+        String sender; // the sender name
+        String message; // the message content without color tag or sender
+        int senderId, recipientId; // sender -1 == server ; recipient -1 == no recipient
+        Color color; // color to display this message
+        long timestamp; // time stamp of message
+        String langKey = null; // in case is a translatable msg from server
+        float height; // the height this message occupies in label (for click detection)
+    }
 
 
     /**
@@ -70,6 +90,8 @@ public class ChatWindow extends GameWindow {
         privateChatLog = Collections.synchronizedList(new ArrayList<>());
         // chat hit box for hover detection
         hitBox = new Rectangle();
+        chatHistoryLabel = new Label("", skin, "chatLabelStyle");
+        tmpLabel = new Label("", skin, "chatLabelStyle");
     }
 
     @Override
@@ -86,8 +108,7 @@ public class ChatWindow extends GameWindow {
         // makes sure title is in the correct language
         //this.getTitleLabel().setText(" "+langBundle.format("chat"));
 
-        // log label
-        chatHistoryLabel = new Label("", skin, "newLabelStyle");
+        // chat log label
         chatHistoryLabel.setAlignment(Align.bottomLeft);
         chatHistoryLabel.setColor(0.969f, 0.957f, 0.982f, 1.0f);
         //chatHistoryLabel.setFontScale(0.95f);
@@ -95,21 +116,29 @@ public class ChatWindow extends GameWindow {
 
         // text input textfield
         msgField = new TextField("", skin);
+        msgField.setMaxLength(MAX_CHAT_MSG_CHARACTERS);
+        msgField.setColor(new Color(0.32f,0.5f,0.32f,1f));
+        TextField.TextFieldStyle newStyle = new TextField.TextFieldStyle(msgField.getStyle());
+        newStyle.background.setLeftWidth(8f);
+        newStyle.focusedBackground.setLeftWidth(8f);
+        newStyle.focusedFontColor = DEFAULT_CHAT_MESSAGE_COLOR;
+        newStyle.messageFontColor = new Color(0.75f, 0.79f, 0.55f, 1f);
+        msgField.setStyle(newStyle);
         msgField.setMessageText(langBundle.format("chatTipMessage"));
 
         // send button
         sendBtn = new TextButton(langBundle.format("send"), skin);
+        sendBtn.setColor(Color.FOREST);
 
         // ui table with ui actors
         uiTable = new Table(skin);
-        uiTable.setPosition(Gdx.graphics.getWidth() / 2.0f, Gdx.graphics.getHeight() / 2.0f, Align.center);
-        uiTable.defaults().spaceBottom(0).padRight(5).padLeft(5).minWidth(320);
+        //uiTable.setPosition(Gdx.graphics.getWidth() / 2.0f, Gdx.graphics.getHeight() / 2.0f, Align.center);
+        //uiTable.defaults().spaceTop(0).padRight(0).padLeft(5).minWidth(320);
         //uiTable.add(titleLabel).center().colspan(2).padBottom(10).padTop(10);
-        uiTable.row();
+
         // scrollable log table
         Table scrollTable = new Table();
-        scrollTable.add(chatHistoryLabel).grow().padTop(5).padLeft(5);
-        scrollTable.row();
+        scrollTable.add(chatHistoryLabel).grow().padRight(20).padLeft(5);
         scrollTable.pack();
         // uses scrollpane to make table scrollable
         chatScrollPane = new ScrollPane(scrollTable, skin);
@@ -119,14 +148,14 @@ public class ChatWindow extends GameWindow {
         chatScrollPane.setupOverscroll(0,0,0);
         //chatScrollPane.setColor(Color.YELLOW);
 
-        uiTable.add(chatScrollPane).colspan(2).size(GameScreen.getStage().getWidth()*0.5f, GameScreen.getStage().getHeight()*0.2f).center();
+        uiTable.add(chatScrollPane).colspan(2).size(CHAT_WIDTH, GameScreen.getStage().getHeight()*0.22f);
         uiTable.row();
-        uiTable.add(msgField).padTop(10).left().colspan(1).grow().height(30);
-        uiTable.add(sendBtn).padTop(10).colspan(1).width(152).height(32);
+        uiTable.add(msgField).padBottom(5).left().colspan(1).growX().height(36);
+        uiTable.add(sendBtn).padBottom(5).colspan(1).width(144).height(37);
         uiTable.pack();
 
         Pixmap labelColor = new Pixmap(1, 1,Pixmap.Format.RGBA8888);
-        labelColor.setColor(new Color(0.1f, 0.1f, 0.1f, 0.2f));
+        labelColor.setColor(new Color(0.1f, 0.1f, 0.1f, 0.4f));
         labelColor.fill();
         this.setBackground(new Image(new Texture(labelColor)).getDrawable());
         labelColor.dispose();
@@ -146,7 +175,7 @@ public class ChatWindow extends GameWindow {
         new ChatController();
 
         // create welcome message
-        sendMessage("Server", ChatChannel.DEFAULT, langBundle.get("welcomeChatMessage"), -1);
+        sendMessage("[Server]", -1, ChatChannel.DEFAULT, langBundle.get("welcomeChatMessage"), "welcomeChatMessage", SERVER_CHAT_MESSAGE_COLOR, -1, false);
     }
 
     /**
@@ -155,7 +184,7 @@ public class ChatWindow extends GameWindow {
      * @param chatLog	the chat log that the log will be added
      * @param message		the new message to be added to the chat log
      */
-    private void storeMessage(List<String> chatLog, String message) {
+    private void storeMessage(List<ChatMessage> chatLog, ChatMessage message) {
         chatLog.add(message); // adds to the chat log list
         if(chatLog.size() > MAX_CHAT_LOG_DISPLAY_SIZE) // keep new elements only, within max size
             chatLog.remove(0);
@@ -168,13 +197,27 @@ public class ChatWindow extends GameWindow {
      * @param recipientId in case its a private message channel, the id of the recipient to load private messages
      */
     private void updateChatLabel(ChatChannel channel, int recipientId) {
-        List<String> list = chatLogFromChannel(channel, recipientId); // gets chat from tab
+        List<ChatMessage> list = chatLogFromChannel(channel, recipientId); // gets chat from tab
         StringBuilder stringBuilder = new StringBuilder(); // str builder that will build chat text
         // chat list may be accessed concurrently by chat client thread when other clients send messages
         synchronized(list) {
             Iterator i = list.iterator(); // Must be in synchronized block
-            while (i.hasNext())
-                stringBuilder.append(i.next()).append("\n");
+            while (i.hasNext()) {
+                ChatMessage msg = (ChatMessage) i.next();
+                stringBuilder.append("[#");
+                stringBuilder.append(msg.color);
+                stringBuilder.append("]");
+                stringBuilder.append(Common.getTimeTag(msg.timestamp));
+                stringBuilder.append(" ");
+                stringBuilder.append(msg.sender);
+                stringBuilder.append(": ");
+                if(msg.langKey!=null) // get translated msg if its a translatable server msg
+                    stringBuilder.append(langBundle.format(msg.langKey));
+                else
+                    stringBuilder.append(msg.message);
+                stringBuilder.append("[]");
+                stringBuilder.append("\n");
+            }
         }
 
         chatHistoryLabel.setText(stringBuilder);
@@ -186,8 +229,8 @@ public class ChatWindow extends GameWindow {
      * @param recipientId in case its a private message channel, the id of the recipient to load private messages
      * @return		the chat list that corresponds to the tab
      */
-    private List<String> chatLogFromChannel(ChatChannel channel, int recipientId) {
-        List<String> list = defaultChatLog;
+    private List<ChatMessage> chatLogFromChannel(ChatChannel channel, int recipientId) {
+        List<ChatMessage> list = defaultChatLog;
 
         switch (channel) {
             case DEFAULT:
@@ -222,53 +265,108 @@ public class ChatWindow extends GameWindow {
         and when the bar is all the way down
      **/
     public void scrollToEnd() {
-        if(chatScrollPane.isBottomEdge()) {
-            chatScrollPane.layout();
-            chatScrollPane.scrollTo(0, 0, 0, 0);
-        }
+        //Gdx.app.postRunnable(() -> {
+            if (chatScrollPane.isBottomEdge()) {
+                chatScrollPane.layout();
+                chatScrollPane.scrollTo(0, 0, 0, 0);
+            }
+        //});
     }
 
     /**
      * Sends a message to the desired channel
-     * @param sender        the sender of the message
+     * @param sender        the name of the sender of the message
+     * @param senderId      the sender id of the message
      * @param channel       the channel to send the message to
      * @param message       the message to be sent
+     * @param langKey       if its a translatable server message, the key in the lang bundle (this param is null if its not translatable)
+     * @param color         the color of the message
      * @param recipientId   in case its a private message, the recipient id
+     * @param sendToServer  if this is true, will send this message to server for other clients
      */
-    public void sendMessage(String sender, ChatChannel channel, String message, int recipientId) {
-        if(message == "") return; // returns if there is no message
+    public void sendMessage(String sender, int senderId, ChatChannel channel, String message, String langKey, Color color, int recipientId, boolean sendToServer) {
+        if(message == "" || message.trim().length() == 0) return; // returns if there is no message
 
-        StringBuilder sb = new StringBuilder(sender);
-        sb.append(": ");
-        sb.append(message);
+        Gdx.app.postRunnable(() -> {
+            ChatMessage msg = new ChatMessage();
+            msg.sender = sender;
+            msg.senderId = senderId;
+            if(message.length() > MAX_CHAT_MSG_CHARACTERS)
+                msg.message = message.substring(0, MAX_CHAT_MSG_CHARACTERS-1);
+            else
+                msg.message = message;
+            msg.color = color;
+            msg.langKey = langKey;
+            msg.recipientId = recipientId;
+            msg.timestamp = System.currentTimeMillis();
+            msg.height = calculateMsgHeight(msg);
 
-        storeMessage(chatLogFromChannel(channel, recipientId), String.valueOf(sb)); // stores message in desired channel
+            storeMessage(chatLogFromChannel(channel, recipientId), msg); // stores message in desired channel
 
-        if(channel == currentChannel) { // update chat label if its current channel
-            updateChatLabel(channel, recipientId);
-            scrollToEnd(); // scroll to keep up with chat log (only scrolls if bar is already bottom)
-        }
+            if (channel == currentChannel) { // update chat label if its current channel
+                updateChatLabel(channel, recipientId);
+                scrollToEnd(); // scroll to keep up with chat log (only scrolls if bar is already bottom)
+            }
+
+            if(sendToServer) {
+                //TODO SEND TO SERVER
+            }
+        });
     }
 
     /**
-     * Sends the message in the message field to the current channel
+     * Sends the message in the message field to the current channel with default color
      */
     public void sendMessage() {
-        if(msgField.getText() == "") {
-            clearMessageField(false); // lose focus and return if there is no message
-            return;
-        }
+        Gdx.app.postRunnable(() -> {
+            if(msgField.getText() == "" || msgField.getText().trim().length() == 0) {
+                clearMessageField(false); // lose focus and return if there is no message
+                return;
+            }
 
-        StringBuilder sb = new StringBuilder(GameClient.getInstance().getClientCharacter().name);
-        sb.append(": ");
-        sb.append(msgField.getText());
+            Entity.Character senderChar = GameClient.getInstance().getClientCharacter();
+            String message = msgField.getText();
 
-        storeMessage(chatLogFromChannel(currentChannel, -1), String.valueOf(sb)); // stores message in current channel
-        updateChatLabel(currentChannel, -1);// update chat label since its current channel
-        scrollToEnd(); // scroll to keep up with chat log (only scrolls if bar is already bottom)
+            ChatMessage msg = new ChatMessage();
+            msg.sender = senderChar.name;
+            msg.senderId = senderChar.id;
+            if(message.length() > MAX_CHAT_MSG_CHARACTERS)
+                msg.message = message.substring(0, MAX_CHAT_MSG_CHARACTERS-1);
+            else
+                msg.message = message;
+            msg.color = DEFAULT_CHAT_MESSAGE_COLOR;
+            msg.recipientId = -1;
+            msg.langKey = null;
+            msg.timestamp = System.currentTimeMillis();
+            msg.height = calculateMsgHeight(msg);
 
-        clearMessageField(false); // we can clear message field since we know message was sent from client
+            storeMessage(chatLogFromChannel(currentChannel, msg.recipientId), msg); // stores message in current channel
+            updateChatLabel(currentChannel, msg.recipientId);// update chat label since its current channel
+            scrollToEnd(); // scroll to keep up with chat log (only scrolls if bar is already bottom)
+
+            clearMessageField(false); // we can clear message field since we know message was sent from client
+
+            //TODO SEND TO SERVER
+        });
     }
+
+    private float calculateMsgHeight(ChatMessage msg) {
+        // simulate msg
+        StringBuilder sb = new StringBuilder(Common.getTimeTag(msg.timestamp));
+        sb.append(" ");
+        sb.append(msg.sender);
+        sb.append(" ");
+        sb.append(msg.message);
+        tmpLabel.setText(String.valueOf(sb));
+        tmpLabel.setWidth(CHAT_WIDTH);
+        tmpLabel.setWrap(true);
+        tmpLabel.layout();
+        GlyphLayout layout = tmpLabel.getGlyphLayout();
+        float height = layout.height;
+        System.out.println(height);
+        return height;
+    }
+
 
     public boolean hasFocus() {
         return msgField.hasKeyboardFocus();
@@ -295,6 +393,17 @@ public class ChatWindow extends GameWindow {
 
         if(!keepFocus)
             stage.setKeyboardFocus(null);
+    }
+
+
+    /**
+     * Reload interface language and server messages language
+     */
+    public void reloadLanguage() {
+        langBundle = manager.get("lang/langbundle", I18NBundle.class);
+        msgField.setMessageText(langBundle.format("chatTipMessage"));
+        sendBtn.setText(langBundle.format("send"));
+        updateChatLabel(currentChannel, -1);
     }
 
     @Override
@@ -373,8 +482,8 @@ public class ChatWindow extends GameWindow {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
                     if(!msgField.getText().equals("")) {
-                        sendMessage(GameClient.getInstance().getClientCharacter().name,
-                                currentChannel, msgField.getText(), -1);
+                        sendMessage(GameClient.getInstance().getClientCharacter().name, GameClient.getInstance().getClientCharacter().id,
+                                currentChannel, msgField.getText(), null, DEFAULT_CHAT_MESSAGE_COLOR, -1, true);
                         clearMessageField(false); // clear message field
                     }
                 }

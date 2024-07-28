@@ -18,7 +18,7 @@ public class GameRegister {
     public static final int serverTickrate = 15; // the amount of communication updates per second in server
     public static final int clientTickrate = 20; // the amount of communication updates per second in client
     static public boolean lagSimulation = true; // simulate lag
-    static public int lag = 240; // simulated lag value in ms
+    static public int lag = 60; // simulated lag value in ms
     static public final int N_ROWS = 45; // number of rows to be sent to player in state (AoI)
     static public final int N_COLS = 45; // number of cols to be sent to player in state (AoI)
 
@@ -69,6 +69,11 @@ public class GameRegister {
         kryo.register(Damage.class);
         kryo.register(DamageType.class);
         kryo.register(AttackType.class);
+        kryo.register(LagUpdate.class);
+    }
+
+    static public class LagUpdate {
+        int increment;
     }
 
     static public class Layer {

@@ -85,7 +85,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private static TextButton respawnBtn;
     private static TypingLabel deathMsgLabel, mapNameLabel, zoneNameLabel;
     private static Stack targetStack;
-    private static ChatWindow chatWindow;
+    public static ChatWindow chatWindow;
     private Image closestEntityImg, targetImg;
     private Button selectTargetBtn;
     private static Button lastTargetBtn, nextTargetBtn, optionsBtn;
@@ -134,6 +134,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Vector3 screenMouse = new Vector3();
     private Vector2 joystickDir = new Vector2(); // the current joystick direction (for android)
     private Texture testTexure;
+    private int chatOffsetY = 0; // chat y offset from bottom
 
     /** poolable objects **/
 
@@ -469,6 +470,24 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     loadWindow(optionWindow, true, true);
                 }
 
+                // lag simulation controls
+                if(keycode == Input.Keys.COMMA && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
+                    updatePingSimulation(-10, false);
+                }
+
+                if(keycode == Input.Keys.PERIOD && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
+                    updatePingSimulation(10, false);
+                }
+
+                // lag simulation controls server
+                if(keycode == Input.Keys.COMMA && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+                    updatePingSimulation(-10, true);
+                }
+
+                if(keycode == Input.Keys.PERIOD && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+                    updatePingSimulation(10, true);
+                }
+
                 /**
                  * MOVEMENT INTERACTIONS
                  */
@@ -586,7 +605,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         //chatWindow.setScale(0.7f, 0.7f);
         //chatWindow.setWidth(stage.getWidth()/2f);
         chatWindow.setX(stage.getWidth() /2f - chatWindow.getWidth() * chatWindow.getScaleX() /2f);
-        chatWindow.setY(1f);
+        chatWindow.setY(chatOffsetY);
         chatWindow.updateHitBox();
         stage.addActor(chatWindow);
     }
@@ -772,6 +791,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
      */
     public void update() {
         if(gameClient.getClientCharacter() == null) return; // character not loaded yet!
+
+        // if its on android, change chat y position offset if keyboard is showing
+        if(Gdx.app.getType() == Application.ApplicationType.Android) {
+            //Gdx.app.log("inputtest", String.valueOf(RogueFantasy.android.isKeyboardShowing()));
+            if(RogueFantasy.android.isKeyboardShowing()) {
+                chatOffsetY = RogueFantasy.android.getKeyboardHeight();
+                chatWindow.setY(chatOffsetY);
+            } else {
+                chatOffsetY = 1;
+                chatWindow.setY(chatOffsetY);
+            }
+        }
 
         // update whether mouse is on actor of stage
         screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
@@ -1448,7 +1479,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
      * Should reload texts to update to new language settings
      */
     private void reloadLanguage() {
-
+        chatWindow.reloadLanguage();
     }
 
     /**
@@ -1512,6 +1543,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // adds built game window to the stage to display it
         stage.addActor(gameWindow);
         stage.draw();
+    }
+
+    public static void updatePingSimulation(int inc, boolean updateServerPing) {
+        if(updateServerPing) {
+            GameClient.getInstance().sendPingUpdate(inc);
+        } else {
+            GameRegister.lag += inc;
+            if(GameRegister.lag <= 0) {GameRegister.lag = 0; return;} // minimum = no lag simulation
+            if(GameRegister.lag >= 2000) {GameRegister.lag = 2000; return;}// maximum = 2 sec
+
+            chatWindow.sendMessage("Debug", -1, ChatWindow.ChatChannel.DEFAULT, "Changed client lag to: " + GameRegister.lag, null, Color.ORANGE, -1, false);
+        }
     }
 
     /**

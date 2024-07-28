@@ -1,6 +1,7 @@
 package com.mygdx.game.network;
 
 import static com.mygdx.game.entity.Entity.State.DYING;
+import static com.mygdx.game.ui.ChatWindow.DEBUG_CHAT_MESSAGE_COLOR;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
@@ -19,6 +20,7 @@ import com.mygdx.game.network.GameRegister.MoveCharacter;
 import com.mygdx.game.network.GameRegister.RemoveCharacter;
 import com.mygdx.game.network.GameRegister.UpdateCharacter;
 import com.mygdx.game.network.GameRegister.UpdateCreature;
+import com.mygdx.game.ui.ChatWindow;
 import com.mygdx.game.ui.FloatingText;
 import com.mygdx.game.ui.GameScreen;
 import com.mygdx.game.util.Common;
@@ -41,7 +43,6 @@ public class GameClient extends DispatchServer {
     String host="";
     private int clientCharId; // this client's char id
     private int clientUid; // this client's char uid
-    private int latWindowSize = 10;
     private long avgLatency = 0;
     private ConcurrentLinkedQueue<MoveCharacter> pendingMoves; // will contain a copy of all MoveMessages sent (for server recon.)
     private float updateDelta;
@@ -89,45 +90,48 @@ public class GameClient extends DispatchServer {
                     if (ping.isReply) {
                         long now = System.currentTimeMillis();
                         latencies.add(now - lastPingTs); // calculates delta since last ping
-                        if(latencies.size() > latWindowSize) // keep within desired window size
+                        if(latencies.size() > Common.PING_WINDOW_SIZE) // keep within desired window size
                             latencies.remove(0); // remove oldest latency
                         //System.out.println("Ping: " + Common.calculateAverage(latencies));
                         avgLatency = Common.calculateAverage(latencies); // stores avg ping value
                     }
                     if(!pingDelay.isScheduled())
-                        Timer.schedule(pingDelay, 5f); // delay new ping update
+                        Timer.schedule(pingDelay, Common.PING_INTERVAL); // delay new ping update
                 }
-                if (object instanceof ClientId) {
+                else if (object instanceof ClientId) {
                     ClientId msg = (ClientId)object;
                     clientCharId =  msg.id;
                     return;
                 }
-                if (object instanceof AddCharacter) {
+                else if (object instanceof GameRegister.LagUpdate) {
+                    GameRegister.LagUpdate msg = (GameRegister.LagUpdate)object;
+                    GameScreen.chatWindow.sendMessage("Debug", -1, ChatWindow.ChatChannel.DEFAULT,
+                                                "Changed server lag to: " + msg.increment, null, DEBUG_CHAT_MESSAGE_COLOR, -1, false);
+                }
+                else if (object instanceof AddCharacter) {
                     AddCharacter msg = (AddCharacter)object;
                     Entity.Character character = Entity.Character.toCharacter(msg.character);
                     serverController.addCharacter(character);
                     return;
                 }
 
-                if (object instanceof GameRegister.UpdateState) {
+                else if (object instanceof GameRegister.UpdateState) {
                     serverController.updateState((GameRegister.UpdateState)object);
                     return;
                 }
 
-                if (object instanceof UpdateCharacter) {
+                else if (object instanceof UpdateCharacter) {
                     serverController.updateCharacter((UpdateCharacter)object);
                     return;
                 }
 
-                if (object instanceof GameRegister.Teleport) {
+                else if (object instanceof GameRegister.Teleport) {
                     serverController.teleportCharacter((GameRegister.Teleport)object);
                     return;
                 }
-
                 if (object instanceof RemoveCharacter) {
                     RemoveCharacter msg = (RemoveCharacter)object;
                     serverController.removeCharacter(msg.id);
-                    return;
                 }
             }
 
@@ -348,6 +352,12 @@ public class GameClient extends DispatchServer {
         return serverController.trees;
     }
 
+    public void sendPingUpdate(int inc) {
+        GameRegister.LagUpdate lup = new GameRegister.LagUpdate();
+        lup.increment = inc;
+        client.sendTCP(lup);
+    }
+
 
     static class ServerController {
 
@@ -551,12 +561,12 @@ public class GameClient extends DispatchServer {
 ////                    GameScreen.lockWorldRender = false;
 //                }
 
-                // desynch attack TODO: AVOID THIS BEHAVIOUR - WHY IS IT HAPPENING?
-                if(msg.character.state == GameRegister.EntityState.FREE && character.state == GameRegister.EntityState.ATTACKING) {
-                    if (getInstance().clientCharId ==  msg.character.id) {
-                        GameClient.getInstance().requestInteraction(GameRegister.Interaction.ATTACK_ENTITY, character.getTarget().contextId,  character.getTarget().type);
-                    }
-                }
+//                // desynch attack TODO: AVOID THIS BEHAVIOUR - WHY IS IT HAPPENING?
+//                if(msg.character.state == GameRegister.EntityState.FREE && character.state == GameRegister.EntityState.ATTACKING) {
+//                    if (getInstance().clientCharId ==  msg.character.id) {
+//                        GameClient.getInstance().requestInteraction(GameRegister.Interaction.ATTACK_ENTITY, character.getTarget().contextId,  character.getTarget().type);
+//                    }
+//                }
 
                 /** updates attributes **/
                 character.avgLatency = msg.character.avgLatency;

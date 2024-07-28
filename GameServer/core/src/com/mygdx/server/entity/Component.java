@@ -606,6 +606,7 @@ public class Component {
 
             if(hitTarget.isScheduled()) {
                 float hitTargetMillisToExec = hitTarget.getExecuteTimeMillis();
+                System.out.println("sTOP: " + target.id);
                 hitTarget.cancel();
                 long elapsed = System.currentTimeMillis() - lastHitSchedule;
                 int correctHits = (int)(elapsed/(1000f/ attr.attackSpeed)) + 1;

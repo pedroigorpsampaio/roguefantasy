@@ -84,9 +84,8 @@ public class GameServer implements CmdReceiver {
 
                     return;
                 }
-
                 // token login
-                if (object instanceof GameRegister.Token) {
+                else if (object instanceof GameRegister.Token) {
                     GameRegister.Token token = (GameRegister.Token) object; // gets token casting obj
                     Encoder encoder = new Encoder();
                     String decryptedToken = encoder.decryptSignedData(token.token); // decrypts token
@@ -121,8 +120,7 @@ public class GameServer implements CmdReceiver {
                         }
                     }
                 }
-
-                if (object instanceof GameRegister.Response) {
+                else if (object instanceof GameRegister.Response) {
                     GameRegister.Response msg = (GameRegister.Response)object;
                     switch (msg.type) {
                         case LOGOFF:
@@ -148,8 +146,7 @@ public class GameServer implements CmdReceiver {
                             break;
                     }
                 }
-
-                if (object instanceof GameRegister.InteractionRequest) {
+                else if (object instanceof GameRegister.InteractionRequest) {
                     // Ignore if not logged in.
                     if (character == null) return;
 
@@ -158,8 +155,14 @@ public class GameServer implements CmdReceiver {
                     //System.out.println(msg.type + " : " + msg.entityType + " : " + msg.targetId );
                     processInteraction(connection, msg);
                 }
+                else if (object instanceof  GameRegister.LagUpdate) {
+                    // Ignore if not logged in.
+                    if (character == null) return;
 
-                if (object instanceof GameRegister.MoveCharacter) {
+                    GameRegister.LagUpdate msg = (GameRegister.LagUpdate)object;
+                    updatePingSimulation(connection, msg.increment);
+                }
+                else if (object instanceof GameRegister.MoveCharacter) {
                     // Ignore if not logged in.
                     if (character == null) return;
 
@@ -417,6 +420,16 @@ public class GameServer implements CmdReceiver {
             } catch (IOException ignored) {
             }
         }
+    }
+
+    public static void updatePingSimulation(CharacterConnection conn, int inc) {
+        GameRegister.lag += inc;
+        if(GameRegister.lag <= 0) {GameRegister.lag = 0; return;} // minimum = no lag simulation
+        if(GameRegister.lag >= 2000) {GameRegister.lag = 2000; return;} // maximum = 2 sec
+
+        GameRegister.LagUpdate lup = new GameRegister.LagUpdate();
+        lup.increment = GameRegister.lag;
+        conn.sendTCP(lup);
     }
 
     public void sendStateToAll() {

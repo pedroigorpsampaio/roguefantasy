@@ -7,6 +7,9 @@ import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
+import com.mygdx.game.network.GameClient;
+import com.mygdx.game.network.GameRegister;
+import com.mygdx.game.ui.ChatWindow;
 
 import org.apache.commons.io.FileUtils;
 
@@ -19,6 +22,8 @@ public class Common {
 
     public final static long MB = 1024 * 1024;
     public final static Runtime runtime = Runtime.getRuntime();
+    public static final float PING_INTERVAL = 1f; // ping interval in seconds
+    public static final int PING_WINDOW_SIZE = 5; // size of average ping calculation window
     static public boolean clientPrediction = true; // apply client prediction
     static public boolean serverReconciliation = true; // apply server reconciliation
     static public boolean entityInterpolation = true; // apply entity interpolation
@@ -33,6 +38,19 @@ public class Common {
             return sum / list.size();
         }
         return sum;
+    }
+
+    public static String getTimeTag(long milli) {
+        //int seconds = (int) (time / 1000) % 60 ;
+        int minutes = (int) ((milli / (1000*60)) % 60);
+        int hours   = (int) ((milli / (1000*60*60)) % 24);
+        StringBuilder sb = new StringBuilder();
+        if (hours <= 9) sb.append('0'); // avoid using format methods to decrease work
+        sb.append(hours);
+        sb.append(":");
+        if (minutes <= 9) sb.append('0');
+        sb.append(minutes);
+        return String.valueOf(sb);
     }
 
     public static long getRamUsage() {
