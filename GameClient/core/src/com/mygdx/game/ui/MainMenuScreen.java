@@ -60,6 +60,7 @@ public class MainMenuScreen implements Screen {
     private TextButton exitBtn;
     private Texture bgTexture;
     private Image bg;
+    public static int chatOffsetY;
 
     /**
      * Builds the game main menu screen with login, register and options menu (prototype version)
@@ -188,9 +189,33 @@ public class MainMenuScreen implements Screen {
 
     }
 
+    boolean openKeyboard = false;
     @Override
     public void render(float delta) {
         ScreenUtils.clear(0.2f, 0.2f, 0.2f, 1);
+
+        // if its on android, change chat y position offset if keyboard is showing for current window
+        if(Gdx.app.getType() == Application.ApplicationType.Android) {
+            if(RogueFantasy.isKeyboardShowing()) {
+                if(!openKeyboard) { // keyboard just opened
+                    chatOffsetY = RogueFantasy.getKeyboardHeight();
+                    openKeyboard = true;
+                    if (loginWindow.getStage() != null) // login window is on stage
+                        loginWindow.softKeyboardOpened();
+                    if (registerWindow.getStage() != null) // register window is on stage
+                        registerWindow.softKeyboardOpened();
+                }
+            } else {
+                //chatOffsetY = 0;
+                if(openKeyboard) { // keyboard just closed
+                    openKeyboard = false;
+                    if (loginWindow.getStage() != null) // login window is on stage
+                        loginWindow.softKeyboardClosed();
+                    if (registerWindow.getStage() != null) // register window is on stage
+                        registerWindow.softKeyboardClosed();
+                }
+            }
+        }
 
         fpsLabel.setText("fps: " + Gdx.graphics.getFramesPerSecond());
 

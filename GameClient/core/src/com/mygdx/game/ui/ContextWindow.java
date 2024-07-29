@@ -1,22 +1,21 @@
 package com.mygdx.game.ui;
 
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Cursor;
+import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
-import com.badlogic.gdx.scenes.scene2d.ui.Window;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
-import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.network.LoginClient;
@@ -25,7 +24,7 @@ import com.mygdx.game.util.Encoder;
 /**
  * A class that encapsulates the option menu window
  */
-public class InfoWindow extends GameWindow {
+public class ContextWindow extends GameWindow {
     private Label infoLabel;
     private TypingLabel discLabel;
     private TypingLabel creditsLabel;
@@ -42,7 +41,7 @@ public class InfoWindow extends GameWindow {
      * @param skin    the game skin to be used when building the window
      * @param styleName the style name present in the skin to be used when building the window
      */
-    public InfoWindow(RogueFantasy game, Stage stage, Screen parent, AssetManager manager, String title, Skin skin, String styleName) {
+    public ContextWindow(RogueFantasy game, Stage stage, Screen parent, AssetManager manager, String title, Skin skin, String styleName) {
         super(game, stage, parent, manager, title, skin, styleName);
     }
 
@@ -83,7 +82,7 @@ public class InfoWindow extends GameWindow {
         // builds options window
         this.getTitleTable().padBottom(6);
         this.defaults().spaceBottom(10).padLeft(22).padRight(8).padBottom(2).minWidth(320);
-        this.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
+        //this.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
         this.setMovable(false);
         this.add(infoLabel).width(677);
         this.row();
@@ -100,7 +99,6 @@ public class InfoWindow extends GameWindow {
 
     @Override
     public void resize(int width, int height) {
-
     }
 
     @Override
@@ -121,6 +119,11 @@ public class InfoWindow extends GameWindow {
     @Override
     public void softKeyboardOpened() {
 
+    }
+
+    public boolean isPointOn(float x, float y) {
+        Vector2 coordinates = stageToLocalCoordinates(new Vector2(x, y));
+        return this.hit(coordinates.x, coordinates.y, true) != null;
     }
 
     /**

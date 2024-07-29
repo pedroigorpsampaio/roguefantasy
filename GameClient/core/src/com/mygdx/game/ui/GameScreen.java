@@ -1,6 +1,11 @@
 package com.mygdx.game.ui;
 
+import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeIn;
+import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeOut;
+import static com.badlogic.gdx.scenes.scene2d.actions.Actions.scaleTo;
+import static com.badlogic.gdx.scenes.scene2d.actions.Actions.sequence;
 import static com.mygdx.game.ui.CommonUI.ENABLE_TARGET_UI;
+import static com.mygdx.game.ui.CommonUI.removeWindowWithAction;
 
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
@@ -27,6 +32,7 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.scenes.scene2d.Action;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
@@ -37,6 +43,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Stack;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.Touchpad;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
@@ -108,6 +115,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private RogueFantasy game;
     private Preferences prefs;
     private OptionWindow optionWindow;
+    private ContextWindow contextWindow;
     private I18NBundle langBundle;
     private Texture bgTexture;
     private Image bg;
@@ -177,6 +185,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         Entity.assetManager = manager;
         Jukebox.manager = manager;
         entityController = EntityController.getInstance();
+        instance = this;
 
         // gets language bundle from asset manager
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
@@ -270,6 +279,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         optionWindow = new OptionWindow(game, stage, this, manager, " "+langBundle.format("option"),
                 skin, "newWindowStyle");
+
+        contextWindow = new ContextWindow(game, stage, this, manager, "", skin, "newWindowStyle");
 
         /**
          * Menu buttons
@@ -396,9 +407,34 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // character current movement
         movement = new GameRegister.MoveCharacter();
 
+        stage.addCaptureListener(new ClickListener(Input.Buttons.RIGHT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if ( Gdx.app.getType() == Application.ApplicationType.Desktop) {
+                    // context menu is on stage, remove if touch up happens outside of it
+                    if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y))
+                        hideContextMenu();
+
+                    if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
+                        showContextMenu(null);
+                    }
+                }
+            }
+        });
+        stage.addCaptureListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if ( Gdx.app.getType() == Application.ApplicationType.Desktop) {
+                    // context menu is on stage, remove if touch up happens outside of it
+                    if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y))
+                        hideContextMenu();
+                }
+            }
+        });
         stage.addListener(new InputListener(){
             @Override
             public boolean keyDown(InputEvent event, int keycode) {
+                if ( Gdx.app.getType() == Application.ApplicationType.Desktop && contextWindow.getStage()!=null) return false; //context menu is opened
                 if( Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor) return false; // ignore if there is clicking/touching
                 if(chatWindow.hasFocus()) return false; // dont walk if chat window has focus
 
@@ -427,9 +463,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 if(keycode == Input.Keys.ESCAPE) {
                     if(chatWindow.hasFocus())
                         chatWindow.clearMessageField(false);
-                    else
+                    else if(contextWindow.getStage()!=null)
+                        hideContextMenu(); //context menu is opened
+                    else if(GameClient.getInstance().getClientCharacter().getTarget() != null)
                         GameClient.getInstance().getClientCharacter().setTarget(null);
                 }
+
+                if ( Gdx.app.getType() == Application.ApplicationType.Desktop && contextWindow.getStage()!=null) return false; //context menu is opened
 
                 if(keycode == Input.Keys.ENTER) {
                     if(chatWindow.hasFocus())
@@ -528,6 +568,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
             @Override
             public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
                 if(Gdx.app.getType() == Application.ApplicationType.Desktop) {
+                    if (contextWindow.getStage()!=null) return false; //context menu is opened
+                    if (Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) return false; // left control is pressed (do not target)
                     // if its first touch and there is a interactive entity, select it
                     if(Gdx.input.justTouched() && button == 1 && !onStageActor) { // Only acts on world if it did not hit any UI actor)
                         //if(WorldMap.hoverEntity != null)
@@ -594,6 +636,31 @@ public class GameScreen implements Screen, PropertyChangeListener {
         stage.addActor(deathMsgLabel);
 
         // let the respawn btn be shown by render method after animation
+    }
+
+    public static GameScreen getInstance() {
+        return instance;
+    }
+
+    public void hideContextMenu() {
+        //contextWindow.remove();
+        removeWindowWithAction(contextWindow, fadeOut(0.1f));
+    }
+
+    /**
+     * Shows context menu on mouse position
+     *
+     * @param options   the table containing the label options of the context menu
+     */
+    public void showContextMenu(Table options) {
+        hideContextMenu();
+        Color c = contextWindow.getColor();
+        contextWindow.setColor(c.r, c.g, c.b, 1f);
+        contextWindow.build();
+        contextWindow.setBounds(screenMouse.x, screenMouse.y, contextWindow.getWidth(), contextWindow.getHeight());
+        contextWindow.setScale(0);
+        contextWindow.addAction(scaleTo(1.0f,1.0f,0.05f));
+        stage.addActor(contextWindow);
     }
 
     public static Stage getStage() {
@@ -794,9 +861,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         // if its on android, change chat y position offset if keyboard is showing
         if(Gdx.app.getType() == Application.ApplicationType.Android) {
-            //Gdx.app.log("inputtest", String.valueOf(RogueFantasy.android.isKeyboardShowing()));
-            if(RogueFantasy.android.isKeyboardShowing()) {
-                chatOffsetY = RogueFantasy.android.getKeyboardHeight();
+            //Gdx.app.log("inputtest", String.valueOf(RogueFantasy.isKeyboardShowing()));
+            if(RogueFantasy.isKeyboardShowing()) {
+                chatOffsetY = RogueFantasy.getKeyboardHeight();
                 chatWindow.setY(chatOffsetY);
             } else {
                 chatOffsetY = 1;
@@ -839,7 +906,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 movement.x = joystickDir.x;
                 movement.y = joystickDir.y;
             } else if (Gdx.app.getType() == Application.ApplicationType.Desktop) {    // if its on pc move accordingly
-                if (Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor && !onStageActorDown) { // only left mouse button walks and if not on ui stage actor
+                if (Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor && !onStageActorDown &&
+                contextWindow.getStage()!=null) { // only left mouse button walks and if not on ui stage actor or context menu is opened
                     touchPos = new Vector2(unprojectedMouse.x - gameClient.getClientCharacter().spriteW / 2f,  // compensate to use center of char sprite as anchor
                             unprojectedMouse.y - gameClient.getClientCharacter().spriteH / 2f);
                     movement.xEnd = touchPos.x;
@@ -1472,7 +1540,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
      */
     private void clearWindows() {
         if(optionWindow.getStage() != null)
-            optionWindow.remove();
+            CommonUI.removeWindowWithAction(optionWindow, fadeOut(0.2f));
     }
 
     /**
@@ -1495,6 +1563,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     break;
                 case RELOAD_LANGUAGE:
                     reloadLanguage(); // call method that reloads language and update texts
+                    break;
+                case LOGOUT:
+                    gameClient.logoff(); // logs off
                     break;
                 default:
                     Gdx.app.error("Unknown Window Command", "Current screen received an unknown command from option window");
@@ -1540,6 +1611,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
             });
         }
 
+        //gameWindow.setOrigin(Align.center);
+        //gameWindow.setTransform(true);
+        //gameWindow.addAction(sequence(scaleTo(1.2f,1.2f,0.1f),scaleTo(1f,1f,0.1f)));
+        Color c = gameWindow.getColor();
+        gameWindow.setColor(c.r, c.g, c.b, 0f);
+        gameWindow.addAction(fadeIn(0.1f));
         // adds built game window to the stage to display it
         stage.addActor(gameWindow);
         stage.draw();
@@ -1618,10 +1695,14 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
                     onStageActor = true;
-                    loadWindow(optionWindow, true, true);
+                    if(optionWindow.getStage()==null) {
+                        loadWindow(optionWindow, true, true);
+                    }
+                    else {
+                        CommonUI.removeWindowWithAction(optionWindow, fadeOut(0.2f));
+                    }
                 }
             });
         }
     }
-
 }

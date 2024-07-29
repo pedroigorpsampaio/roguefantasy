@@ -1,5 +1,7 @@
 package com.mygdx.game.ui;
 
+import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeOut;
+
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.Screen;
@@ -37,6 +39,7 @@ public class OptionWindow extends GameWindow {
     private Slider sfxSlider;
     private SelectBox langBox;
     private TextButton backBtn;
+    private TextButton logoffBtn;
 
     /**
      * Builds the option window, to be used as an actor in any screen
@@ -89,6 +92,9 @@ public class OptionWindow extends GameWindow {
         // back button
         backBtn = new TextButton(langBundle.format("back"), skin);
 
+        // logoff button (for game screen)
+        logoffBtn = new TextButton(langBundle.format("logoff"), skin);
+
         // language select box
         //TODO: Find a way to add emoji flags to items of lang box?
         langBox = new SelectBox(skin, "newSelectBoxStyle");
@@ -116,7 +122,11 @@ public class OptionWindow extends GameWindow {
         this.add(langLabel).colspan(1);
         this.add(langBox).width(240).spaceTop(16);
         this.row();
-        this.add(backBtn).minWidth(182).colspan(2).spaceTop(21).padBottom(10);
+        if(parent instanceof GameScreen) { // game screen option buttons
+            this.add(backBtn).minWidth(182).colspan(1).spaceTop(21).padBottom(10).center();
+            this.add(logoffBtn).minWidth(182).colspan(1).spaceTop(21).padBottom(10).left();
+        } else
+            this.add(backBtn).minWidth(182).colspan(2).spaceTop(21).padBottom(10);
         this.pack();
 
         // instantiate the controller that adds listeners and acts when needed
@@ -135,6 +145,16 @@ public class OptionWindow extends GameWindow {
 
     @Override
     public void stopServerListening() {
+
+    }
+
+    @Override
+    public void softKeyboardClosed() {
+
+    }
+
+    @Override
+    public void softKeyboardOpened() {
 
     }
 
@@ -157,6 +177,13 @@ public class OptionWindow extends GameWindow {
                     backBtnOnClick(event, x, y);
                 }
             });
+            logoffBtn.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    super.clicked(event, x, y);
+                    logoffBtnOnClick(event, x, y);
+                }
+            });
             bgmSlider.addListener(new ChangeListener() {
                 public void changed(ChangeEvent event, Actor actor) {
                     changeVolume("bgm", + bgmSlider.getValue());
@@ -167,6 +194,12 @@ public class OptionWindow extends GameWindow {
                     changeVolume("sfx", + sfxSlider.getValue());
                 }
             });
+        }
+
+        // called when logout button is clicked (only appears in game screen options)
+        private void logoffBtnOnClick(InputEvent event, float x, float y) {
+            if (parent instanceof GameScreen)
+                ((GameScreen) parent).processWindowCmd(getInstance(), false, CommonUI.ScreenCommands.LOGOUT);
         }
 
         // called when volume of any kind is changed
@@ -245,7 +278,10 @@ public class OptionWindow extends GameWindow {
 
         // called when back button is pressed
         private void backBtnOnClick(InputEvent event, float x, float y) {
-            remove(); // removes option window
+            if(parent instanceof MainMenuScreen)
+                remove(); // removes option window
+            else if(parent instanceof  GameScreen)
+                CommonUI.removeWindowWithAction(getInstance(), fadeOut(0.2f));
         }
     }
 

@@ -1,5 +1,10 @@
 package com.mygdx.game.ui;
 
+import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeOut;
+import static com.badlogic.gdx.scenes.scene2d.actions.Actions.sequence;
+
+import com.badlogic.gdx.Application;
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Cursor;
@@ -9,6 +14,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ImmediateModeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.scenes.scene2d.Action;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
@@ -19,6 +25,7 @@ import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
+import com.mygdx.game.RogueFantasy;
 
 import java.lang.management.ManagementFactory;
 import java.util.HashMap;
@@ -41,12 +48,27 @@ public class CommonUI {
         RELOAD_VOLUME,
         LOAD_REGISTER_WINDOW,
         DISPOSE,
-        LOAD_LOGIN_WINDOW
+        LOGOUT, LOAD_LOGIN_WINDOW
+    }
+
+    public static void removeWindowWithAction(GameWindow window, Action effect) {
+        Action completeAction = new Action(){
+            public boolean act( float delta ) {
+                window.remove();
+                return true;
+            }
+        };
+
+        window.addAction(sequence(effect, completeAction));
     }
 
     // creates a dialog from the parameters provided
     public static Dialog createDialog(Stage stage, Skin skin, I18NBundle langBundle,
                                       Font iconFont, String title, String content, boolean anim, boolean closeable) {
+        // hides android soft keyboard if its open
+        if(RogueFantasy.isKeyboardShowing())
+            Gdx.input.setOnscreenKeyboardVisible(false);
+
         TextButton.TextButtonStyle tbStyle = skin.get("newTextButtonStyle", TextButton.TextButtonStyle.class);
         Dialog dialog = new Dialog(title, skin, "newWindowStyle");
         int nLetters = content.length();
@@ -97,6 +119,11 @@ public class CommonUI {
     // creates a dialog from the parameters provided with a timer
     public static Dialog createDialog(Stage stage, Skin skin, I18NBundle langBundle,
                                       Font iconFont, String title, String content, boolean anim, boolean closeable, float timeOut) {
+
+        // hides keyboard if its open
+        if(Gdx.app.getType() == Application.ApplicationType.Android && RogueFantasy.isKeyboardShowing())
+            Gdx.input.setOnscreenKeyboardVisible(false);
+
         TextButton.TextButtonStyle tbStyle = skin.get("newTextButtonStyle", TextButton.TextButtonStyle.class);
         Dialog dialog = new Dialog(title, skin, "newWindowStyle");
         int nLetters = content.length();

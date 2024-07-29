@@ -26,7 +26,21 @@ import de.eskalon.commons.screen.transition.impl.BlendingTransition;
 public class RogueFantasy extends Game {
 
 	private static RogueFantasy instance = null;
-	public static AndroidNative android;
+	private static AndroidNative android;
+
+	public static int getKeyboardHeight() {
+		if(Gdx.app.getType() == Application.ApplicationType.Android)
+			return android.getKeyboardHeight();
+
+		return 0;
+	}
+
+	public static boolean isKeyboardShowing() {
+		if(Gdx.app.getType() == Application.ApplicationType.Android)
+			return android.isKeyboardShowing();
+
+		return false;
+	}
 
 	// sets defaults and loads first screen
 	public void create() {

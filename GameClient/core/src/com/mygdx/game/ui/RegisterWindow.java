@@ -2,6 +2,7 @@ package com.mygdx.game.ui;
 
 import static com.mygdx.game.network.LoginRegister.Register.*;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
@@ -73,6 +74,8 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
     private TypingLabel tosLabel;
     private CheckBox tosCB;
     private Dialog infoDialog;
+    private float txtFieldOffsetY;
+    private ScrollPane scroller;
 
     /**
      * Builds the register window, to be used as an actor in any screen
@@ -247,7 +250,7 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
         scrollTable.row();
         scrollTable.pack();
         // uses scrollpane to make table scrollable
-        final ScrollPane scroller = new ScrollPane(scrollTable, skin);
+        scroller = new ScrollPane(scrollTable, skin);
         scroller.setFadeScrollBars(false);
         scroller.setScrollbarsOnTop(true);
         scroller.setSmoothScrolling(true);
@@ -279,6 +282,27 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
         if(loginClient.isListening("registrationResponse", this))
             loginClient.removeListener("registrationResponse", this);
     }
+
+    @Override
+    public void softKeyboardClosed() {
+        float deltaY = txtFieldOffsetY - MainMenuScreen.chatOffsetY;
+        if(deltaY < 0) // keyboard obfuscates
+            moveBy(0, deltaY);
+    }
+
+    @Override
+    public void softKeyboardOpened() {
+        float deltaY = txtFieldOffsetY - MainMenuScreen.chatOffsetY;
+        if(deltaY < 0) { // keyboard obfuscates
+            // move window up
+            moveBy(0, -deltaY);
+
+            // scrolls to end in case window actors are overflowing it
+            scroller.layout();
+            scroller.scrollTo(0, 0, 0, 0);
+        }
+    }
+
 
     // resizes info dialogs on game resize
     @Override
@@ -339,24 +363,34 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
             userNameTextField.addListener(new FocusListener() {
                 public void keyboardFocusChanged(FocusListener.FocusEvent event, Actor actor, boolean focused) {
                     if(!focused) validateTextInput(userNameTextField, usrStr, usernameLabel, infoUserLabel, InputType.USER);
+                    else if(Gdx.app.getType() == Application.ApplicationType.Android && !RogueFantasy.isKeyboardShowing())
+                        txtFieldOffsetY = userNameTextField.getY() + getY();
+
                 }
             });
             //charTextField.setTextFieldFilter((textField, c) -> consecutiveSpaceFilter(textField, c));
             charTextField.addListener(new FocusListener() {
                 public void keyboardFocusChanged(FocusListener.FocusEvent event, Actor actor, boolean focused) {
                     if(!focused) validateTextInput(charTextField, charStr, charLabel, infoCharLabel, InputType.NAME);
+                    else if(Gdx.app.getType() == Application.ApplicationType.Android && !RogueFantasy.isKeyboardShowing())
+                        txtFieldOffsetY = charTextField.getY() + getY();
                 }
             });
             passwordTextField.setTextFieldFilter((textField, c) -> spaceBarFilter(textField, c));
             passwordTextField.addListener(new FocusListener() {
                 public void keyboardFocusChanged(FocusListener.FocusEvent event, Actor actor, boolean focused) {
                     if(!focused) validateTextInput(passwordTextField, passStr, passwordLabel, infoPassLabel, InputType.PASSWORD);
+                    else if(Gdx.app.getType() == Application.ApplicationType.Android && !RogueFantasy.isKeyboardShowing())
+                        txtFieldOffsetY = passwordTextField.getY() + getY();
                 }
             });
             emailTextField.setTextFieldFilter((textField, c) -> spaceBarFilter(textField, c));
             emailTextField.addListener(new FocusListener() {
                 public void keyboardFocusChanged(FocusListener.FocusEvent event, Actor actor, boolean focused) {
                     if(!focused) validateTextInput(emailTextField, emailStr, emailLabel, infoEmailLabel, InputType.EMAIL);
+                    else if(Gdx.app.getType() == Application.ApplicationType.Android && !RogueFantasy.isKeyboardShowing()) {
+                        txtFieldOffsetY = emailTextField.getY() + getY();
+                    }
                 }
             });
 
@@ -441,6 +475,10 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
             final String dialogBtn = langBundle.format("ok");
             if(infoDialog != null && infoDialog.getStage() != null)
                 return;
+
+            // hides keyboard if its open
+            if(RogueFantasy.isKeyboardShowing())
+                Gdx.input.setOnscreenKeyboardVisible(false);
 
             infoDialog = new Dialog(dialogTitle, skin, "newWindowStyle");
             Label title = new Label(dialogTitle, skin,"newLabelStyle");

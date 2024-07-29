@@ -87,4 +87,8 @@ public abstract class GameWindow extends Window {
      * Abstract method for subclasses to cut communication with server property changes
      */
     public abstract void stopServerListening();
+
+    public abstract void softKeyboardClosed();
+
+    public abstract void softKeyboardOpened();
 }

@@ -5,6 +5,7 @@ import static com.mygdx.game.network.LoginRegister.Register.isValidAndFitName;
 import static com.mygdx.game.network.LoginRegister.Register.isValidAndFitPassword;
 import static com.mygdx.game.network.LoginRegister.Register.isValidAndFitUser;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
@@ -52,6 +53,8 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
     private TextButton backBtn;
     private TextButton loginBtn;
     private Dialog infoDialog;
+    public float txtFieldOffsetY;
+    private float originalY;
 
     /**
      * Builds the option window, to be used as an actor in any screen
@@ -175,6 +178,8 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
         // instantiate the controller that adds listeners and acts when needed
         new loginController();
 
+        originalY = this.getY();
+
         // if its not listening to login responses, start listening to it
         if(!loginClient.isListening("loginResponse", this))
             loginClient.addListener("loginResponse", this);
@@ -207,6 +212,21 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
             loginClient.removeListener("loginResponse", this);
         if(loginClient.isListening("tokenResponse", this))
             loginClient.removeListener("tokenResponse", this);
+    }
+
+    @Override
+    public void softKeyboardClosed() {
+        float deltaY = txtFieldOffsetY - MainMenuScreen.chatOffsetY;
+        if(deltaY < 0) // keyboard obfuscates
+            moveBy(0, deltaY);
+    }
+
+    @Override
+    public void softKeyboardOpened() {
+        //Gdx.app.log("keyboardtst", "wtf " + String.valueOf(txtFieldOffsetY));
+        float deltaY = txtFieldOffsetY - MainMenuScreen.chatOffsetY;
+        if(deltaY < 0) // keyboard obfuscates
+            moveBy(0, -deltaY);
     }
 
     /**
@@ -264,6 +284,26 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
             userNameTextField.setTextFieldListener((textField, c) -> {onUsernameInput(textField, c);});
             // adds the password filter
             passwordTextField.setTextFieldFilter((textField, c) -> {return passwordFilter(textField, c);});
+
+            // txt fields click listeners
+            userNameTextField.addListener(new InputListener() {
+                @Override
+                public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+                    if(Gdx.app.getType() == Application.ApplicationType.Android && !RogueFantasy.isKeyboardShowing())
+                        txtFieldOffsetY = userNameTextField.getY() + getY();
+                    return false;
+                }
+            });
+
+            passwordTextField.addListener(new InputListener() {
+                @Override
+                public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+                    if(Gdx.app.getType() == Application.ApplicationType.Android && !RogueFantasy.isKeyboardShowing())
+                        txtFieldOffsetY = passwordTextField.getY() + getY();
+                    return false;
+                }
+            });
+
             // back button listener
             backBtn.addListener(new ClickListener() {
                 @Override
