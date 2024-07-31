@@ -1,14 +1,20 @@
 package com.mygdx.game;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.graphics.Rect;
 import android.util.Log;
 import android.view.View;
 
 import com.badlogic.gdx.backends.android.AndroidGraphics;
 import com.mygdx.game.util.AndroidNative;
+import com.mygdx.game.util.Common;
 
 public class Android implements AndroidNative {
     public static AndroidGraphics graphics;
+    public static Context context;
+
     public Android() {
         final View rootView = graphics.getView();
         // ContentView is the root view of the layout of this activity/fragment
@@ -50,11 +56,18 @@ public class Android implements AndroidNative {
 
     @Override
     public int getKeyboardHeight() {
-        return keyboardHeight;
+        return (int) (keyboardHeight* Common.ANDROID_VIEWPORT_SCALE);
     }
 
     @Override
     public boolean isKeyboardShowing() {
         return isKeyboardShowing;
+    }
+
+    @Override
+    public void copyToClipboard(String text) {
+        ClipboardManager clipboard = (ClipboardManager)  context.getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText("text", text);
+        clipboard.setPrimaryClip(clip);
     }
 }

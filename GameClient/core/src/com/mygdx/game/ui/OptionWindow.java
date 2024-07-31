@@ -158,6 +158,23 @@ public class OptionWindow extends GameWindow {
 
     }
 
+    @Override
+    protected void setStage(Stage stage) {
+        super.setStage(stage);
+
+        if (stage != null) {
+            // Actor added to stage
+        } else {
+            // Actor removed from stage
+            sfxSlider.getStyle().background.setMinHeight(16);
+            sfxSlider.getStyle().knobBefore.setMinHeight(10);
+            sfxSlider.getStyle().knob.setMinHeight(20);
+            sfxSlider.getStyle().knob.setMinWidth(15);
+            sfxSlider.getStyle().knobDown.setMinHeight(20);
+            sfxSlider.getStyle().knobDown.setMinWidth(15);
+        }
+    }
+
     /**
      * A nested class that controls the option window
      */

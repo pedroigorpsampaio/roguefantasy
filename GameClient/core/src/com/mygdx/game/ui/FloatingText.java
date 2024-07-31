@@ -4,6 +4,7 @@ import static com.mygdx.game.entity.Entity.assetManager;
 
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.utils.Pool;
@@ -11,6 +12,8 @@ import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.entity.Entity;
 import com.mygdx.game.entity.WorldMap;
+
+import org.w3c.dom.css.Rect;
 
 /**
  * Represents a floating text in the game
@@ -49,6 +52,11 @@ public class FloatingText implements Pool.Poolable {
     }
 
     public void init(Entity creator, String text, float offsetX, float offsetY, float scale, Color color, float lifeTime, float animSpeed, boolean followCreator) {
+//        if(text.length()>MAX_CHARACTERS_IN_LINE) {
+//            text = CommonUI.insert(text, "\n", MAX_CHARACTERS_IN_LINE);
+//        }
+       // text = text + ""
+
         StringBuilder sb = new StringBuilder();
         sb.append("{COLOR=#");
         sb.append(color.toString());
@@ -67,7 +75,7 @@ public class FloatingText implements Pool.Poolable {
         this.elapsed = 0f;
     }
 
-    private void die() {
+    public void die() {
         alive = false;
         elapsed = 0f;
     }
@@ -84,8 +92,10 @@ public class FloatingText implements Pool.Poolable {
 
         if(followCreator)
             this.position.set(creator.getEntityCenter().x + offsetX,  creator.getEntityCenter().y + offsetY);
-        else
-            this.position.y+=this.offsetY;
+        else {
+            if(animSpeed != 0f)
+                this.position.y += this.offsetY;
+        }
 
         if(elapsed >= lifetime) // if it has surpassed its lifetime, die
             die();
@@ -99,8 +109,9 @@ public class FloatingText implements Pool.Poolable {
 
             //nameLabel.setColor(nameColor);
             label.setBounds(position.x -  (label.getWidth()*tagScale/2f),
-                                position.y + label.getFont().originalCellHeight/2f, label.getWidth(), label.getHeight());
+                    position.y + label.getFont().originalCellHeight/2f, label.getWidth(), label.getHeight());
             label.getFont().scale(tagScale, tagScale);
+
             label.draw(batch, 1.0f);
 
             label.getFont().scaleTo(label.getFont().originalCellWidth, label.getFont().originalCellHeight);
@@ -108,6 +119,13 @@ public class FloatingText implements Pool.Poolable {
             // makes sure batch color is reset with correct alpha
             //batch.setColor(Color.WHITE);
         }
+    }
+
+    Rectangle hitBox = new Rectangle();
+    public Rectangle getHitBox() {
+        float tagScale = WorldMap.unitScale * 0.25f * scale;
+        hitBox.set(label.getX(), label.getY() - label.getFont().originalCellHeight/2f, label.getWidth()*tagScale, getHeight()/0.85f);
+        return hitBox;
     }
 
     @Override
@@ -124,5 +142,15 @@ public class FloatingText implements Pool.Poolable {
         this.followCreator = false;
         this.alive = false;
         this.scale = 1f;
+    }
+
+    public void moveByY(float val) {
+        this.offsetY += val;
+    }
+
+    public float getHeight() {
+        TypingLabel tmpLabel = new TypingLabel("test", font);
+        float tagScale = WorldMap.unitScale * 0.25f * scale;
+        return tmpLabel.getLineHeight(0)*tagScale * 0.85f;
     }
 }

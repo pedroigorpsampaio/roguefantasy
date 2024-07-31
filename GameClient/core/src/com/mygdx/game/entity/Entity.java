@@ -4,6 +4,7 @@ import static com.mygdx.game.entity.WorldMap.TEX_HEIGHT;
 import static com.mygdx.game.entity.WorldMap.TEX_WIDTH;
 import static com.mygdx.game.entity.WorldMap.edgeFactor;
 import static com.mygdx.game.entity.WorldMap.unitScale;
+import static com.mygdx.game.ui.CommonUI.MAX_CHARACTERS_FLOATING_TEXT;
 import static com.mygdx.game.ui.CommonUI.getPixmapCircle;
 import static com.mygdx.game.ui.GameScreen.camera;
 import static com.mygdx.game.ui.GameScreen.shapeDebug;
@@ -19,7 +20,9 @@ import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
+import com.badlogic.gdx.math.Circle;
 import com.badlogic.gdx.math.Interpolation;
+import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
@@ -41,6 +44,7 @@ import com.mygdx.game.util.Jukebox;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -95,6 +99,8 @@ public abstract class Entity implements Comparable<Entity> {
     protected Vector2 center = new Vector2();
     private GameRegister.AttackType attackType = null; // current attack type if any
     public boolean isRespawning = false;
+    public ArrayList<FloatingText> currentFloatingTexts = new ArrayList<>();
+    protected Rectangle tagHitBox = new Rectangle();
 
     public Entity() {
         /**
@@ -197,6 +203,89 @@ public abstract class Entity implements Comparable<Entity> {
 
         if(damages.size() == 0) // no damage nor respawn
             updateHealth(healthState); // just updates health
+    }
+
+    /**
+     * Renders floating texts above entity
+     * wrapping it based on max amount of characters per line defined
+     *
+     * The text will not follow entity, and only one floating text
+     * per entity can be active at the same time
+     *
+     * @param text  the text to render above entity
+     */
+    public void renderFloatingText(String text) {
+        for(int i = 0 ; i < currentFloatingTexts.size(); i++) // remove old texts if it exists
+            currentFloatingTexts.get(i).die();
+
+        Color c = (new Color(1,1,0.035f,1));
+        float scale = 0.84f;
+        float offsetY = spriteH / 2.75f;
+
+        // remder tag
+        StringBuilder sb = new StringBuilder();
+        sb.append(this.entityName);
+        sb.append(":");
+        FloatingText tag = GameScreen.getFloatingTextPool().obtain();
+
+        // break line on max line characters creating new floating texts for each line
+        if(text.length() > MAX_CHARACTERS_FLOATING_TEXT) {
+            List<String> strings = Common.splitEqually(text, MAX_CHARACTERS_FLOATING_TEXT);
+            FloatingText txt = null;
+            float firstY = -1;
+
+            for(int i = 0; i < strings.size(); i++) {
+                txt = GameScreen.getFloatingTextPool().obtain();
+                int nOffsets = strings.size() - i - 1;
+
+                // adds "-" when a word is split in half
+                if(i < strings.size()-1) {
+                    if(strings.get(i).charAt(strings.get(i).length()-1) != ' ' &&
+                            strings.get(i+1).charAt(0) != ' ' && strings.get(i+1).charAt(0) != ','
+                    && strings.get(i+1).charAt(0) != '.' && strings.get(i+1).charAt(0) != '-' &&
+                            strings.get(i+1).charAt(0) != ';' && strings.get(i+1).charAt(0) != ':')
+                        strings.set(i, strings.get(i) + "-");
+                }
+
+                float offset = offsetY+(txt.getHeight()*nOffsets);
+
+                if(firstY == -1)
+                    firstY = offset;
+
+                txt.init(this, strings.get(i), 0, offset, scale,
+                                 c, 3f, 0f, false);
+                GameScreen.addFloatingText(txt);
+                currentFloatingTexts.add(txt);
+            }
+
+            tag.init(this, String.valueOf(sb), 0, firstY+txt.getHeight(), scale,
+                    c, 3f, 0f, false);
+            GameScreen.addFloatingText(tag);
+            currentFloatingTexts.add(tag);
+        } else { // only one line - one floating text (plus tag) needed and no splitting necessary
+            FloatingText txt = GameScreen.getFloatingTextPool().obtain();
+            txt.init(this, text, 0, offsetY, scale,
+                    c, 3f, 0f, false);
+
+            tag.init(this, String.valueOf(sb), 0, offsetY+txt.getHeight(), scale,
+                    c, 3f, 0f, false);
+
+            GameScreen.addFloatingText(tag);
+            GameScreen.addFloatingText(txt);
+            currentFloatingTexts.add(tag);
+            currentFloatingTexts.add(txt);
+        }
+
+    }
+
+    /**
+     * Clears dead floating texts (should be called in render)
+     */
+    public void clearFloatingTexts() {
+        for(int i = currentFloatingTexts.size()-1 ; i >= 0; i--) { // remove dead texts
+            if(!currentFloatingTexts.get(i).alive)
+                currentFloatingTexts.remove(i);
+        }
     }
 
     public void renderDamagePoint(GameRegister.Damage damage) {
@@ -417,6 +506,10 @@ public abstract class Entity implements Comparable<Entity> {
         float eAlpha = alpha;
         if(alpha>1.0f) eAlpha = 1.0f;
 
+        /** in case obfuscates client floating chat text, batch will have lower alpha **/
+        if(batch.getColor().a < 1)
+            eAlpha = batch.getColor().a;
+
         /**health bar background**/
         healthBarBg.setBounds(x+spriteW/2f - w/2f, y+spriteH -h/2, w, h);
         healthBarBg.draw(batch, eAlpha);
@@ -445,6 +538,11 @@ public abstract class Entity implements Comparable<Entity> {
         nameLabel.draw(batch, eAlpha);
 
         nameLabel.getFont().scaleTo(nameLabel.getFont().originalCellWidth, nameLabel.getFont().originalCellHeight);
+
+        /**
+         * hit box
+         */
+        tagHitBox.set(x+spriteW/2f - w/2f, y+spriteH -h/2, w, h * 4f);
 
         // makes sure batch color is reset with correct alpha
         batch.setColor(Color.WHITE);
@@ -1278,7 +1376,7 @@ public abstract class Entity implements Comparable<Entity> {
 
         @Override
         public void renderUI(SpriteBatch batch) {
-            renderEntityTag(batch, this.finalDrawPos.x-unitScale*0.47f, this.finalDrawPos.y-unitScale*8.81f, 0.7f, 0.12f, Color.YELLOW);
+            renderEntityTag(batch, this.finalDrawPos.x-unitScale*0.47f, this.finalDrawPos.y-unitScale*8.81f, 0.7f, 0.12f, new Color(0.3f, 0.9f, 0.0f, 1f));
         }
 
         @Override
@@ -1337,11 +1435,51 @@ public abstract class Entity implements Comparable<Entity> {
             updateHealth(maxHealth); // makes sure health is back to max
         }
 
+        /**
+         * Checks if chat floating text collides with character tag (for client only)
+         * @return true if collides, false otherwise
+         */
+        public boolean floatingTextCollision(SpriteBatch batch) {
+ //           batch.end();
+//            shapeDebug.setProjectionMatrix(camera.combined);
+//            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
+//            shapeDebug.setColor(Color.ORANGE);
+
+            //makes sure taghitbox is updated (check renderEntityTag values)
+//            float x = this.finalDrawPos.x-unitScale*0.47f;
+//            float y = this.finalDrawPos.y-unitScale*8.81f;
+//            float w = 0.7f; float h = 0.12f;
+//            tagHitBox.set(x+spriteW/2f - w/2f, y+spriteH -h/2, w, h * 4f);
+
+            for(int i = 0; i < currentFloatingTexts.size(); i++) {
+//                shapeDebug.rect(currentFloatingTexts.get(i).getHitBox().getX(), currentFloatingTexts.get(i).getHitBox().getY(),
+//                        currentFloatingTexts.get(i).getHitBox().getWidth(), currentFloatingTexts.get(i).getHitBox().getHeight());
+//                if(tagHitBox.contains(currentFloatingTexts.get(i).getHitBox())) {
+//                    System.out.println("imhere");
+//                    return true;
+               // }
+                Rectangle intersection = new Rectangle();
+                if (Intersector.intersectRectangles(currentFloatingTexts.get(i).getHitBox(), tagHitBox, intersection))
+                {
+                    System.out.println("imhere");
+                    return true;
+                }
+            }
+
+            //shapeDebug.rect(tagHitBox.getX(), tagHitBox.getY(), tagHitBox.getWidth(), tagHitBox.getHeight());
+
+//            shapeDebug.end();
+            //           batch.begin();
+            return false;
+        }
+
         @Override
         public void render(SpriteBatch batch) {
             // if assets are not loaded, return
             if(assetsLoaded == false) return;
             isWalking = false;
+
+            clearFloatingTexts(); // clear floating chat texts that are dead
 
             if(!isAlive && !fadeOut) return; // make sure we do not render dead players after they faded out
 

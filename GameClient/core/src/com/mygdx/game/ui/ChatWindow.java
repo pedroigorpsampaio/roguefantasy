@@ -8,16 +8,14 @@ import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.scenes.scene2d.ui.Stack;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
@@ -31,17 +29,18 @@ import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Common;
 import com.mygdx.game.util.Encoder;
 
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.ListIterator;
 
 /**
  * A class that encapsulates the chat window
  */
 public class ChatWindow extends GameWindow {
-    private static final int MAX_CHAT_LOG_DISPLAY_SIZE = 50;
+    private static final int MAX_CHAT_LOG_DISPLAY_SIZE = 15;
     private static final int MAX_CHAT_MSG_CHARACTERS = 255;
     public static final Color DEFAULT_CHAT_MESSAGE_COLOR = new Color(0.95f, 0.99f, 0.75f, 1f);
     public static final Color SERVER_CHAT_MESSAGE_COLOR = new Color(0.77f, 0.77f, 1f, 1f);
@@ -66,7 +65,6 @@ public class ChatWindow extends GameWindow {
         Color color; // color to display this message
         long timestamp; // time stamp of message
         String langKey = null; // in case is a translatable msg from server
-        float height; // the height this message occupies in label (for click detection)
     }
 
 
@@ -161,8 +159,9 @@ public class ChatWindow extends GameWindow {
         chatScrollPane = new ScrollPane(scrollTable, skin);
         chatScrollPane.setFadeScrollBars(false);
         chatScrollPane.setScrollbarsOnTop(true);
-        chatScrollPane.setSmoothScrolling(true);
+        chatScrollPane.setSmoothScrolling(false);
         chatScrollPane.setupOverscroll(0,0,0);
+        scrollToEnd();
         //chatScrollPane.setColor(Color.YELLOW);
 
         uiTable.add(chatScrollPane).colspan(2).size(CHAT_WIDTH, GameScreen.getStage().getHeight()*0.22f);
@@ -218,6 +217,7 @@ public class ChatWindow extends GameWindow {
         StringBuilder stringBuilder = new StringBuilder(); // str builder that will build chat text
         // chat list may be accessed concurrently by chat client thread when other clients send messages
         scrollTable.clear();
+        lastChatSaved.setLength(0);
         synchronized(list) {
             int count=0;
             Iterator i = list.iterator(); // Must be in synchronized block
@@ -227,13 +227,21 @@ public class ChatWindow extends GameWindow {
                 stringBuilder.append(msg.color);
                 stringBuilder.append("]");
                 stringBuilder.append(Common.getTimeTag(msg.timestamp));
+                lastChatSaved.append(Common.getTimeTag(msg.timestamp));
                 stringBuilder.append(" ");
+                lastChatSaved.append(" ");
                 stringBuilder.append(msg.sender);
+                lastChatSaved.append(msg.sender);
                 stringBuilder.append(": ");
-                if(msg.langKey!=null) // get translated msg if its a translatable server msg
+                lastChatSaved.append(": ");
+                if(msg.langKey!=null) {// get translated msg if its a translatable server msg
                     stringBuilder.append(langBundle.format(msg.langKey));
-                else
+                    lastChatSaved.append(langBundle.format(msg.langKey));
+                }
+                else {
                     stringBuilder.append(msg.message);
+                    lastChatSaved.append(msg.message);
+                }
                 stringBuilder.append("[]");
                 //if(i.hasNext())
                     //stringBuilder.append("\n");
@@ -251,22 +259,168 @@ public class ChatWindow extends GameWindow {
                             openContextMenu(msg);
                         }
                     });
+                } else if (Gdx.app.getType() == Application.ApplicationType.Android) {
+                    l.addListener(new ClickListener() {
+                        @Override
+                        public void clicked(InputEvent event, float x, float y) {
+                            openContextMenu(msg);
+                        }
+
+                    });
                 }
 
                 scrollTable.add(l).growX().padRight(20).padLeft(5);
-                if(i.hasNext())
+                if(i.hasNext()) {
                     scrollTable.row();
+                    lastChatSaved.append("\n");
+                }
+
                 stringBuilder.setLength(0);
                 count++;
             }
         }
 
-
+        scrollTable.layout();
         //chatHistoryLabel.setText(stringBuilder);
+        //chatScrollPane.layout();
     }
+    StringBuilder lastChatSaved = new StringBuilder();
 
+    /**
+     * Open chat context menu based on message clicked.
+     * Builds the table with the respective interaction buttons and send to the screen to show it
+     * @param msg   the chat message clicked to open context menu on
+     */
     private void openContextMenu(ChatMessage msg) {
-        GameScreen.getInstance().showContextMenu(null);
+        Table t = new Table();
+
+        /**
+         * Context menu buttons
+         */
+        TextButton sendMsg = new TextButton(langBundle.format("contextMenuSendMessage", msg.sender), skin);
+        TextButton cpyMsg = new TextButton(langBundle.get("contextMenuCopyMessage"), skin);
+        TextButton cpyName = new TextButton(langBundle.get("contextMenuCopyName"), skin);
+        TextButton cpyAll = new TextButton(langBundle.get("contextMenuCopyAll"), skin);
+        TextButton addContact = new TextButton(langBundle.get("contextMenuAddContact"), skin);
+        TextButton ignorePerson = new TextButton(langBundle.format("contextMenuIgnorePerson", msg.sender), skin);
+
+        /**
+         * Context menu button style
+         */
+        TextButton.TextButtonStyle newStyle = new TextButton.TextButtonStyle(sendMsg.getStyle());
+        Pixmap pxColor = new Pixmap(1, 1, Pixmap.Format.RGB888);
+        pxColor.setColor(new Color(0x75757575));
+        pxColor.fill();
+        newStyle.up = null;
+        newStyle.over = new Image(new Texture(pxColor)).getDrawable();
+        newStyle.down = null;
+        newStyle.font.getData().setScale(0.81f, 0.81f);
+
+        /**
+         * Default config
+         */
+        sendMsg.setStyle(newStyle);
+        sendMsg.getLabel().setAlignment(Align.left);
+        cpyMsg.setStyle(newStyle);
+        cpyMsg.getLabel().setAlignment(Align.left);
+        cpyName.setStyle(newStyle);
+        cpyName.getLabel().setAlignment(Align.left);
+        cpyAll.setStyle(newStyle);
+        cpyAll.getLabel().setAlignment(Align.left);
+        addContact.setStyle(newStyle);
+        addContact.getLabel().setAlignment(Align.left);
+        ignorePerson.setStyle(newStyle);
+        ignorePerson.getLabel().setAlignment(Align.left);
+
+        /**
+         * Listeners
+         */
+        sendMsg.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("TODO send message to: " + msg.sender);
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+
+        addContact.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("TODO add by id to contacts list if its not there yet: " + msg.sender);
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+
+        ignorePerson.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("TODO add by id to ignore list if its not there yet: " + msg.sender);
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+
+        cpyMsg.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("TODO tell that copied message: " + msg.message);
+                Common.copyToClipboard(msg.message);
+
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+
+        cpyName.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("TODO tell that copied name: " + msg.sender);
+                Common.copyToClipboard(msg.sender);
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+
+        cpyAll.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                Common.copyToClipboard(String.valueOf(lastChatSaved));
+                GameScreen.getInstance().hideContextMenu();
+                System.out.println("TODO tell that copied all chat: " + lastChatSaved);
+            }
+        });
+
+        /**
+         * Decorations
+         */
+        Pixmap strokePixmap = new Pixmap(1, 1, Pixmap.Format.RGB888);
+        strokePixmap.setColor(new Color(0.4f, 0.4f, 0.4f, 1.0f));
+        strokePixmap.drawLine(0,0,1,0);
+        Image strokeLine = new Image(new Texture(strokePixmap));
+        strokePixmap.dispose();
+
+        /**
+         * Builds table
+         */
+        t.add(sendMsg).fillX();
+        t.row();
+        t.add(addContact).fillX();
+        t.row();
+        t.add(ignorePerson).fillX();
+        t.row();
+        t.add(strokeLine).fill().padBottom(5).padTop(8);
+        t.row();
+        t.add(cpyMsg).fillX();
+        t.row();
+        t.add(cpyName).fillX();
+        t.row();
+        t.add(cpyAll).fillX();
+        t.pack();
+        t.layout();
+        t.validate();
+
+        /**
+         * Send to screen to be shown
+         */
+        GameScreen.getInstance().showContextMenu(t);
+        pxColor.dispose();
     }
 
     /**
@@ -345,7 +499,6 @@ public class ChatWindow extends GameWindow {
             msg.langKey = langKey;
             msg.recipientId = recipientId;
             msg.timestamp = System.currentTimeMillis();
-            msg.height = calculateMsgHeight(msg);
 
             storeMessage(chatLogFromChannel(channel, recipientId), msg); // stores message in desired channel
 
@@ -362,6 +515,7 @@ public class ChatWindow extends GameWindow {
 
     /**
      * Sends the message in the message field to the current channel with default color
+     * This method is only called by client character messages
      */
     public void sendMessage() {
         Gdx.app.postRunnable(() -> {
@@ -384,7 +538,6 @@ public class ChatWindow extends GameWindow {
             msg.recipientId = -1;
             msg.langKey = null;
             msg.timestamp = System.currentTimeMillis();
-            msg.height = calculateMsgHeight(msg);
 
             storeMessage(chatLogFromChannel(currentChannel, msg.recipientId), msg); // stores message in current channel
             updateChatLabel(currentChannel, msg.recipientId);// update chat label since its current channel
@@ -393,26 +546,13 @@ public class ChatWindow extends GameWindow {
             clearMessageField(false); // we can clear message field since we know message was sent from client
 
             //TODO SEND TO SERVER
+
+            /**Create floating text above char that sent msg*/
+            if(currentChannel == ChatChannel.DEFAULT) {
+                GameClient.getInstance().getClientCharacter().renderFloatingText(msg.message);
+            }
         });
     }
-
-    private float calculateMsgHeight(ChatMessage msg) {
-        // simulate msg
-        StringBuilder sb = new StringBuilder(Common.getTimeTag(msg.timestamp));
-        sb.append(" ");
-        sb.append(msg.sender);
-        sb.append(" ");
-        sb.append(msg.message);
-        tmpLabel.setText(String.valueOf(sb));
-        tmpLabel.setWidth(CHAT_WIDTH - 21*(1080/720f));
-        tmpLabel.setWrap(true);
-        tmpLabel.layout();
-        GlyphLayout layout = tmpLabel.getGlyphLayout();
-        float height = layout.height * 1.46f;
-        System.out.println(height);
-        return height;
-    }
-
 
     public boolean hasFocus() {
         return msgField.hasKeyboardFocus();
@@ -529,11 +669,6 @@ public class ChatWindow extends GameWindow {
 
         // constructor adds listeners to the actors
         public ChatController() {
-//            langBox.addListener(new ChangeListener() {
-//                public void changed(ChangeEvent event, Actor actor) {
-//                    changeLanguage(langBox.getSelectedIndex());
-//                }
-//            });
             sendBtn.addListener(new ClickListener() {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
@@ -544,40 +679,7 @@ public class ChatWindow extends GameWindow {
                     }
                 }
             });
-
-            chatHistoryLabel.addListener(new ClickListener() {
-                @Override
-                public void clicked(InputEvent event, float x, float y) {
-                    float delta = 1 - chatScrollPane.getScrollPercentY();
-                    ChatMessage msg = getChatMessagedByY(y + delta);
-                    if(msg != null)
-                        System.out.println(msg.message);
-                }
-           });
         }
-
-        // called when back button is pressed
-        private void backBtnOnClick(InputEvent event, float x, float y) {
-            remove(); // removes chat window
-        }
-    }
-
-    private ChatMessage getChatMessagedByY(float y) {
-        List<ChatMessage> list = chatLogFromChannel(currentChannel, currentRecipientId); // gets chat from current channel
-        // chat list may be accessed concurrently by chat client thread when other clients send messages
-        synchronized(list) {
-            ListIterator i = list.listIterator(list.size());
-            int acc = 8; // initial offset
-            while (i.hasPrevious()) {
-                ChatMessage msg = (ChatMessage) i.previous();
-                acc += msg.height;
-
-                if(y < acc) {
-                    return msg;
-                }
-            }
-        }
-        return null;
     }
 
     private ChatWindow getInstance() {

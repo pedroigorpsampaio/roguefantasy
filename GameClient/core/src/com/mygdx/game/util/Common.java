@@ -1,5 +1,6 @@
 package com.mygdx.game.util;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.math.Circle;
@@ -7,16 +8,17 @@ import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
-import com.mygdx.game.network.GameClient;
-import com.mygdx.game.network.GameRegister;
-import com.mygdx.game.ui.ChatWindow;
+import com.badlogic.gdx.utils.Clipboard;
+import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.ui.GameScreen;
 
-import org.apache.commons.io.FileUtils;
-
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.io.File;
-import java.io.IOException;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
+import java.util.List;
 
 public class Common {
 
@@ -24,6 +26,7 @@ public class Common {
     public final static Runtime runtime = Runtime.getRuntime();
     public static final float PING_INTERVAL = 1f; // ping interval in seconds
     public static final int PING_WINDOW_SIZE = 5; // size of average ping calculation window
+    public static final float ANDROID_VIEWPORT_SCALE = 0.81f; // the smaller the bigger the game UI will be on android
     static public boolean clientPrediction = true; // apply client prediction
     static public boolean serverReconciliation = true; // apply server reconciliation
     static public boolean entityInterpolation = true; // apply entity interpolation
@@ -41,9 +44,14 @@ public class Common {
     }
 
     public static String getTimeTag(long milli) {
+//        Date date = new Date();   // given date
+        Calendar calendar = GregorianCalendar.getInstance(); // creates a new calendar instance
+//        calendar.setTime(date);   // assigns calendar to given date
         //int seconds = (int) (time / 1000) % 60 ;
-        int minutes = (int) ((milli / (1000*60)) % 60);
-        int hours   = (int) ((milli / (1000*60*60)) % 24);
+//        int minutes = (int) ((mseconds / (1000*60)) % 60);
+//        int hours   = (int) ((mseconds / (1000*60*60)) % 24);
+        int hours = calendar.get(Calendar.HOUR_OF_DAY);
+        int minutes = calendar.get(Calendar.MINUTE);
         StringBuilder sb = new StringBuilder();
         if (hours <= 9) sb.append('0'); // avoid using format methods to decrease work
         sb.append(hours);
@@ -66,6 +74,15 @@ public class Common {
         if (Intersector.overlapConvexPolygons(rPoly, p))
             return true;
         return false;
+    }
+
+    public static List<String> splitEqually(String text, int size) {
+        List<String> ret = new ArrayList<String>((text.length() + size - 1) / size);
+
+        for (int start = 0; start < text.length(); start += size) {
+            ret.add(text.substring(start, Math.min(text.length(), start + size)));
+        }
+        return ret;
     }
 
     // Check if Polygon intersects Circle
@@ -121,5 +138,22 @@ public class Common {
             dirFileNames.add(entry.name());
         }
         return dirFileNames;
+    }
+
+    /**
+     * Copies text to clipboard based on current device
+     * @param text  the text to be copied to clipboard
+     */
+    public static void copyToClipboard(String text) {
+        if(Gdx.app.getType() == Application.ApplicationType.Desktop) {
+            Toolkit.getDefaultToolkit()
+                    .getSystemClipboard()
+                    .setContents(
+                            new StringSelection(text),
+                            null
+                    );
+        } else if(Gdx.app.getType() == Application.ApplicationType.Android) {
+            RogueFantasy.copyToClipboard(text);
+        }
     }
 }

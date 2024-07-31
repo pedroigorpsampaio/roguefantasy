@@ -28,6 +28,11 @@ public class RogueFantasy extends Game {
 	private static RogueFantasy instance = null;
 	private static AndroidNative android;
 
+	/**
+	 * Android interface methods
+	 */
+
+
 	public static int getKeyboardHeight() {
 		if(Gdx.app.getType() == Application.ApplicationType.Android)
 			return android.getKeyboardHeight();
@@ -41,6 +46,15 @@ public class RogueFantasy extends Game {
 
 		return false;
 	}
+
+	public static void copyToClipboard(String text) {
+		if(Gdx.app.getType() == Application.ApplicationType.Android)
+			android.copyToClipboard(text);
+	}
+
+	/**
+	 * End of android interface methods
+	 */
 
 	// sets defaults and loads first screen
 	public void create() {

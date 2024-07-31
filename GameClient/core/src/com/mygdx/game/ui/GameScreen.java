@@ -260,7 +260,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
         bgm.setVolume(prefs.getFloat("bgmVolume", 1.0f));
         bgm.play();
 
-        stage = new Stage(new StretchViewport(1920, 1080));
+        // viewport size based on device
+        if(Gdx.app.getType() == Application.ApplicationType.Desktop)
+            stage = new Stage(new StretchViewport(1920, 1080));
+        else
+            stage = new Stage(new StretchViewport(1920*Common.ANDROID_VIEWPORT_SCALE, 1080*Common.ANDROID_VIEWPORT_SCALE));
 
         gestureDetector = new GestureDetector(20, 0.4f,
                                     0.2f, Integer.MAX_VALUE, new GameGestureListener());
@@ -416,7 +420,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                         hideContextMenu();
 
                     if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
-                        showContextMenu(null);
+                        //showContextMenu(null); TODO IMPLEMENT CONTEXT MENU ON DIFFERENT TARGETS, ITEMS, AND SOME TILES?
                     }
                 }
             }
@@ -424,11 +428,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
         stage.addCaptureListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                if ( Gdx.app.getType() == Application.ApplicationType.Desktop) {
+                //if ( Gdx.app.getType() == Application.ApplicationType.Desktop) {
                     // context menu is on stage, remove if touch up happens outside of it
                     if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y))
                         hideContextMenu();
-                }
+                //}
             }
         });
         stage.addListener(new InputListener(){
@@ -656,7 +660,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         hideContextMenu();
         Color c = contextWindow.getColor();
         contextWindow.setColor(c.r, c.g, c.b, 1f);
-        contextWindow.build();
+        contextWindow.loadTable(options);
         contextWindow.setBounds(screenMouse.x, screenMouse.y, contextWindow.getWidth(), contextWindow.getHeight());
         contextWindow.setScale(0);
         contextWindow.addAction(scaleTo(1.0f,1.0f,0.05f));
@@ -907,7 +911,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 movement.y = joystickDir.y;
             } else if (Gdx.app.getType() == Application.ApplicationType.Desktop) {    // if its on pc move accordingly
                 if (Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor && !onStageActorDown &&
-                contextWindow.getStage()!=null) { // only left mouse button walks and if not on ui stage actor or context menu is opened
+                contextWindow.getStage()==null) { // only left mouse button walks and if not on ui stage actor or context menu is opened
                     touchPos = new Vector2(unprojectedMouse.x - gameClient.getClientCharacter().spriteW / 2f,  // compensate to use center of char sprite as anchor
                             unprojectedMouse.y - gameClient.getClientCharacter().spriteH / 2f);
                     movement.xEnd = touchPos.x;
@@ -1122,8 +1126,14 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         if(gameClient.getClientCharacter() == null) return;
 
-        // always draw client simplified ui
-        gameClient.getClientCharacter().renderUI(batch);
+        // always draw client simplified ui (actually only if no chat texts are being displayed atm)
+        if(!gameClient.getClientCharacter().floatingTextCollision(batch))
+            gameClient.getClientCharacter().renderUI(batch);
+        else {
+            batch.setColor(bColor.r, bColor.g, bColor.b, 0.3f); // render with tag with transparency
+            gameClient.getClientCharacter().renderUI(batch);
+            batch.setColor(bColor.r, bColor.g, bColor.b, bColor.a);
+        }
 
         // renders hover entity information if player exists and is alive
         if(GameClient.getInstance().getClientCharacter() != null // only look for hover entity if player exists and is alive

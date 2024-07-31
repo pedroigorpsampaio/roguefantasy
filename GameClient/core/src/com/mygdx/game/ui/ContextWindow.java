@@ -5,17 +5,23 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Cursor;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
+import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.network.LoginClient;
@@ -25,10 +31,8 @@ import com.mygdx.game.util.Encoder;
  * A class that encapsulates the option menu window
  */
 public class ContextWindow extends GameWindow {
-    private Label infoLabel;
-    private TypingLabel discLabel;
-    private TypingLabel creditsLabel;
-    private TextButton backBtn;
+
+    private Table uiTable;
 
     /**
      * Builds the option window, to be used as an actor in any screen
@@ -47,6 +51,14 @@ public class ContextWindow extends GameWindow {
 
     @Override
     public void build() {
+
+    }
+
+    /**
+     * Builds context menu with the table provided
+     * @param table     the table containing the context menu options
+     */
+    public void loadTable(Table table) {
         // makes sure window is clear and not in stage before building it
         this.clear();
         this.remove();
@@ -54,47 +66,19 @@ public class ContextWindow extends GameWindow {
         // makes sure language is up to date with current selected option
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
 
-        // makes sure title is in the correct language
-        this.getTitleLabel().setText(" "+langBundle.format("info"));
-
-        // label that describes the project name/version
-        infoLabel = new Label( " "+ langBundle.format("gameInfo"), skin, "fontMedium", Color.WHITE);
-        infoLabel.setWrap(true);
-        infoLabel.setAlignment(Align.left);
-        infoLabel.setHeight(infoLabel.getPrefHeight());
-
-        // discord link label with different color and effects
-        //https://game-icons.net/about.html#authors
-        String discText = "{SIZE=135%}{COLOR=sage}[+talk][%]{ENDCOLOR}{FADE}{GRADIENT=ROYAL;azure}" +
-                "{LINK=http://discord.gg/invite}http://discord.gg/invite{ENDGRADIENT}{ENDFADE}           ";
-        discLabel = new TypingLabel( discText, iconFont) ;
-        discLabel.setAlignment(Align.center);
-
-        String creditsText = "{SIZE=79%}{COLOR=ROYAL}[+pencil-brush][%]{ENDCOLOR}" +
-                "{SIZE=79%}{FADE}{GRADIENT=GOLD;red}" +
-                "{LINK=https://game-icons.net/about.html#authors}@game icons{ENDGRADIENT}{ENDFADE}[%]      ";
-        creditsLabel = new TypingLabel( creditsText, iconFont) ;
-        creditsLabel.setAlignment(Align.center);
-
-        // back button
-        backBtn = new TextButton(langBundle.format("back"), skin);
-
-        // builds options window
-        this.getTitleTable().padBottom(6);
-        this.defaults().spaceBottom(10).padLeft(22).padRight(8).padBottom(2).minWidth(320);
-        //this.setPosition(Gdx.graphics.getWidth() / 2.0f ,Gdx.graphics.getHeight() / 2.0f, Align.center);
+        TextureAtlas uiAtlas = manager.get("ui/packed_textures/ui.atlas");
+        this.setBackground(new Image(uiAtlas.findRegion("UiBg")).getDrawable());
+        this.defaults().padTop(7).padBottom(7).padLeft(9).padRight(9);
         this.setMovable(false);
-        this.add(infoLabel).width(677);
-        this.row();
-        this.add(discLabel).padTop(15);
-        this.row();
-        this.add(creditsLabel).padTop(51).padBottom(14);
-        this.row();
-        this.add(backBtn).minWidth(182).spaceTop(25).padBottom(10);
+
         this.pack();
 
-        // instantiate the controller that adds listeners and acts when needed
-        new InfoController();
+        this.defaults().minWidth(table.getMinWidth()).minHeight(table.getMinHeight());
+        this.add(table).expand().bottom().fillX();
+        this.pack();
+        this.layout();
+        this.validate();
+        stage.draw();
     }
 
     @Override
@@ -124,47 +108,5 @@ public class ContextWindow extends GameWindow {
     public boolean isPointOn(float x, float y) {
         Vector2 coordinates = stageToLocalCoordinates(new Vector2(x, y));
         return this.hit(coordinates.x, coordinates.y, true) != null;
-    }
-
-    /**
-     * A nested class that controls the info window
-     */
-    class InfoController {
-        // constructor adds listeners to the actors
-        public InfoController() {
-            backBtn.addListener(new ClickListener() {
-                @Override
-                public void clicked(InputEvent event, float x, float y) {
-                    super.clicked(event, x, y);
-                    backBtnOnClick(event, x, y);
-                }
-            });
-            discLabel.addListener(new ClickListener() {
-                @Override
-                public void enter(InputEvent event, float x, float y, int pointer, Actor fromActor) {
-                    Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Hand);
-                }
-                @Override
-                public void exit(InputEvent event, float x, float y, int pointer, Actor toActor) {
-                    Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Arrow);
-                }
-            });
-            creditsLabel.addListener(new ClickListener() {
-                @Override
-                public void enter(InputEvent event, float x, float y, int pointer, Actor fromActor) {
-                    Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Hand);
-                }
-                @Override
-                public void exit(InputEvent event, float x, float y, int pointer, Actor toActor) {
-                    Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Arrow);
-                }
-            });
-        }
-
-
-        // called when back button is pressed
-        private void backBtnOnClick(InputEvent event, float x, float y) {
-            remove(); // removes option window
-        }
     }
 }

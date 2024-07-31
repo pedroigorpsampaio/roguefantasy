@@ -17,6 +17,7 @@ public class AndroidLauncher extends AndroidApplication {
 		RogueFantasy rf = new RogueFantasy();
 		initialize(rf, config);
 		Android.graphics = graphics;
+		Android.context = this;
 		rf.setNativeAndroid();
 	}
 
