@@ -123,8 +123,8 @@ public class OptionWindow extends GameWindow {
         this.add(langBox).width(240).spaceTop(16);
         this.row();
         if(parent instanceof GameScreen) { // game screen option buttons
-            this.add(backBtn).minWidth(182).colspan(1).spaceTop(21).padBottom(10).center();
-            this.add(logoffBtn).minWidth(182).colspan(1).spaceTop(21).padBottom(10).left();
+            this.add(logoffBtn).minWidth(182).colspan(1).spaceTop(21).padBottom(10).center().padRight(20);
+            this.add(backBtn).minWidth(182).colspan(1).spaceTop(21).padBottom(10).left();
         } else
             this.add(backBtn).minWidth(182).colspan(2).spaceTop(21).padBottom(10);
         this.pack();

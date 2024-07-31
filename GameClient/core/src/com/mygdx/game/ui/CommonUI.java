@@ -34,11 +34,14 @@ import java.util.regex.Pattern;
 
 // Common UI methods that help different UI modules
 public class CommonUI {
-    public static final int MAX_CHARACTERS_FLOATING_TEXT = 50;
+    public static final int MAX_LINE_CHARACTERS_FLOATING_TEXT = 50;
+    public static final int MAX_LINES_FLOATING_TEXT = 13;
+    public static final float FLOATING_CHAT_TEXT_SCALE = 1f;
     public static final float TARGET_UI_WIDTH = 340;
     public static final float TARGET_UI_HEIGHT = 105;
     public static final float TARGET_UI_BG_ALPHA = 1.00f;
     public static final boolean ENABLE_TARGET_UI = false;
+    public static final boolean FADE_CLIENT_TAG_ON_ALL_FLOATING_TEXT = true;
     public static final float MAP_INFO_LABEL_LIFETIME = 3f;
     public static boolean enableDebugTex = false;
     public static HashMap<String, Cursor> cursorBank;

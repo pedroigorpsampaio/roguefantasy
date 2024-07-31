@@ -1,5 +1,7 @@
 package com.mygdx.game.ui;
 
+import static com.mygdx.game.ui.CommonUI.MAX_LINE_CHARACTERS_FLOATING_TEXT;
+
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
@@ -41,11 +43,12 @@ import java.util.List;
  */
 public class ChatWindow extends GameWindow {
     private static final int MAX_CHAT_LOG_DISPLAY_SIZE = 15;
-    private static final int MAX_CHAT_MSG_CHARACTERS = 255;
+    public static final int MAX_CHAT_MSG_CHARACTERS = 255;
     public static final Color DEFAULT_CHAT_MESSAGE_COLOR = new Color(0.95f, 0.99f, 0.75f, 1f);
     public static final Color SERVER_CHAT_MESSAGE_COLOR = new Color(0.77f, 0.77f, 1f, 1f);
     public static final Color DEBUG_CHAT_MESSAGE_COLOR = new Color(0.97f, 0.67f, 0.3f, 1f);
     private static final float CHAT_WIDTH = GameScreen.getStage().getWidth()*0.5f;
+    private static final float CHAT_HEIGHT = GameScreen.getStage().getHeight()*0.1805f;
     private Table uiTable;
     private List<ChatMessage> defaultChatLog, worldChatLog, mapChatMap, guildChatLog, partyChatLog, helpChatLog, privateChatLog; // contain logs from each chat log
     private TextButton defaultChatTabBtn, worldChatTabBtn, mapChatTabBtn, guildChatTabBtn, partyChatTabBtn, helpChatTabBtn, privateChatTabBtn; // chat tab buttons
@@ -53,7 +56,7 @@ public class ChatWindow extends GameWindow {
     private int currentRecipientId; // current recipient Id (for private chats)
     private TextButton sendBtn;
     private TextField msgField; // message field
-    private final Label chatHistoryLabel, tmpLabel;
+    private final Label tmpLabel;
     private ScrollPane chatScrollPane;
     private Rectangle hitBox;
     private Table scrollTable;
@@ -92,7 +95,6 @@ public class ChatWindow extends GameWindow {
         privateChatLog = Collections.synchronizedList(new ArrayList<>());
         // chat hit box for hover detection
         hitBox = new Rectangle();
-        chatHistoryLabel = new Label("", skin, "chatLabelStyle");
         tmpLabel = new Label("", skin, "chatLabelStyle");
     }
 
@@ -110,12 +112,6 @@ public class ChatWindow extends GameWindow {
 
         // makes sure title is in the correct language
         //this.getTitleLabel().setText(" "+langBundle.format("chat"));
-
-        // chat log label
-        chatHistoryLabel.setAlignment(Align.bottomLeft);
-        chatHistoryLabel.setColor(0.969f, 0.957f, 0.982f, 1.0f);
-        //chatHistoryLabel.setFontScale(0.95f);
-        chatHistoryLabel.setWrap(true);
 
         // text input textfield
         msgField = new TextField("", skin);
@@ -164,7 +160,10 @@ public class ChatWindow extends GameWindow {
         scrollToEnd();
         //chatScrollPane.setColor(Color.YELLOW);
 
-        uiTable.add(chatScrollPane).colspan(2).size(CHAT_WIDTH, GameScreen.getStage().getHeight()*0.22f);
+        float adjustedHeight = CHAT_HEIGHT;
+        if(Gdx.app.getType() == Application.ApplicationType.Android) adjustedHeight *= 1.15f;
+
+        uiTable.add(chatScrollPane).colspan(2).size(CHAT_WIDTH, adjustedHeight);
         uiTable.row();
         uiTable.add(msgField).padBottom(5).left().colspan(1).growX().height(36);
         uiTable.add(sendBtn).padBottom(5).colspan(1).width(144).height(37);
@@ -269,7 +268,7 @@ public class ChatWindow extends GameWindow {
                     });
                 }
 
-                scrollTable.add(l).growX().padRight(20).padLeft(5);
+                scrollTable.add(l).growX().padRight(20).padLeft(5).padTop(-1f);
                 if(i.hasNext()) {
                     scrollTable.row();
                     lastChatSaved.append("\n");
@@ -485,16 +484,19 @@ public class ChatWindow extends GameWindow {
      * @param sendToServer  if this is true, will send this message to server for other clients
      */
     public void sendMessage(String sender, int senderId, ChatChannel channel, String message, String langKey, Color color, int recipientId, boolean sendToServer) {
-        if(message == "" || message.trim().length() == 0) return; // returns if there is no message
+        // remove token reserved characters
+        String trimmedMsg = message.replaceAll("[\\[\\]\\{\\}]", "");
+
+        if(trimmedMsg == "" || trimmedMsg.trim().length() == 0) return; // returns if there is no message
 
         Gdx.app.postRunnable(() -> {
             ChatMessage msg = new ChatMessage();
             msg.sender = sender;
             msg.senderId = senderId;
-            if(message.length() > MAX_CHAT_MSG_CHARACTERS)
-                msg.message = message.substring(0, MAX_CHAT_MSG_CHARACTERS-1);
+            if(trimmedMsg.length() > MAX_CHAT_MSG_CHARACTERS)
+                msg.message = trimmedMsg.substring(0, MAX_CHAT_MSG_CHARACTERS-1);
             else
-                msg.message = message;
+                msg.message = trimmedMsg;
             msg.color = color;
             msg.langKey = langKey;
             msg.recipientId = recipientId;
@@ -505,6 +507,13 @@ public class ChatWindow extends GameWindow {
             if (channel == currentChannel) { // update chat label if its current channel
                 updateChatLabel(channel, recipientId);
                 scrollToEnd(); // scroll to keep up with chat log (only scrolls if bar is already bottom)
+            }
+
+            /**Create floating text above char that sent msg*/
+            if(channel == ChatChannel.DEFAULT) {
+                Entity.Character senderChar = GameClient.getInstance().getCharacter(senderId);
+                if(senderChar != null)
+                    senderChar.renderFloatingText(msg.message);
             }
 
             if(sendToServer) {
@@ -519,21 +528,36 @@ public class ChatWindow extends GameWindow {
      */
     public void sendMessage() {
         Gdx.app.postRunnable(() -> {
-            if(msgField.getText() == "" || msgField.getText().trim().length() == 0) {
+            // remove token reserved characters
+            String trimmedMsg = msgField.getText().replaceAll("[\\[\\]\\{\\}]", "");
+
+            if(trimmedMsg == "" || trimmedMsg.trim().length() == 0) {
                 clearMessageField(false); // lose focus and return if there is no message
                 return;
             }
 
+            // makes sure its within max size
+            if(trimmedMsg.length() > MAX_CHAT_MSG_CHARACTERS)
+                trimmedMsg = trimmedMsg.substring(0, MAX_CHAT_MSG_CHARACTERS-1);
+            
             Entity.Character senderChar = GameClient.getInstance().getClientCharacter();
-            String message = msgField.getText();
+
+            List<String> texts = Common.splitEqually(trimmedMsg, MAX_LINE_CHARACTERS_FLOATING_TEXT);
+
+            /** block player from messaging if it is full of floating text already **/
+            if(senderChar.currentFloatingTexts.size() + texts.size() >= CommonUI.MAX_LINES_FLOATING_TEXT) {
+                clearMessageField(false);
+                GameScreen.getInstance().showInfo("infoWaitForMessaging");
+                return;
+            }
 
             ChatMessage msg = new ChatMessage();
             msg.sender = senderChar.name;
             msg.senderId = senderChar.id;
-            if(message.length() > MAX_CHAT_MSG_CHARACTERS)
-                msg.message = message.substring(0, MAX_CHAT_MSG_CHARACTERS-1);
-            else
-                msg.message = message;
+//            if(message.length() > MAX_CHAT_MSG_CHARACTERS)
+//                msg.message = message.substring(0, MAX_CHAT_MSG_CHARACTERS-1);
+//            else
+            msg.message = trimmedMsg;
             msg.color = DEFAULT_CHAT_MESSAGE_COLOR;
             msg.recipientId = -1;
             msg.langKey = null;
@@ -679,6 +703,14 @@ public class ChatWindow extends GameWindow {
                     }
                 }
             });
+            msgField.setTextFieldFilter((textField, c) -> {return chatFilter(textField, c);}); // filter unwanted chars
+        }
+
+        //  Filters token chars
+        private boolean chatFilter(TextField textField, char c) {
+            if (Character.toString(c).matches("[{}\\[\\]]"))
+                return false;
+            return true;
         }
     }
 

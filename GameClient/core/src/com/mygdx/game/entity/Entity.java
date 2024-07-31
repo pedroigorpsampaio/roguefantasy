@@ -4,11 +4,14 @@ import static com.mygdx.game.entity.WorldMap.TEX_HEIGHT;
 import static com.mygdx.game.entity.WorldMap.TEX_WIDTH;
 import static com.mygdx.game.entity.WorldMap.edgeFactor;
 import static com.mygdx.game.entity.WorldMap.unitScale;
-import static com.mygdx.game.ui.CommonUI.MAX_CHARACTERS_FLOATING_TEXT;
+import static com.mygdx.game.ui.ChatWindow.MAX_CHAT_MSG_CHARACTERS;
+import static com.mygdx.game.ui.CommonUI.FLOATING_CHAT_TEXT_SCALE;
+import static com.mygdx.game.ui.CommonUI.MAX_LINE_CHARACTERS_FLOATING_TEXT;
 import static com.mygdx.game.ui.CommonUI.getPixmapCircle;
 import static com.mygdx.game.ui.GameScreen.camera;
 import static com.mygdx.game.ui.GameScreen.shapeDebug;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
@@ -36,6 +39,7 @@ import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
+import com.mygdx.game.ui.ChatWindow;
 import com.mygdx.game.ui.CommonUI;
 import com.mygdx.game.ui.FloatingText;
 import com.mygdx.game.ui.GameScreen;
@@ -100,7 +104,8 @@ public abstract class Entity implements Comparable<Entity> {
     private GameRegister.AttackType attackType = null; // current attack type if any
     public boolean isRespawning = false;
     public ArrayList<FloatingText> currentFloatingTexts = new ArrayList<>();
-    protected Rectangle tagHitBox = new Rectangle();
+    public FloatingText tagFloatingText = null;
+    public Rectangle tagHitBox = new Rectangle();
 
     public Entity() {
         /**
@@ -156,7 +161,7 @@ public abstract class Entity implements Comparable<Entity> {
         /** update damages received **/
         for(int i = 0; i < damages.size() ; i++) {
             if(damages.get(i).attackerType == GameRegister.EntityType.CHARACTER &&
-                damages.get(i).attackerId != GameClient.getInstance().getClientCharacter().id) { // character attacker and was not client, delay
+                    damages.get(i).attackerId != GameClient.getInstance().getClientCharacter().id) { // character attacker and was not client, delay
                 float delay = 0;
                 int finalI = i;
 
@@ -208,19 +213,31 @@ public abstract class Entity implements Comparable<Entity> {
     /**
      * Renders floating texts above entity
      * wrapping it based on max amount of characters per line defined
+     * If necessary new floating text will be appended to older alive floating texts
      *
-     * The text will not follow entity, and only one floating text
-     * per entity can be active at the same time
+     * The text will not follow entity
      *
      * @param text  the text to render above entity
      */
     public void renderFloatingText(String text) {
-        for(int i = 0 ; i < currentFloatingTexts.size(); i++) // remove old texts if it exists
-            currentFloatingTexts.get(i).die();
+        // remove token reserved characters
+        text = text.replaceAll("[\\[\\]\\{\\}]", "");
+        if (text.trim().length() == 0) { // after removing of token chars nothing remained, return
+            return;
+        }
+
+        // makes sure its within max size
+        if(text.length() > MAX_CHAT_MSG_CHARACTERS)
+            text = text.substring(0, MAX_CHAT_MSG_CHARACTERS-1);
+
+//        for(int i = 0 ; i < currentFloatingTexts.size(); i++) // remove old texts if it exists
+//            currentFloatingTexts.get(i).die();
 
         Color c = (new Color(1,1,0.035f,1));
-        float scale = 0.84f;
+        float scale = FLOATING_CHAT_TEXT_SCALE;
+        if(Gdx.app.getType() == Application.ApplicationType.Android) scale /= Common.ANDROID_VIEWPORT_SCALE;
         float offsetY = spriteH / 2.75f;
+        float lifeTime = 3f + (8f * (text.length()*1.0f/ MAX_CHAT_MSG_CHARACTERS));
 
         // remder tag
         StringBuilder sb = new StringBuilder();
@@ -228,54 +245,105 @@ public abstract class Entity implements Comparable<Entity> {
         sb.append(":");
         FloatingText tag = GameScreen.getFloatingTextPool().obtain();
 
+        // save old list if it exists
+        float biggestAliveLifeTime = 0f;
+        ArrayList<FloatingText> oldTexts = new ArrayList<>();
+        for(int i = 0; i < currentFloatingTexts.size(); i++) {
+            oldTexts.add(currentFloatingTexts.get(i));
+            if(currentFloatingTexts.get(i).lifetime > biggestAliveLifeTime)
+                biggestAliveLifeTime = currentFloatingTexts.get(i).lifetime;
+        }
+
         // break line on max line characters creating new floating texts for each line
-        if(text.length() > MAX_CHARACTERS_FLOATING_TEXT) {
-            List<String> strings = Common.splitEqually(text, MAX_CHARACTERS_FLOATING_TEXT);
-            FloatingText txt = null;
-            float firstY = -1;
+        //if(text.length() > MAX_LINE_CHARACTERS_FLOATING_TEXT) {
+        List<String> strings = Common.splitEqually(text, MAX_LINE_CHARACTERS_FLOATING_TEXT);
+        FloatingText txt = null;
+        float firstY = -1, firstYTag = -1;
 
-            for(int i = 0; i < strings.size(); i++) {
-                txt = GameScreen.getFloatingTextPool().obtain();
-                int nOffsets = strings.size() - i - 1;
+        for(int i = 0; i < strings.size(); i++) {
+            txt = GameScreen.getFloatingTextPool().obtain();
+            int nOffsets = strings.size() - i - 1;
 
-                // adds "-" when a word is split in half
-                if(i < strings.size()-1) {
-                    if(strings.get(i).charAt(strings.get(i).length()-1) != ' ' &&
-                            strings.get(i+1).charAt(0) != ' ' && strings.get(i+1).charAt(0) != ','
-                    && strings.get(i+1).charAt(0) != '.' && strings.get(i+1).charAt(0) != '-' &&
-                            strings.get(i+1).charAt(0) != ';' && strings.get(i+1).charAt(0) != ':')
-                        strings.set(i, strings.get(i) + "-");
-                }
-
-                float offset = offsetY+(txt.getHeight()*nOffsets);
-
-                if(firstY == -1)
-                    firstY = offset;
-
-                txt.init(this, strings.get(i), 0, offset, scale,
-                                 c, 3f, 0f, false);
-                GameScreen.addFloatingText(txt);
-                currentFloatingTexts.add(txt);
+            // adds "-" when a word is split in half
+            if(i < strings.size()-1) {
+                if(strings.get(i).charAt(strings.get(i).length()-1) != ' ' &&
+                        strings.get(i+1).charAt(0) != ' ' && strings.get(i+1).charAt(0) != ','
+                        && strings.get(i+1).charAt(0) != '.' && strings.get(i+1).charAt(0) != '-' &&
+                        strings.get(i+1).charAt(0) != ';' && strings.get(i+1).charAt(0) != ':')
+                    strings.set(i, strings.get(i) + "-");
             }
 
-            tag.init(this, String.valueOf(sb), 0, firstY+txt.getHeight(), scale,
-                    c, 3f, 0f, false);
-            GameScreen.addFloatingText(tag);
-            currentFloatingTexts.add(tag);
-        } else { // only one line - one floating text (plus tag) needed and no splitting necessary
-            FloatingText txt = GameScreen.getFloatingTextPool().obtain();
-            txt.init(this, text, 0, offsetY, scale,
-                    c, 3f, 0f, false);
+            float offset = offsetY+(txt.getHeight()*scale*nOffsets);
 
-            tag.init(this, String.valueOf(sb), 0, offsetY+txt.getHeight(), scale,
-                    c, 3f, 0f, false);
+            if(firstY == -1)
+                firstY = offset;
 
-            GameScreen.addFloatingText(tag);
+            if(biggestAliveLifeTime > lifeTime)
+                lifeTime = biggestAliveLifeTime;
+
+            txt.init(this, strings.get(i), 0, offset, scale,
+                    c, lifeTime, 0f, false);
             GameScreen.addFloatingText(txt);
-            currentFloatingTexts.add(tag);
             currentFloatingTexts.add(txt);
         }
 
+        for(int i = 0 ; i < oldTexts.size(); i++) { // update position and lifetime of old texts if exists
+            int nOffsets = oldTexts.size() - i;
+            float newOffY = firstY + oldTexts.get(i).getHeight()*nOffsets;
+            if(firstYTag == -1)
+                firstYTag = newOffY;
+
+            oldTexts.get(i).position.set(getEntityCenter().x, getEntityCenter().y + newOffY);
+        }
+
+        if(oldTexts.size()==0)  firstYTag = firstY;
+
+        if(tagFloatingText == null) { // creates tag if not there yet
+            tag.init(this, String.valueOf(sb), 0, firstYTag+txt.getHeight(), scale,
+                    c, lifeTime, 0f, false);
+            GameScreen.addFloatingText(tag);
+            tagFloatingText = tag;
+        } else { // otherwise update its position and life time
+            tagFloatingText.position.set(getEntityCenter().x, getEntityCenter().y + firstYTag+txt.getHeight());
+            tagFloatingText.lifetime = lifeTime;
+            tagFloatingText.elapsed = 0f;
+        }
+//        } else { // only one line - one floating text (plus tag) needed and no splitting necessary
+//            FloatingText txt = GameScreen.getFloatingTextPool().obtain();
+//            txt.init(this, text, 0, offsetY, scale,
+//                    c, lifeTime, 0f, false);
+//
+////            tag.init(this, String.valueOf(sb), 0, offsetY+txt.getHeight(), scale,
+////                    c, lifeTime, 0f, false);
+////
+////            GameScreen.addFloatingText(tag);
+//            GameScreen.addFloatingText(txt);
+//            //           currentFloatingTexts.add(tag);
+//            currentFloatingTexts.add(txt);
+//
+//            float firstY =offsetY, firstYTag = -1;
+//
+//            for(int i = 0 ; i < oldTexts.size(); i++) { // update position and lifetime of old texts if exists
+//                int nOffsets = oldTexts.size() - i;
+//                float newOffY = firstY + txt.getHeight()*nOffsets;
+//                if(firstYTag == -1)
+//                    firstYTag = newOffY;
+//                oldTexts.get(i).position.set(getEntityCenter().x, getEntityCenter().y + newOffY);
+////                currentFloatingTexts.get(i).lifetime = lifeTime;
+////                currentFloatingTexts.get(i).elapsed = 0f;
+//            }
+//
+//            if(tagFloatingText == null) { // creates tag if not there yet
+//                tag.init(this, String.valueOf(sb), 0, firstYTag+txt.getHeight(), scale,
+//                        c, lifeTime, 0f, false);
+//                GameScreen.addFloatingText(tag);
+//                tagFloatingText = tag;
+//            } else { // otherwise update its position and life time
+//                tagFloatingText.position.set(getEntityCenter().x, getEntityCenter().y + firstYTag+txt.getHeight());
+//                tagFloatingText.lifetime = lifeTime;
+//                tagFloatingText.elapsed = 0f;
+//            }
+//        }
     }
 
     /**
@@ -283,9 +351,17 @@ public abstract class Entity implements Comparable<Entity> {
      */
     public void clearFloatingTexts() {
         for(int i = currentFloatingTexts.size()-1 ; i >= 0; i--) { // remove dead texts
-            if(!currentFloatingTexts.get(i).alive)
+            if(!currentFloatingTexts.get(i).alive) {
+                float scale = FLOATING_CHAT_TEXT_SCALE;
+                if(Gdx.app.getType() == Application.ApplicationType.Android) scale /= Common.ANDROID_VIEWPORT_SCALE;
+                if(tagFloatingText!=null) // adjusts tag position if its showing
+                    tagFloatingText.position.set(tagFloatingText.position.x, tagFloatingText.position.y - currentFloatingTexts.get(i).getHeight() * scale);
+                // remove dead floating text
                 currentFloatingTexts.remove(i);
+            }
         }
+        if(tagFloatingText!= null && !tagFloatingText.alive) // if tag is dead, null it
+            tagFloatingText = null;
     }
 
     public void renderDamagePoint(GameRegister.Damage damage) {
@@ -1370,7 +1446,7 @@ public abstract class Entity implements Comparable<Entity> {
         private void spawnMagicProjectile() {
             Projectile projectile = GameScreen.getProjectilePool().obtain();
             projectile.init(sfxAtlas.findRegions("PrismaWand"), 0.7f, 0.7f, 1.0f/attackSpeed,
-                            1/30f,this, getTarget(), true, true, Interpolation.bounce, "prisma_wand");
+                    1/30f,this, getTarget(), true, true, Interpolation.bounce, "prisma_wand");
             GameScreen.addProjectile(projectile);
         }
 
@@ -1440,7 +1516,7 @@ public abstract class Entity implements Comparable<Entity> {
          * @return true if collides, false otherwise
          */
         public boolean floatingTextCollision(SpriteBatch batch) {
- //           batch.end();
+            //           batch.end();
 //            shapeDebug.setProjectionMatrix(camera.combined);
 //            shapeDebug.begin(ShapeRenderer.ShapeType.Line);
 //            shapeDebug.setColor(Color.ORANGE);
@@ -1457,11 +1533,10 @@ public abstract class Entity implements Comparable<Entity> {
 //                if(tagHitBox.contains(currentFloatingTexts.get(i).getHitBox())) {
 //                    System.out.println("imhere");
 //                    return true;
-               // }
+                // }
                 Rectangle intersection = new Rectangle();
                 if (Intersector.intersectRectangles(currentFloatingTexts.get(i).getHitBox(), tagHitBox, intersection))
                 {
-                    System.out.println("imhere");
                     return true;
                 }
             }

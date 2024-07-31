@@ -5,6 +5,7 @@ import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeOut;
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.scaleTo;
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.sequence;
 import static com.mygdx.game.ui.CommonUI.ENABLE_TARGET_UI;
+import static com.mygdx.game.ui.CommonUI.FADE_CLIENT_TAG_ON_ALL_FLOATING_TEXT;
 import static com.mygdx.game.ui.CommonUI.removeWindowWithAction;
 
 import com.badlogic.gdx.Application;
@@ -28,6 +29,7 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.input.GestureDetector;
 import com.badlogic.gdx.maps.tiled.TiledMap;
+import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
@@ -107,6 +109,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Label ramLabel;
     private Label bCallsLabel;
     private Label mouseOnLabel;
+    private InfoToast infoToast; // for informing player of useful info
     private Image uiBg, healthBar, healthBarBg;
     private TypingLabel nameLabel, percentLabel;
     private Stack targetUiStack;
@@ -173,6 +176,14 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public static Pool<FloatingText> getFloatingTextPool() {return floatingTextPool;}
 
     /**
+     * A lil class for information label with a lang key for its content in different languages
+     */
+    public static class InfoToast {
+        Label label;
+        String langKey;
+    }
+
+    /**
      * Prepares the screen/stage of the game
      * @param manager       the asset manager containing loaded assets
      * @param gameClient    the reference to the game client responsible for the communication with
@@ -206,7 +217,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // Height is multiplied by aspect ratio.
         camera = new OrthographicCamera(32, 32 * (resH / resW));
         camera.position.set(camera.viewportWidth / 2f, camera.viewportHeight / 2f, 0);
-        camera.zoom = 0.4f;
+        camera.zoom = 0.45f;
         aimZoom = camera.zoom;
         uiCam = new OrthographicCamera(resW, resH);
         uiCam.position.set(resW / 2f, resH / 2f, 0);
@@ -262,7 +273,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         // viewport size based on device
         if(Gdx.app.getType() == Application.ApplicationType.Desktop)
-            stage = new Stage(new StretchViewport(1920, 1080));
+            stage = new Stage(new StretchViewport(1920*1.2f, 1080*1.2f));
         else
             stage = new Stage(new StretchViewport(1920*Common.ANDROID_VIEWPORT_SCALE, 1080*Common.ANDROID_VIEWPORT_SCALE));
 
@@ -295,9 +306,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
         optionsBtn.setY(stage.getHeight() - optionsBtn.getHeight()*optionsBtn.getScaleY());
 
         /**
+         * info toast label
+         */
+        infoToast = new InfoToast();
+        infoToast.label = new Label("infoLabel", skin, "fontMedium", Color.WHITE);
+        infoToast.label.setAlignment(Align.center);
+        infoToast.label.setX(stage.getWidth()/2f - infoToast.label.getWidth()/2f);
+        infoToast.label.setY(chatWindow.getY()+chatWindow.getHeight());
+        infoToast.label.setVisible(false);
+
+        /**
          * debug
          */
-
         fpsLabel = new Label("fps: 1441", skin, "fontMedium", Color.WHITE);
         fpsLabel.setAlignment(Align.left);
         fpsLabel.setX(12);
@@ -388,6 +408,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         respawnBtn.setPosition(stage.getWidth()/2f - respawnBtn.getWidth()/2f, stage.getHeight()/2.75f - respawnBtn.getHeight()/2f);
         deathMsgLabel.setPosition(stage.getWidth()/2f - deathMsgLabel.getWidth()/2f, stage.getHeight()/1.45f - deathMsgLabel.getHeight()/2f);
 
+        stage.addActor(infoToast.label);
         stage.addActor(fpsLabel);
         stage.addActor(pingLabel);
         stage.addActor(ramLabel);
@@ -561,7 +582,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     return super.scrolled(event, x, y, amountX, amountY); // do not zoom world if mouse is on stage actor
                 }
                 // change world zoom
-                aimZoom = camera.zoom + amountY * 0.1f;
+                aimZoom = camera.zoom + amountY * 0.064f;
                 //world.zoom(amountY);
                 //camera.zoom += amountY;
                 return super.scrolled(event, x, y, amountX, amountY);
@@ -640,6 +661,30 @@ public class GameScreen implements Screen, PropertyChangeListener {
         stage.addActor(deathMsgLabel);
 
         // let the respawn btn be shown by render method after animation
+    }
+
+    /**
+     * Shows information to player through info toast label
+     * that appears for a set amount of time above chat window
+     *
+     * @param langKey the language key to find desired information in the correct language
+     */
+    public void showInfo(String langKey) {
+        String info = langBundle.get(langKey);
+        infoToast.label.setText(info);
+        infoToast.label.setVisible(true);
+        infoToast.langKey = langKey;
+
+        float lifeTime = 1f + info.length() * 1/24f;
+
+        Timer.schedule(new Timer.Task() {
+            @Override
+            public void run() {
+                infoToast.label.setText("");
+                infoToast.label.setVisible(false);
+                infoToast.langKey = null;
+            }
+        }, lifeTime);
     }
 
     public static GameScreen getInstance() {
@@ -863,6 +908,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public void update() {
         if(gameClient.getClientCharacter() == null) return; // character not loaded yet!
 
+        Entity.Character clientChar = gameClient.getClientCharacter();
+
         // if its on android, change chat y position offset if keyboard is showing
         if(Gdx.app.getType() == Application.ApplicationType.Android) {
             //Gdx.app.log("inputtest", String.valueOf(RogueFantasy.isKeyboardShowing()));
@@ -912,11 +959,20 @@ public class GameScreen implements Screen, PropertyChangeListener {
             } else if (Gdx.app.getType() == Application.ApplicationType.Desktop) {    // if its on pc move accordingly
                 if (Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor && !onStageActorDown &&
                 contextWindow.getStage()==null) { // only left mouse button walks and if not on ui stage actor or context menu is opened
-                    touchPos = new Vector2(unprojectedMouse.x - gameClient.getClientCharacter().spriteW / 2f,  // compensate to use center of char sprite as anchor
-                            unprojectedMouse.y - gameClient.getClientCharacter().spriteH / 2f);
-                    movement.xEnd = touchPos.x;
-                    movement.yEnd = touchPos.y;
-                    movement.hasEndPoint = true;
+                    if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) { // if ctrl is pressed, just change direction
+                        touchPos = new Vector2(unprojectedMouse.x - clientChar.spriteW / 2f,  // compensate to use center of char sprite as anchor
+                                unprojectedMouse.y - clientChar.spriteH / 2f);
+                        Vector2 charPos = new Vector2(clientChar.position.x, clientChar.position.y);
+                        Vector2 deltaVec = new Vector2(touchPos).sub(charPos);
+                        Vector2 dir = deltaVec.nor();
+                        clientChar.direction = Entity.Direction.getDirection(Math.round(dir.x), Math.round(dir.y));
+                    } else {
+                        touchPos = new Vector2(unprojectedMouse.x - gameClient.getClientCharacter().spriteW / 2f,  // compensate to use center of char sprite as anchor
+                                unprojectedMouse.y - gameClient.getClientCharacter().spriteH / 2f);
+                        movement.xEnd = touchPos.x;
+                        movement.yEnd = touchPos.y;
+                        movement.hasEndPoint = true;
+                    }
                 }
             }
         } else {
@@ -1127,12 +1183,20 @@ public class GameScreen implements Screen, PropertyChangeListener {
         if(gameClient.getClientCharacter() == null) return;
 
         // always draw client simplified ui (actually only if no chat texts are being displayed atm)
-        if(!gameClient.getClientCharacter().floatingTextCollision(batch))
-            gameClient.getClientCharacter().renderUI(batch);
-        else {
-            batch.setColor(bColor.r, bColor.g, bColor.b, 0.3f); // render with tag with transparency
+        if(FADE_CLIENT_TAG_ON_ALL_FLOATING_TEXT) {
+            if(floatingTextCollision(gameClient.getClientCharacter().tagHitBox))
+                batch.setColor(bColor.r, bColor.g, bColor.b, 0.3f); // render tag with transparency
+
             gameClient.getClientCharacter().renderUI(batch);
             batch.setColor(bColor.r, bColor.g, bColor.b, bColor.a);
+        } else {
+            if (!gameClient.getClientCharacter().floatingTextCollision(batch))
+                gameClient.getClientCharacter().renderUI(batch);
+            else {
+                batch.setColor(bColor.r, bColor.g, bColor.b, 0.3f); // render tag with transparency
+                gameClient.getClientCharacter().renderUI(batch);
+                batch.setColor(bColor.r, bColor.g, bColor.b, bColor.a);
+            }
         }
 
         // renders hover entity information if player exists and is alive
@@ -1324,6 +1388,23 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 floatingTextPool.free(floatingText);
             }
         }
+    }
+
+    /**
+     * Checks collision with every alive static floating text
+     */
+    private boolean floatingTextCollision(Rectangle rect) {
+        Iterator<FloatingText> it = floatingTexts.iterator();
+        while(it.hasNext()) {
+            FloatingText ft = it.next();
+            if(ft.animSpeed > 0f) // ignore non-static floating texts (damage points for instance...)
+                continue;
+            Rectangle intersection = new Rectangle();
+            if (Intersector.intersectRectangles(ft.getHitBox(), rect, intersection))
+                return true;
+        }
+
+        return false;
     }
 
     /** clears pool objects  **/
@@ -1557,7 +1638,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
      * Should reload texts to update to new language settings
      */
     private void reloadLanguage() {
+        langBundle = manager.get("lang/langbundle", I18NBundle.class);
         chatWindow.reloadLanguage();
+        // if info label is active, set text in new language
+        if(infoToast.label.isVisible())
+            infoToast.label.setText(langBundle.get(infoToast.langKey));
     }
 
     /**

@@ -125,6 +125,15 @@ public class LoadScreen implements Screen {
             fontChat.fontParameters.magFilter = Texture.TextureFilter.Linear;
             fontChat.fontParameters.minFilter = Texture.TextureFilter.Linear;
             manager.load("fonts/chatFont.ttf", BitmapFont.class, fontChat);
+            // floating text font
+            FreetypeFontLoader.FreeTypeFontLoaderParameter fontFloatingText = new FreetypeFontLoader.FreeTypeFontLoaderParameter();
+            fontFloatingText.fontFileName = "fonts/immortal.ttf";
+            fontFloatingText.fontParameters.size = 18;
+            fontFloatingText.fontParameters.borderColor = Color.BLACK;
+            fontFloatingText.fontParameters.borderWidth = 1.25f;
+            fontFloatingText.fontParameters.magFilter = Texture.TextureFilter.Linear;
+            fontFloatingText.fontParameters.minFilter = Texture.TextureFilter.Linear;
+            manager.load("fonts/floatingTextFont.ttf", BitmapFont.class, fontFloatingText);
             // blocks until skin is fully loaded
             manager.finishLoading();
         }
@@ -136,21 +145,27 @@ public class LoadScreen implements Screen {
             // gets font loaded
             BitmapFont fontMedium = manager.get("fonts/immortalMedium.ttf", BitmapFont.class);
             BitmapFont fontChat = manager.get("fonts/chatFont.ttf", BitmapFont.class);
+            BitmapFont fontFloatingText = manager.get("fonts/floatingTextFont.ttf", BitmapFont.class);
             fontMedium.getData().markupEnabled = true;
             fontChat.getData().markupEnabled = true;
+            fontFloatingText.getData().markupEnabled = true;
             // creates the typist font containing emojis and game icons that is ready for effects
             Font iconFont = new Font(fontMedium);
             Font emojiFont = new Font(fontMedium);
+            Font floatingTextFont = new Font(fontFloatingText);
             iconFont.setInlineImageMetrics(-50f, -4f, 0f);
             emojiFont.setInlineImageMetrics(-15f, -12f, 0f);
             iconFont.setUnderlineMetrics(-0.4f,-0.1f,-0.1f,0f);
             emojiFont.setUnderlineMetrics(-0.4f,-0.1f,-0.1f,0f);
+            floatingTextFont.setUnderlineMetrics(-0.4f,-0.1f,-0.1f,0f);
+            KnownFonts.addEmoji(floatingTextFont);
             KnownFonts.addEmoji(emojiFont);
             KnownFonts.addGameIcons(iconFont);
             skin.add("emojiFont", emojiFont, Font.class);
             skin.add("iconFont", iconFont, Font.class);
             skin.add("fontMedium", fontMedium, BitmapFont.class);
             skin.add("fontChat", fontChat, BitmapFont.class);
+            skin.add("floatingTextFont", floatingTextFont, Font.class);
             // creates new styles based on the new font
             Window.WindowStyle wStyle =  skin.get(Window.WindowStyle.class);
             wStyle.titleFont = fontMedium;

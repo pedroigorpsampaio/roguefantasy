@@ -1,8 +1,12 @@
 package com.mygdx.game.ui;
 
 import static com.mygdx.game.entity.Entity.assetManager;
+import static com.mygdx.game.ui.CommonUI.FLOATING_CHAT_TEXT_SCALE;
 
+import com.badlogic.gdx.Application;
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
@@ -12,6 +16,7 @@ import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.entity.Entity;
 import com.mygdx.game.entity.WorldMap;
+import com.mygdx.game.util.Common;
 
 import org.w3c.dom.css.Rect;
 
@@ -31,14 +36,14 @@ public class FloatingText implements Pool.Poolable {
     public float lifetime; // lifetime in seconds of this floating text
     public float animSpeed; // animation speed of this floating text
     public boolean alive;
-    private float elapsed;
+    public float elapsed;
     public float offsetX, offsetY;
     private boolean followCreator;
 
     public FloatingText() {
         this.alive = false;
         this.skin = assetManager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
-        this.font = skin.get("emojiFont", Font.class); // gets typist font with icons
+        this.font = skin.get("floatingTextFont", Font.class); // gets typist font with icons
         this.label = new TypingLabel("", font);
         this.label.skipToTheEnd();
         this.text = "";
@@ -52,11 +57,6 @@ public class FloatingText implements Pool.Poolable {
     }
 
     public void init(Entity creator, String text, float offsetX, float offsetY, float scale, Color color, float lifeTime, float animSpeed, boolean followCreator) {
-//        if(text.length()>MAX_CHARACTERS_IN_LINE) {
-//            text = CommonUI.insert(text, "\n", MAX_CHARACTERS_IN_LINE);
-//        }
-       // text = text + ""
-
         StringBuilder sb = new StringBuilder();
         sb.append("{COLOR=#");
         sb.append(color.toString());
@@ -124,7 +124,7 @@ public class FloatingText implements Pool.Poolable {
     Rectangle hitBox = new Rectangle();
     public Rectangle getHitBox() {
         float tagScale = WorldMap.unitScale * 0.25f * scale;
-        hitBox.set(label.getX(), label.getY() - label.getFont().originalCellHeight/2f, label.getWidth()*tagScale, getHeight()/0.85f);
+        hitBox.set(label.getX(), label.getY() - label.getFont().originalCellHeight/2f, label.getWidth()*tagScale, getHeight()/FLOATING_CHAT_TEXT_SCALE);
         return hitBox;
     }
 
@@ -151,6 +151,6 @@ public class FloatingText implements Pool.Poolable {
     public float getHeight() {
         TypingLabel tmpLabel = new TypingLabel("test", font);
         float tagScale = WorldMap.unitScale * 0.25f * scale;
-        return tmpLabel.getLineHeight(0)*tagScale * 0.85f;
+        return tmpLabel.getLineHeight(0)*tagScale * FLOATING_CHAT_TEXT_SCALE;
     }
 }
