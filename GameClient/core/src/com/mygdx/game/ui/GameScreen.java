@@ -124,6 +124,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Image bg;
     private SpriteBatch batch;
     public static OrthographicCamera camera;
+    public static float ORIGINAL_ZOOM = 0.45f;
     static final int WORLD_WIDTH = 1000;
     static final int WORLD_HEIGHT = 1000;
     private float rotationSpeed;
@@ -217,7 +218,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // Height is multiplied by aspect ratio.
         camera = new OrthographicCamera(32, 32 * (resH / resW));
         camera.position.set(camera.viewportWidth / 2f, camera.viewportHeight / 2f, 0);
-        camera.zoom = 0.45f;
+        camera.zoom = ORIGINAL_ZOOM;
         aimZoom = camera.zoom;
         uiCam = new OrthographicCamera(resW, resH);
         uiCam.position.set(resW / 2f, resH / 2f, 0);
@@ -312,7 +313,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         infoToast.label = new Label("infoLabel", skin, "fontMedium", Color.WHITE);
         infoToast.label.setAlignment(Align.center);
         infoToast.label.setX(stage.getWidth()/2f - infoToast.label.getWidth()/2f);
-        infoToast.label.setY(chatWindow.getY()+chatWindow.getHeight());
+        infoToast.label.setY(chatWindow.getY()+chatWindow.getHeight()+chatWindow.getChannelTabs().getHeight());
         infoToast.label.setVisible(false);
 
         /**
@@ -503,24 +504,38 @@ public class GameScreen implements Screen, PropertyChangeListener {
                         chatWindow.setFocus();
                 }
 
-                if(keycode == Input.Keys.TAB && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {// tab targeting
+                if (keycode == Input.Keys.TAB && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) { // chat tab change
+                    int nextIdx;
+                    if(!Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT))
+                        nextIdx = (chatWindow.getTabsButtonGroup().getCheckedIndex() + 1) % chatWindow.getTabsButtonGroup().getButtons().size;
+                    else
+                        nextIdx = (chatWindow.getTabsButtonGroup().getCheckedIndex() + chatWindow.getTabsButtonGroup().getButtons().size - 1) %
+                                        chatWindow.getTabsButtonGroup().getButtons().size;
+                    TextButton next = chatWindow.getTabsButtonGroup().getButtons().get(nextIdx);
+                    next.setChecked(true);
+                }
+
+                if(keycode == Input.Keys.TAB && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) && !Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {// tab targeting
                     if(!chatWindow.hasFocus()) {
                         Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), false);
-                        GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
+                        if(nextTarget == null || nextTarget.uId != GameClient.getInstance().getClientUid()) // makes sure to not attack itself
+                            GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
                     }
                 }
 
-                if(keycode == Input.Keys.TAB && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {// tab targeting in reverse
+                if(keycode == Input.Keys.TAB && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)  && !Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {// tab targeting in reverse
                     if(!chatWindow.hasFocus()) {
                         Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), true);
-                        GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
+                        if(nextTarget == null || nextTarget.uId != GameClient.getInstance().getClientUid()) // makes sure to not attack itself
+                            GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
                     }
                 }
 
                 if(keycode == Input.Keys.SPACE) {// closest interactive entity targeting
                     if(!chatWindow.hasFocus()) {
                         Entity nextTarget = EntityController.getInstance().getNextTargetEntity();
-                        GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
+                        if(nextTarget == null || nextTarget.uId != GameClient.getInstance().getClientUid()) // makes sure to not attack itself
+                            GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
                     }
                 }
 
@@ -717,6 +732,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
     }
 
     private void buildChatWindow() {
+        /**
+         * Chat window
+         */
         chatWindow.build();
         //chatWindow.setScale(0.7f, 0.7f);
         //chatWindow.setWidth(stage.getWidth()/2f);
@@ -724,6 +742,14 @@ public class GameScreen implements Screen, PropertyChangeListener {
         chatWindow.setY(chatOffsetY);
         chatWindow.updateHitBox();
         stage.addActor(chatWindow);
+
+        /**
+         * Chat tab buttons
+         */
+        Table t = chatWindow.getChannelTabs();
+        t.setPosition(chatWindow.getX(), chatWindow.getY()+chatWindow.getHeight());
+        t.align(Align.bottomLeft);
+        stage.addActor(t);
     }
 
     public static void hideDeathUI() {

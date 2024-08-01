@@ -44,6 +44,8 @@ import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
 import com.badlogic.gdx.scenes.scene2d.ui.Window;
+import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
@@ -199,6 +201,13 @@ public class LoadScreen implements Screen {
             tbStyle.font = fontMedium;
             tbStyle.fontColor = Color.WHITE;
             skin.add("newTextButtonStyle", tbStyle, TextButton.TextButtonStyle.class);
+
+//            down: button-pressed
+//            up: button
+//            font: font
+//            fontColor: white
+//            checked: button-pressed
+//            downFontColor: light-gray
 
             CheckBox.CheckBoxStyle cbStyle =  skin.get(CheckBox.CheckBoxStyle.class);
             cbStyle.font = fontMedium;

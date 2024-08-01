@@ -10,10 +10,15 @@ import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Button;
+import com.badlogic.gdx.scenes.scene2d.ui.ButtonGroup;
+import com.badlogic.gdx.scenes.scene2d.ui.HorizontalGroup;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
@@ -21,7 +26,9 @@ import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.mygdx.game.RogueFantasy;
@@ -47,10 +54,13 @@ public class ChatWindow extends GameWindow {
     public static final Color DEFAULT_CHAT_MESSAGE_COLOR = new Color(0.95f, 0.99f, 0.75f, 1f);
     public static final Color SERVER_CHAT_MESSAGE_COLOR = new Color(0.77f, 0.77f, 1f, 1f);
     public static final Color DEBUG_CHAT_MESSAGE_COLOR = new Color(0.97f, 0.67f, 0.3f, 1f);
+    public static final Color TAB_COLOR_SELECTED = new Color(0.4f, 0.9f, 0.8f, 1.0f);
+    public static final Color TAB_COLOR_UNSELECTED = new Color(0.2f, 0.4f, 0.1f, 0.7f);
     private static final float CHAT_WIDTH = GameScreen.getStage().getWidth()*0.5f;
     private static final float CHAT_HEIGHT = GameScreen.getStage().getHeight()*0.1805f;
     private Table uiTable;
-    private List<ChatMessage> defaultChatLog, worldChatLog, mapChatMap, guildChatLog, partyChatLog, helpChatLog, privateChatLog; // contain logs from each chat log
+    //private List<ChatMessage> defaultChatLog, worldChatLog, mapChatMap, guildChatLog, partyChatLog, helpChatLog; // contain logs from each chat log
+    private List<Channel> channels; // list of chat channels (of ServerChannel types)
     private TextButton defaultChatTabBtn, worldChatTabBtn, mapChatTabBtn, guildChatTabBtn, partyChatTabBtn, helpChatTabBtn, privateChatTabBtn; // chat tab buttons
     private ChatChannel currentChannel; // current chat channel
     private int currentRecipientId; // current recipient Id (for private chats)
@@ -60,6 +70,26 @@ public class ChatWindow extends GameWindow {
     private ScrollPane chatScrollPane;
     private Rectangle hitBox;
     private Table scrollTable;
+    private Table channelTabs;
+    private ButtonGroup<TextButton> tabsButtonGroup;
+    private HorizontalGroup tabHorizontalBtns;
+    private ScrollPane tabsScrollPane;
+
+    public float getTabHeight() {
+        if(tabHorizontalBtns.hasChildren())
+            return tabHorizontalBtns.getChild(0).getHeight();
+        else
+            return 0;
+    }
+
+    public ButtonGroup<TextButton> getTabsButtonGroup() {return tabsButtonGroup;}
+
+    public static class Channel {
+        public TextButton btn;
+        public List<ChatMessage> log;
+        public ChatChannel type;
+        public int recipientId; // in case its a private chat
+    }
 
     public static class ChatMessage {
         String sender; // the sender name
@@ -85,17 +115,25 @@ public class ChatWindow extends GameWindow {
     public ChatWindow(RogueFantasy game, Stage stage, Screen parent, AssetManager manager, String title, Skin skin, String styleName) {
         super(game, stage, parent, manager, title, skin, styleName);
 
-        // initialize lists of chat logs
-        defaultChatLog = Collections.synchronizedList(new ArrayList<>());
-        worldChatLog = Collections.synchronizedList(new ArrayList<>());
-        mapChatMap = Collections.synchronizedList(new ArrayList<>());
-        guildChatLog = Collections.synchronizedList(new ArrayList<>());
-        partyChatLog = Collections.synchronizedList(new ArrayList<>());
-        helpChatLog = Collections.synchronizedList(new ArrayList<>());
-        privateChatLog = Collections.synchronizedList(new ArrayList<>());
+        // initialize channels list
+        channels = Collections.synchronizedList(new ArrayList<>());
+
         // chat hit box for hover detection
         hitBox = new Rectangle();
         tmpLabel = new Label("", skin, "chatLabelStyle");
+
+
+        /**
+         * Prepare tab style
+         */
+        TextButton.TextButtonStyle tbChatTabStyle = new TextButton.TextButtonStyle(skin.get(TextButton.TextButtonStyle.class));
+        tbChatTabStyle.font = skin.get("fontChat", BitmapFont.class);
+        tbChatTabStyle.fontColor = Color.LIGHT_GRAY;
+        tbChatTabStyle.checkedFontColor = Color.WHITE;
+        tbChatTabStyle.up =  new TextureRegionDrawable(skin.getAtlas().findRegion("tab")).tint(ChatWindow.TAB_COLOR_UNSELECTED);
+        tbChatTabStyle.checked = new TextureRegionDrawable(skin.getAtlas().findRegion("tab-pressed")).tint(ChatWindow.TAB_COLOR_SELECTED);
+        tbChatTabStyle.down = tbChatTabStyle.checked;
+        skin.add("chatTab", tbChatTabStyle, TextButton.TextButtonStyle.class);
     }
 
     @Override
@@ -112,6 +150,53 @@ public class ChatWindow extends GameWindow {
 
         // makes sure title is in the correct language
         //this.getTitleLabel().setText(" "+langBundle.format("chat"));
+
+        /**
+         * Tabs for channels
+         */
+        channelTabs = new Table();
+        tabsButtonGroup = new ButtonGroup<>();
+        tabsButtonGroup.setMinCheckCount(1);
+        tabsButtonGroup.setMaxCheckCount(1);
+        tabsButtonGroup.setUncheckLast(true);
+
+        // tab buttons
+        tabHorizontalBtns = new HorizontalGroup();
+        tabHorizontalBtns.space(4f);
+        tabsScrollPane = new ScrollPane(tabHorizontalBtns, skin);
+        tabsScrollPane.setFadeScrollBars(true);
+        tabsScrollPane.setupFadeScrollBars(0,0);
+        tabsScrollPane.setScrollbarsOnTop(true);
+        tabsScrollPane.setSmoothScrolling(false);
+        tabsScrollPane.setScrollbarsVisible(false);
+        tabsScrollPane.setForceScroll(false,false);
+        tabsScrollPane.setFlingTime(0);
+        tabsScrollPane.setScrollingDisabled(false, true);
+        tabsScrollPane.setupOverscroll(0,0,0);
+
+        // create initial channels - except private, guild and party channels (those are created during the game when necessary)
+        createChannel(ChatChannel.DEFAULT, -1, true);
+        createChannel(ChatChannel.WORLD, -1, false);
+        createChannel(ChatChannel.MAP, -1, false);
+        createChannel(ChatChannel.HELP, -1, false);
+        createChannel(ChatChannel.DEFAULT, -1, true);
+        createChannel(ChatChannel.WORLD, -1, false);
+        createChannel(ChatChannel.MAP, -1, false);
+        createChannel(ChatChannel.HELP, -1, false);
+        createChannel(ChatChannel.DEFAULT, -1, true);
+        createChannel(ChatChannel.WORLD, -1, false);
+        createChannel(ChatChannel.MAP, -1, false);
+        createChannel(ChatChannel.HELP, -1, false);
+        createChannel(ChatChannel.MAP, -1, false);
+        createChannel(ChatChannel.HELP, -1, false);
+        createChannel(ChatChannel.DEFAULT, -1, true);
+        createChannel(ChatChannel.WORLD, -1, false);
+        createChannel(ChatChannel.MAP, -1, false);
+        createChannel(ChatChannel.HELP, -1, false);
+
+
+        // adds scroll pane to table with correct limits
+        channelTabs.add(tabsScrollPane).colspan(1).left().size(CHAT_WIDTH, getTabHeight()+2);
 
         // text input textfield
         msgField = new TextField("", skin);
@@ -191,6 +276,67 @@ public class ChatWindow extends GameWindow {
 
         // create welcome message
         sendMessage("[Server]", -1, ChatChannel.DEFAULT, langBundle.get("welcomeChatMessage"), "welcomeChatMessage", SERVER_CHAT_MESSAGE_COLOR, -1, false);
+    }
+
+    /**
+     * Creates a chat channel adding it to the current chat channels
+     * @param type          the type of channel to be created
+     * @param recipientId   the recipient id, in case of private message channel
+     * @param select        if this channel should be selected after creation
+     */
+    public void createChannel(ChatChannel type, int recipientId, boolean select) {
+        List<ChatMessage> log = Collections.synchronizedList(new ArrayList<>());
+        Channel ch = new Channel();
+        ch.log = log; ch.type = type; ch.recipientId = recipientId;
+
+        /**
+         * add channel to tabs table
+         */
+        TextButton btn = new TextButton(langBundle.get(type.getText()), skin, "chatTab");
+        btn.padTop(1).padBottom(1).padLeft(11).padRight(11);
+
+//        if(select)
+//            btn.setColor(TAB_COLOR_SELECTED);
+//        else
+//            btn.setColor(TAB_COLOR_UNSELECTED);
+
+        tabsButtonGroup.add(btn);
+        btn.setChecked(select);
+        btn.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                if(btn.isChecked()) { // this button was checked
+                    //btn.setColor(TAB_COLOR_SELECTED);
+
+                    if(btn.getX() < tabsScrollPane.getScrollX()) {// getting cut left - decrease pane scrollX
+                        float newX = tabsScrollPane.getScrollX() - (tabsScrollPane.getScrollX() - btn.getX());
+                        //if(newX < 0) newX = 0;
+                        tabsScrollPane.setScrollX(newX);
+                    }
+                    else if(btn.getX() > tabsScrollPane.getScrollX() + CHAT_WIDTH - btn.getWidth()) { // getting cut right - increase pane scrollX
+                        float newX = tabsScrollPane.getScrollX() + btn.getX() - (tabsScrollPane.getScrollX() + CHAT_WIDTH - btn.getWidth());
+                        tabsScrollPane.setScrollX(newX);
+                    }
+                    changeTab(ch.type, ch.recipientId);
+                } else { // this button was unchecked
+                    //btn.setColor(TAB_COLOR_UNSELECTED);
+                }
+            }
+        });
+
+        tabHorizontalBtns.addActor(btn);
+        channelTabs.pack();
+
+        ch.btn = btn;
+        channels.add(ch);
+    }
+
+    /**
+     * Gets the buttons that compose the channels buttons
+     * that are stored in a table
+     */
+    public Table getChannelTabs() {
+        return channelTabs;
     }
 
     /**
@@ -424,39 +570,31 @@ public class ChatWindow extends GameWindow {
 
     /**
      * Returns the chat list that corresponds to the tab received in parameter
-     * @param channel	the tab to get the chat list from
-     * @param recipientId in case its a private message channel, the id of the recipient to load private messages
-     * @return		the chat list that corresponds to the tab
+     * @param type	        the channel type to get the chat list from
+     * @param recipientId   in case its a private message channel, the id of the recipient to load private messages
+     * @return		the chat list that corresponds to the channel tab, null if no chat channel was found
      */
-    private List<ChatMessage> chatLogFromChannel(ChatChannel channel, int recipientId) {
-        List<ChatMessage> list = defaultChatLog;
+    private List<ChatMessage> chatLogFromChannel(ChatChannel type, int recipientId) {
+        Iterator<Channel> it = channels.iterator();
 
-        switch (channel) {
-            case DEFAULT:
-                list = defaultChatLog;
-                break;
-            case WORLD:
-                list = worldChatLog;
-                break;
-            case MAP:
-                list = mapChatMap;
-                break;
-            case GUILD:
-                list = guildChatLog;
-                break;
-            case PARTY:
-                list = partyChatLog;
-                break;
-            case HELP:
-                list = helpChatLog;
-                break;
-            case PRIVATE: // TODO: MUST FILTER RECIPIENT ID
-            default:
-                list = defaultChatLog;
-                break;
+        while(it.hasNext()) {
+            Channel channel = it.next();
+            if(channel.type == type) {
+                if(type != ChatChannel.PRIVATE || (type == ChatChannel.PRIVATE && channel.recipientId == recipientId))
+                    return channel.log;
+            }
         }
 
-        return list;
+        return null;
+    }
+
+    // change selected log tab and updates label text
+    private void changeTab(ChatChannel type, int recipientId) {
+        currentChannel = type;
+        updateChatLabel(type, recipientId);
+        chatScrollPane.layout();
+        chatScrollPane.setScrollPercentY(100);
+        chatScrollPane.updateVisualScroll();
     }
 
     /** only scrolls to the end if bar is at the end,
@@ -614,6 +752,14 @@ public class ChatWindow extends GameWindow {
         msgField.setMessageText(langBundle.format("chatTipMessage"));
         sendBtn.setText(langBundle.format("send"));
         updateChatLabel(currentChannel, -1);
+
+        /** goes through tab buttons updating language of translatable channels **/
+        Iterator<Channel> it = channels.iterator();
+        while(it.hasNext()) {
+            Channel ch = it.next();
+            if(ch.type != ChatChannel.PRIVATE)
+                ch.btn.setText(langBundle.get(ch.type.getText()));
+        }
     }
 
     @Override
@@ -657,13 +803,13 @@ public class ChatWindow extends GameWindow {
      * Chat channels
      */
     public enum ChatChannel {
-        DEFAULT("default"),
-        WORLD("world"),
-        MAP("map"),
-        GUILD("guild"),
-        PARTY("party"),
-        HELP("help"),
-        PRIVATE("private"),
+        DEFAULT("defaultChat"),
+        WORLD("worldChat"),
+        MAP("mapChat"),
+        GUILD("guildChat"),
+        PARTY("partyChat"),
+        HELP("helpChat"),
+        PRIVATE("`privateChat"),
         UNKNOWN("unknown");
 
         private String text;

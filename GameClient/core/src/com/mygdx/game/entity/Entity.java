@@ -835,6 +835,7 @@ public abstract class Entity implements Comparable<Entity> {
             if(isUnmovable()) return; // in case unmovable(logging in, teleportin...) cannot interact
             if(e != null && (e.isUnmovable() || e.state == GameRegister.EntityState.TELEPORTING_IN
                     || e.state == GameRegister.EntityState.TELEPORTING_OUT)) return; // in case target cannot move, do not target it
+            if(e != null && e.uId == GameClient.getInstance().getClientUid()) // makes sure to not attack itself
 
             if(e != null) e.resetYoYoAnim(); // if a entity is selected, reset its yo yo target animation
 
@@ -1563,11 +1564,13 @@ public abstract class Entity implements Comparable<Entity> {
             animTime += Gdx.graphics.getDeltaTime(); // accumulates anim timer
             Map<Direction, Animation<TextureRegion>> currentAnimation = idle;
 
+            Entity currTarget = getTarget();
+
             // predicts direction if a target is selected and its client
-            if(getTarget() != null && GameClient.getInstance().getClientCharacter() != null &&
+            if(currTarget != null && GameClient.getInstance().getClientCharacter() != null &&
                     GameClient.getInstance().getClientCharacter().id == this.id) {
                 // predict direction
-                Vector2 dir = getTarget().centerPos.sub(this.centerPos).nor();
+                Vector2 dir = currTarget.centerPos.sub(this.centerPos).nor();
                 direction = Direction.getDirection(Math.round(dir.x), Math.round(dir.y));
             }
 
