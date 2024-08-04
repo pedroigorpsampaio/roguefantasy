@@ -303,6 +303,11 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
         }
     }
 
+    @Override
+    public void reloadLanguage() {
+
+    }
+
 
     // resizes info dialogs on game resize
     @Override

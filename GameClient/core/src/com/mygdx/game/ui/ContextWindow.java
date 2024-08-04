@@ -105,6 +105,11 @@ public class ContextWindow extends GameWindow {
 
     }
 
+    @Override
+    public void reloadLanguage() {
+
+    }
+
     public boolean isPointOn(float x, float y) {
         Vector2 coordinates = stageToLocalCoordinates(new Vector2(x, y));
         return this.hit(coordinates.x, coordinates.y, true) != null;

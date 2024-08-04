@@ -159,6 +159,11 @@ public class OptionWindow extends GameWindow {
     }
 
     @Override
+    public void reloadLanguage() {
+
+    }
+
+    @Override
     protected void setStage(Stage stage) {
         super.setStage(stage);
 

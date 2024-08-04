@@ -123,6 +123,11 @@ public class InfoWindow extends GameWindow {
 
     }
 
+    @Override
+    public void reloadLanguage() {
+
+    }
+
     /**
      * A nested class that controls the info window
      */

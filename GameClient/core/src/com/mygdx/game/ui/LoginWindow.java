@@ -229,6 +229,11 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
             moveBy(0, -deltaY);
     }
 
+    @Override
+    public void reloadLanguage() {
+
+    }
+
     /**
      * Method that reacts on server responses (login responses)
      * NOTE:  Gdx.app.postRunnable(() makes it thread-safe with libGDX UI

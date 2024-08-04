@@ -11,10 +11,12 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
-import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Button;
 import com.badlogic.gdx.scenes.scene2d.ui.ButtonGroup;
@@ -38,8 +40,6 @@ import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Common;
 import com.mygdx.game.util.Encoder;
 
-import java.awt.Toolkit;
-import java.awt.datatransfer.StringSelection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -58,12 +58,16 @@ public class ChatWindow extends GameWindow {
     public static final Color TAB_COLOR_UNSELECTED = new Color(0.2f, 0.4f, 0.1f, 0.7f);
     private static final float CHAT_WIDTH = GameScreen.getStage().getWidth()*0.5f;
     private static final float CHAT_HEIGHT = GameScreen.getStage().getHeight()*0.1805f;
+    private static final float ICON_HORIZONTAL_PAD = 1;
+    private static final Color ICON_TINT_COLOR = new Color(0.85f, 0.85f, 0.85f, 0.6f);
+    private static final Color PANE_BG_COLOR = new Color(0.1f, 0.1f, 0.1f, 0.4f);
+    private final TextureAtlas uiAtlas;
+    private final Button leftChannelBtn, rightChannelBtn, closeChannelBtn, openChannelBtn;
     private Table uiTable;
     //private List<ChatMessage> defaultChatLog, worldChatLog, mapChatMap, guildChatLog, partyChatLog, helpChatLog; // contain logs from each chat log
     private List<Channel> channels; // list of chat channels (of ServerChannel types)
     private TextButton defaultChatTabBtn, worldChatTabBtn, mapChatTabBtn, guildChatTabBtn, partyChatTabBtn, helpChatTabBtn, privateChatTabBtn; // chat tab buttons
-    private ChatChannel currentChannel; // current chat channel
-    private int currentRecipientId; // current recipient Id (for private chats)
+    private Channel currentChannel; // current chat channel
     private TextButton sendBtn;
     private TextField msgField; // message field
     private final Label tmpLabel;
@@ -74,6 +78,8 @@ public class ChatWindow extends GameWindow {
     private ButtonGroup<TextButton> tabsButtonGroup;
     private HorizontalGroup tabHorizontalBtns;
     private ScrollPane tabsScrollPane;
+    private int currentChannelIdx = -1;
+    private OpenChannelWindow openChannelWindow; // open chat channel ui
 
     public float getTabHeight() {
         if(tabHorizontalBtns.hasChildren())
@@ -83,6 +89,24 @@ public class ChatWindow extends GameWindow {
     }
 
     public ButtonGroup<TextButton> getTabsButtonGroup() {return tabsButtonGroup;}
+
+    /**
+     * Navigates through opened channel tabs
+     * @param reverse   if the direction of navitagion should be reversed (to the left, instead)
+     */
+    public void navigateTab(boolean reverse) {
+        int nextIdx;
+        if(!reverse)
+            nextIdx = (currentChannelIdx + 1) % channels.size();
+        else
+            nextIdx = (currentChannelIdx +  channels.size() - 1) % channels.size();
+
+        channels.get(nextIdx).btn.setChecked(true); // sets button as checked, and checked callback will do the rest
+    }
+
+    public OpenChannelWindow getOpenChannelWindow() {
+        return openChannelWindow;
+    }
 
     public static class Channel {
         public TextButton btn;
@@ -122,6 +146,22 @@ public class ChatWindow extends GameWindow {
         hitBox = new Rectangle();
         tmpLabel = new Label("", skin, "chatLabelStyle");
 
+        /**
+         * Ui atlas icons
+         */
+        uiAtlas = manager.get("ui/packed_textures/ui.atlas");
+
+        TextureRegionDrawable up = new TextureRegionDrawable(new TextureRegion(new Sprite(uiAtlas.findRegion("ArrowLeft"))));
+        leftChannelBtn = new Button(up, up.tint(Color.GRAY));
+
+        up = new TextureRegionDrawable(new TextureRegion(new Sprite(uiAtlas.findRegion("ArrowRight"))));
+        rightChannelBtn = new Button(up, up.tint(Color.GRAY));
+
+        up = new TextureRegionDrawable(new TextureRegion(new Sprite(uiAtlas.findRegion("bookIcon"))));
+        openChannelBtn = new Button(up, up.tint(Color.GRAY));
+
+        up = new TextureRegionDrawable(new TextureRegion(new Sprite(uiAtlas.findRegion("closeIcon"))));
+        closeChannelBtn = new Button(up, up.tint(Color.GRAY));
 
         /**
          * Prepare tab style
@@ -141,9 +181,6 @@ public class ChatWindow extends GameWindow {
         // makes sure window is clear and not in stage before building it
         this.clear();
         this.remove();
-
-        currentChannel = ChatChannel.DEFAULT; // starts at default tab always
-        currentRecipientId = -1; // no recipient in default chat
 
         // makes sure language is up to date with current selected chat
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
@@ -176,27 +213,43 @@ public class ChatWindow extends GameWindow {
 
         // create initial channels - except private, guild and party channels (those are created during the game when necessary)
         createChannel(ChatChannel.DEFAULT, -1, true);
-        createChannel(ChatChannel.WORLD, -1, false);
-        createChannel(ChatChannel.MAP, -1, false);
-        createChannel(ChatChannel.HELP, -1, false);
-        createChannel(ChatChannel.DEFAULT, -1, true);
-        createChannel(ChatChannel.WORLD, -1, false);
-        createChannel(ChatChannel.MAP, -1, false);
-        createChannel(ChatChannel.HELP, -1, false);
-        createChannel(ChatChannel.DEFAULT, -1, true);
-        createChannel(ChatChannel.WORLD, -1, false);
-        createChannel(ChatChannel.MAP, -1, false);
-        createChannel(ChatChannel.HELP, -1, false);
-        createChannel(ChatChannel.MAP, -1, false);
-        createChannel(ChatChannel.HELP, -1, false);
-        createChannel(ChatChannel.DEFAULT, -1, true);
-        createChannel(ChatChannel.WORLD, -1, false);
-        createChannel(ChatChannel.MAP, -1, false);
-        createChannel(ChatChannel.HELP, -1, false);
+        currentChannel = channels.get(0); // starts at default tab always
+        currentChannelIdx = 0; // current idx
 
+        /**
+         * chat window icon buttons
+         */
+        leftChannelBtn.setSize(getTabHeight(), getTabHeight());
+        rightChannelBtn.setSize(getTabHeight(), getTabHeight());
+        closeChannelBtn.setSize(getTabHeight(), getTabHeight());
+        openChannelBtn.setSize(getTabHeight(), getTabHeight());
+        leftChannelBtn.setColor(ICON_TINT_COLOR);
+        closeChannelBtn.setColor(ICON_TINT_COLOR);
+        openChannelBtn.setColor(ICON_TINT_COLOR);
+        rightChannelBtn.setColor(ICON_TINT_COLOR);
 
         // adds scroll pane to table with correct limits
-        channelTabs.add(tabsScrollPane).colspan(1).left().size(CHAT_WIDTH, getTabHeight()+2);
+        Table tRight =new Table();
+        Pixmap iconBgPx = new Pixmap(1, 1,Pixmap.Format.RGBA8888);
+        //iconBgPx.setColor(new Color(0.0f, 0.2f, 0.0f, 0.6f));
+        iconBgPx.setColor(PANE_BG_COLOR);
+        iconBgPx.fill();
+        tRight.setBackground(new Image(new Texture(iconBgPx)).getDrawable());
+        tRight.defaults().padRight(1).padTop(1);
+        tRight.add(rightChannelBtn).size(getTabHeight(), getTabHeight()+2).padLeft(ICON_HORIZONTAL_PAD);
+        tRight.add(closeChannelBtn).size(getTabHeight(), getTabHeight());
+        tRight.add(openChannelBtn).size(getTabHeight(), getTabHeight());
+
+        Table tLeft = new Table();
+        tLeft.setBackground(new Image(new Texture(iconBgPx)).getDrawable());
+        tLeft.defaults().padTop(1);
+        tLeft.add(leftChannelBtn).size(getTabHeight(), getTabHeight()+2).padRight(ICON_HORIZONTAL_PAD);
+
+        iconBgPx.dispose();
+
+        channelTabs.add(tLeft).padRight(ICON_HORIZONTAL_PAD*4);
+        channelTabs.add(tabsScrollPane).colspan(1).left().size(CHAT_WIDTH - getIconsWidth(), getTabHeight()+2);
+        channelTabs.add(tRight).padLeft(ICON_HORIZONTAL_PAD*4);
 
         // text input textfield
         msgField = new TextField("", skin);
@@ -255,7 +308,7 @@ public class ChatWindow extends GameWindow {
         uiTable.pack();
 
         Pixmap labelColor = new Pixmap(1, 1,Pixmap.Format.RGBA8888);
-        labelColor.setColor(new Color(0.1f, 0.1f, 0.1f, 0.4f));
+        labelColor.setColor(PANE_BG_COLOR);
         labelColor.fill();
         this.setBackground(new Image(new Texture(labelColor)).getDrawable());
         labelColor.dispose();
@@ -274,8 +327,34 @@ public class ChatWindow extends GameWindow {
         // instantiate the controller that adds listeners and acts when needed
         new ChatController();
 
+        // create other channels
+        createChannel(ChatChannel.WORLD, -1, false);
+        createChannel(ChatChannel.MAP, -1, false);
+        createChannel(ChatChannel.HELP, -1, false);
+        createChannel(ChatChannel.DEFAULT, -1, true);
+        createChannel(ChatChannel.WORLD, -1, false);
+        createChannel(ChatChannel.MAP, -1, false);
+        createChannel(ChatChannel.HELP, -1, false);
+        createChannel(ChatChannel.DEFAULT, -1, true);
+        createChannel(ChatChannel.WORLD, -1, false);
+        createChannel(ChatChannel.MAP, -1, false);
+        createChannel(ChatChannel.HELP, -1, false);
+        createChannel(ChatChannel.MAP, -1, false);
+        createChannel(ChatChannel.HELP, -1, false);
+        createChannel(ChatChannel.DEFAULT, -1, true);
+        createChannel(ChatChannel.WORLD, -1, false);
+        createChannel(ChatChannel.MAP, -1, false);
+        createChannel(ChatChannel.HELP, -1, false);
+
+        // build open channel window
+        buildOpenChannelWindow();
+
         // create welcome message
         sendMessage("[Server]", -1, ChatChannel.DEFAULT, langBundle.get("welcomeChatMessage"), "welcomeChatMessage", SERVER_CHAT_MESSAGE_COLOR, -1, false);
+    }
+
+    private float getIconsWidth() {
+        return rightChannelBtn.getWidth()+closeChannelBtn.getWidth()+openChannelBtn.getWidth()+leftChannelBtn.getWidth()+(10*ICON_HORIZONTAL_PAD) + 3;
     }
 
     /**
@@ -285,6 +364,15 @@ public class ChatWindow extends GameWindow {
      * @param select        if this channel should be selected after creation
      */
     public void createChannel(ChatChannel type, int recipientId, boolean select) {
+        /**
+         * Check if channel is already opened
+         */
+        int chIdx = searchChannel(type, recipientId);
+        if(chIdx != -1) { // found channel already opened
+            changeTab(chIdx);
+            return;
+        }
+
         List<ChatMessage> log = Collections.synchronizedList(new ArrayList<>());
         Channel ch = new Channel();
         ch.log = log; ch.type = type; ch.recipientId = recipientId;
@@ -313,23 +401,102 @@ public class ChatWindow extends GameWindow {
                         //if(newX < 0) newX = 0;
                         tabsScrollPane.setScrollX(newX);
                     }
-                    else if(btn.getX() > tabsScrollPane.getScrollX() + CHAT_WIDTH - btn.getWidth()) { // getting cut right - increase pane scrollX
-                        float newX = tabsScrollPane.getScrollX() + btn.getX() - (tabsScrollPane.getScrollX() + CHAT_WIDTH - btn.getWidth());
+                    else if(btn.getX() > tabsScrollPane.getScrollX() + CHAT_WIDTH - getIconsWidth() - btn.getWidth()) { // getting cut right - increase pane scrollX
+                        float newX = tabsScrollPane.getScrollX() + btn.getX() - (tabsScrollPane.getScrollX() + CHAT_WIDTH - getIconsWidth() - btn.getWidth());
                         tabsScrollPane.setScrollX(newX);
                     }
-                    changeTab(ch.type, ch.recipientId);
+                    changeTab(searchChannel(ch.type, ch.recipientId));
                 } else { // this button was unchecked
                     //btn.setColor(TAB_COLOR_UNSELECTED);
                 }
             }
         });
 
-        tabHorizontalBtns.addActor(btn);
+        tabHorizontalBtns.addActor(btn); // add to button group ui
         channelTabs.pack();
 
         ch.btn = btn;
-        channels.add(ch);
+        channels.add(ch);   // add to channels data
     }
+
+    /**
+     * Closes an open channel
+     * OBS: Default channel cannot be closed
+     *
+     * @param channel   the channel to be closed
+     */
+    private void closeChannel(Channel channel) {
+        /**
+         * DEFAULT CHANNEL CANT BE CLOSED!!
+         */
+        if(channel.type == ChatChannel.DEFAULT) {
+            GameScreen.getInstance().showInfo("defaultChannelCannotClose");
+            return;
+        }
+
+        /**
+         * Searches for opened channel to be closed, and close it if found
+         */
+        int chIdx = searchChannel(channel.type, channel.recipientId);
+        if(chIdx != -1) { // channel found
+           // navigateTab(true); // navigate one channel to the left
+            tabHorizontalBtns.removeActor(channels.get(chIdx).btn); // remove button ui actor
+            tabHorizontalBtns.pack();
+            channelTabs.pack();
+            channels.remove(chIdx); // remove channel
+            changeTab(chIdx - 1); // changes to left channel (at most it will be standard channel)
+        }
+    }
+
+    /**
+     * Searches for channel in opened channels list
+     *
+     * @param type          the type of channel to be searched
+     * @param recipientId   the recipient id in case of private channel type
+     * @return  the channel index if found, -1 otherwise
+     */
+    public int searchChannel(ChatChannel type, int recipientId) {
+        Iterator<Channel> it = channels.iterator();
+
+        int i = 0;
+        while(it.hasNext()) {
+            Channel channel = it.next();
+
+            if((channel.type == type && channel.type != ChatChannel.PRIVATE) ||
+                    channel.type == ChatChannel.PRIVATE && channel.recipientId == recipientId) {
+                return i;
+            }
+            i++;
+        }
+
+        return -1;
+    }
+
+    /**
+     * builds the window for opening new channels
+     */
+    private void buildOpenChannelWindow() {
+        openChannelWindow = new OpenChannelWindow(game, stage, parent, manager, "", skin, "newWindowStyle");
+        openChannelWindow.build();
+        openChannelWindow.centerInStage();
+    }
+
+    /**
+     * shows the window for opening new channels
+     */
+    private void showOpenChannelWindow() {
+        if(openChannelWindow.getStage() == null)
+            stage.addActor(openChannelWindow);
+    }
+
+    /**
+     * hides the window for opening new channels
+     */
+    private void hideOpenChannelWindow() {
+        if(openChannelWindow.getStage()!=null)
+            openChannelWindow.remove();
+    }
+
 
     /**
      * Gets the buttons that compose the channels buttons
@@ -355,10 +522,9 @@ public class ChatWindow extends GameWindow {
     /**
      * Updates the chat label text
      * @param channel	the channel to update chat list
-     * @param recipientId in case its a private message channel, the id of the recipient to load private messages
      */
-    private void updateChatLabel(ChatChannel channel, int recipientId) {
-        List<ChatMessage> list = chatLogFromChannel(channel, recipientId); // gets chat from tab
+    private void updateChatLabel(Channel channel) {
+        List<ChatMessage> list = channel.log; // gets chat from tab
         StringBuilder stringBuilder = new StringBuilder(); // str builder that will build chat text
         // chat list may be accessed concurrently by chat client thread when other clients send messages
         scrollTable.clear();
@@ -588,10 +754,16 @@ public class ChatWindow extends GameWindow {
         return null;
     }
 
-    // change selected log tab and updates label text
-    private void changeTab(ChatChannel type, int recipientId) {
-        currentChannel = type;
-        updateChatLabel(type, recipientId);
+    /**
+     * Change channel tab to the provided index
+     * The method searchTab should be used before to get the correct index
+     * @param channelIndex  the channel index of the channel to be selected in the channels list
+     */
+    private void changeTab(int channelIndex) {
+        currentChannel = channels.get(channelIndex);
+        channels.get(channelIndex).btn.setChecked(true);
+        currentChannelIdx = channelIndex;
+        updateChatLabel(currentChannel);
         chatScrollPane.layout();
         chatScrollPane.setScrollPercentY(100);
         chatScrollPane.updateVisualScroll();
@@ -642,8 +814,8 @@ public class ChatWindow extends GameWindow {
 
             storeMessage(chatLogFromChannel(channel, recipientId), msg); // stores message in desired channel
 
-            if (channel == currentChannel) { // update chat label if its current channel
-                updateChatLabel(channel, recipientId);
+            if (channel == currentChannel.type) { // update chat label if its current channel
+                updateChatLabel(currentChannel);
                 scrollToEnd(); // scroll to keep up with chat log (only scrolls if bar is already bottom)
             }
 
@@ -701,8 +873,8 @@ public class ChatWindow extends GameWindow {
             msg.langKey = null;
             msg.timestamp = System.currentTimeMillis();
 
-            storeMessage(chatLogFromChannel(currentChannel, msg.recipientId), msg); // stores message in current channel
-            updateChatLabel(currentChannel, msg.recipientId);// update chat label since its current channel
+            storeMessage(currentChannel.log, msg); // stores message in current channel
+            updateChatLabel(currentChannel);// update chat label since its current channel
             scrollToEnd(); // scroll to keep up with chat log (only scrolls if bar is already bottom)
 
             clearMessageField(false); // we can clear message field since we know message was sent from client
@@ -710,7 +882,7 @@ public class ChatWindow extends GameWindow {
             //TODO SEND TO SERVER
 
             /**Create floating text above char that sent msg*/
-            if(currentChannel == ChatChannel.DEFAULT) {
+            if(currentChannel.type == ChatChannel.DEFAULT) {
                 GameClient.getInstance().getClientCharacter().renderFloatingText(msg.message);
             }
         });
@@ -751,7 +923,7 @@ public class ChatWindow extends GameWindow {
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
         msgField.setMessageText(langBundle.format("chatTipMessage"));
         sendBtn.setText(langBundle.format("send"));
-        updateChatLabel(currentChannel, -1);
+        updateChatLabel(currentChannel);
 
         /** goes through tab buttons updating language of translatable channels **/
         Iterator<Channel> it = channels.iterator();
@@ -822,14 +994,16 @@ public class ChatWindow extends GameWindow {
             return this.text;
         }
 
-        public static ChatChannel fromString(String text) throws Exception{
+        public static ChatChannel fromString(String text) {
             for (ChatChannel t : ChatChannel.values()) {
                 if (t.text.equalsIgnoreCase(text)) {
                     return t;
                 }
             }
-            throw new Exception("No enum constant with text " + text + " found");
+            //throw new Exception("No enum constant with text " + text + " found");
+            return null;
         }
+
     }
 
     /**
@@ -844,12 +1018,43 @@ public class ChatWindow extends GameWindow {
                 public void clicked(InputEvent event, float x, float y) {
                     if(!msgField.getText().equals("")) {
                         sendMessage(GameClient.getInstance().getClientCharacter().name, GameClient.getInstance().getClientCharacter().id,
-                                currentChannel, msgField.getText(), null, DEFAULT_CHAT_MESSAGE_COLOR, -1, true);
+                                currentChannel.type, msgField.getText(), null, DEFAULT_CHAT_MESSAGE_COLOR, -1, true);
                         clearMessageField(false); // clear message field
                     }
                 }
             });
             msgField.setTextFieldFilter((textField, c) -> {return chatFilter(textField, c);}); // filter unwanted chars
+
+            /**
+             * Icon btns
+             */
+            rightChannelBtn.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    navigateTab(false);
+                }
+            });
+            leftChannelBtn.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    navigateTab(true);
+                }
+            });
+            closeChannelBtn.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    closeChannel(currentChannel);
+                }
+            });
+            openChannelBtn.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    if(openChannelWindow.getStage() == null)
+                        showOpenChannelWindow();
+                    else
+                        hideOpenChannelWindow();
+                }
+            });
         }
 
         //  Filters token chars

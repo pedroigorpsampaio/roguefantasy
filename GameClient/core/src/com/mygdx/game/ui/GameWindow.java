@@ -91,4 +91,12 @@ public abstract class GameWindow extends Window {
     public abstract void softKeyboardClosed();
 
     public abstract void softKeyboardOpened();
+
+    protected void centerInStage() {
+        setBounds(stage.getWidth()/2f - this.getWidth()/2f,
+                stage.getHeight()/2f - this.getWidth()/2f,
+                this.getWidth(), this.getHeight());
+    }
+
+    public abstract void reloadLanguage();
 }

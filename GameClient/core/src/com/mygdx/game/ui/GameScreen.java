@@ -34,7 +34,6 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.scenes.scene2d.Action;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
@@ -95,6 +94,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private static TypingLabel deathMsgLabel, mapNameLabel, zoneNameLabel;
     private static Stack targetStack;
     public static ChatWindow chatWindow;
+    private static Table chatTabs; // tabs of chat window
+    private static OpenChannelWindow openChannelWindow; // open channel window
     private Image closestEntityImg, targetImg;
     private Button selectTargetBtn;
     private static Button lastTargetBtn, nextTargetBtn, optionsBtn;
@@ -313,7 +314,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         infoToast.label = new Label("infoLabel", skin, "fontMedium", Color.WHITE);
         infoToast.label.setAlignment(Align.center);
         infoToast.label.setX(stage.getWidth()/2f - infoToast.label.getWidth()/2f);
-        infoToast.label.setY(chatWindow.getY()+chatWindow.getHeight()+chatWindow.getChannelTabs().getHeight());
+        infoToast.label.setY(chatWindow.getY()+chatWindow.getHeight()+chatWindow.getTabHeight()+infoToast.label.getHeight()/3f);
         infoToast.label.setVisible(false);
 
         /**
@@ -505,14 +506,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 }
 
                 if (keycode == Input.Keys.TAB && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) { // chat tab change
-                    int nextIdx;
                     if(!Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT))
-                        nextIdx = (chatWindow.getTabsButtonGroup().getCheckedIndex() + 1) % chatWindow.getTabsButtonGroup().getButtons().size;
+                        chatWindow.navigateTab(false);
                     else
-                        nextIdx = (chatWindow.getTabsButtonGroup().getCheckedIndex() + chatWindow.getTabsButtonGroup().getButtons().size - 1) %
-                                        chatWindow.getTabsButtonGroup().getButtons().size;
-                    TextButton next = chatWindow.getTabsButtonGroup().getButtons().get(nextIdx);
-                    next.setChecked(true);
+                        chatWindow.navigateTab(true);
                 }
 
                 if(keycode == Input.Keys.TAB && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) && !Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {// tab targeting
@@ -667,17 +664,6 @@ public class GameScreen implements Screen, PropertyChangeListener {
         },0,GameRegister.clientTickrate());
     }
 
-    public static void showDeathUI() {
-        hideAndroidTargetInteraction();
-        chatWindow.remove();
-//        deathMsgLabel.setText(deathMsgLabel.storedText);
-        if(deathMsgLabel.hasEnded())
-            deathMsgLabel.restart(); // restart if it has ended
-        stage.addActor(deathMsgLabel);
-
-        // let the respawn btn be shown by render method after animation
-    }
-
     /**
      * Shows information to player through info toast label
      * that appears for a set amount of time above chat window
@@ -692,15 +678,20 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         float lifeTime = 1f + info.length() * 1/24f;
 
-        Timer.schedule(new Timer.Task() {
-            @Override
-            public void run() {
-                infoToast.label.setText("");
-                infoToast.label.setVisible(false);
-                infoToast.langKey = null;
-            }
-        }, lifeTime);
+        if(showInfoTask.isScheduled())
+            showInfoTask.cancel();
+
+        Timer.schedule(showInfoTask, lifeTime);
     }
+
+    private Timer.Task showInfoTask = new Timer.Task() {
+        @Override
+        public void run() {
+            infoToast.label.setText("");
+            infoToast.label.setVisible(false);
+            infoToast.langKey = null;
+        }
+    };
 
     public static GameScreen getInstance() {
         return instance;
@@ -727,6 +718,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
         stage.addActor(contextWindow);
     }
 
+    public ChatWindow getChatWindow() {
+        return chatWindow;
+    }
+
     public static Stage getStage() {
         return stage;
     }
@@ -746,17 +741,42 @@ public class GameScreen implements Screen, PropertyChangeListener {
         /**
          * Chat tab buttons
          */
-        Table t = chatWindow.getChannelTabs();
-        t.setPosition(chatWindow.getX(), chatWindow.getY()+chatWindow.getHeight());
-        t.align(Align.bottomLeft);
-        stage.addActor(t);
+        chatTabs = chatWindow.getChannelTabs();
+        chatTabs.setPosition(chatWindow.getX(), chatWindow.getY()+chatWindow.getHeight());
+        chatTabs.align(Align.bottomLeft);
+        stage.addActor(chatTabs);
+
+        openChannelWindow = chatWindow.getOpenChannelWindow();
+    }
+
+    public static void hideChatWindow() {
+        chatWindow.remove();
+        chatTabs.remove();
+        if(openChannelWindow.getStage()!=null)
+            openChannelWindow.remove();
+    }
+
+    public static void showChatWindow() {
+        stage.addActor(chatWindow);
+        stage.addActor(chatTabs);
+    }
+
+    public static void showDeathUI() {
+        hideAndroidTargetInteraction();
+        hideChatWindow();
+//        deathMsgLabel.setText(deathMsgLabel.storedText);
+        if(deathMsgLabel.hasEnded())
+            deathMsgLabel.restart(); // restart if it has ended
+        stage.addActor(deathMsgLabel);
+
+        // let the respawn btn be shown by render method after animation
     }
 
     public static void hideDeathUI() {
         respawnBtn.remove();
         deathMsgLabel.remove();
-        stage.addActor(chatWindow);
         showAndroidTargetInteraction();
+        showChatWindow();
     }
 
     public static void showAndroidTargetInteraction() {
@@ -1669,6 +1689,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // if info label is active, set text in new language
         if(infoToast.label.isVisible())
             infoToast.label.setText(langBundle.get(infoToast.langKey));
+        openChannelWindow.reloadLanguage();
     }
 
     /**
