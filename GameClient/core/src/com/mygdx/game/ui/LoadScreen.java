@@ -53,6 +53,7 @@ import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.KnownFonts;
 import com.kotcrab.vis.ui.VisUI;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.ChatClient;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Common;
@@ -373,11 +374,14 @@ public class LoadScreen implements Screen {
                 game.setScreen(new MainMenuScreen(manager, LoginClient.getInstance()));
             } else if(screen.equals("game")) {
                 GameClient gameClient = GameClient.getInstance(); // gets gameclient instance
-                GameScreen gameScreen = new GameScreen(manager, gameClient);
+                ChatClient chatClient = ChatClient.getInstance(); // gets chat client instance
+                GameScreen gameScreen = new GameScreen(manager, gameClient, chatClient);
                 new Thread(() -> {
+                    chatClient.connect(); // connects chat client with server
                     gameClient.connect(decryptedToken); // connects gameclient with server
                 }).start();
                 while(gameClient.getClientCharacter() == null);
+                chatClient.login(gameClient.getClientCharacter()); // send msg to chat server log in correctly in chat
                 game.setScreen(gameScreen);
             }
         }));

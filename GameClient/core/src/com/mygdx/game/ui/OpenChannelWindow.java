@@ -1,5 +1,7 @@
 package com.mygdx.game.ui;
 
+import com.badlogic.gdx.Application;
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
@@ -11,6 +13,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.scenes.scene2d.ui.Button;
@@ -29,22 +32,36 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
+import com.badlogic.gdx.utils.Scaling;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.ChatRegister;
+import com.mygdx.game.network.DispatchServer;
+import com.mygdx.game.network.GameClient;
+import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.network.LoginClient;
+import com.mygdx.game.network.LoginRegister;
 import com.mygdx.game.util.Encoder;
+
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.util.regex.Pattern;
 
 /**
  * A class that encapsulates the option menu window
  */
-public class OpenChannelWindow extends GameWindow {
+public class OpenChannelWindow extends GameWindow implements PropertyChangeListener {
 
     private Table uiTable;
-    private Button closeBtn, openChannelBtn;
+    private TextButton closeBtn, openChannelBtn;
     private Table scrollTable;
     private ScrollPane scrollPane;
     private TextField recipientTxt;
     private CheckBox enabledCb;
     protected ButtonGroup<TextButton> bg;
+    private boolean isUpdate = false;
+    private Label privateChannel;
+    private float txtFieldOffsetY = 0;
+    private float originalY;
 
     /**
      * Builds the option window, to be used as an actor in any screen
@@ -71,9 +88,12 @@ public class OpenChannelWindow extends GameWindow {
 
         TextureAtlas uiAtlas = manager.get("ui/packed_textures/ui.atlas");
 
-        closeBtn = new TextButton("close", skin);
-        openChannelBtn = new TextButton("openChannel", skin);
-        enabledCb = new CheckBox("Enabled: ", skin);
+        closeBtn = new TextButton(langBundle.get("back"), skin);
+        openChannelBtn = new TextButton(langBundle.get("openChannel"), skin);
+        enabledCb = new CheckBox(langBundle.get("enabled"), skin, "newCheckBoxStyle");
+        enabledCb.getImage().setScaling(Scaling.fill);
+        enabledCb.getImageCell().size(26);
+        enabledCb.getImageCell().padTop(6);
 
         uiTable = new Table();
 
@@ -83,18 +103,21 @@ public class OpenChannelWindow extends GameWindow {
         mapBtn.setName("mapChat");
         TextButton guildBtn = new TextButton(langBundle.format("guildChat"), skin);
         guildBtn.setName("guildChat");
+        TextButton tradeBtn = new TextButton(langBundle.format("tradeChat"), skin);
+        tradeBtn.setName("tradeChat");
         TextButton partyBtn = new TextButton(langBundle.format("partyChat"), skin);
         partyBtn.setName("partyChat");
         TextButton helpBtn = new TextButton(langBundle.format("helpChat"), skin);
         helpBtn.setName("helpChat");
         worldBtn.getLabel().setAlignment(Align.left);
         mapBtn.getLabel().setAlignment(Align.left);
+        tradeBtn.getLabel().setAlignment(Align.left);
         guildBtn.getLabel().setAlignment(Align.left);
         partyBtn.getLabel().setAlignment(Align.left);
         helpBtn.getLabel().setAlignment(Align.left);
 
 
-        int chIdx = GameScreen.getInstance().getChatWindow().searchChannel(ChatWindow.ChatChannel.WORLD, -1);
+        int chIdx = GameScreen.getInstance().getChatWindow().searchChannel(ChatRegister.ChatChannel.WORLD, -1);
         if(chIdx == -1) enabledCb.setChecked(false);
         else enabledCb.setChecked(true);
 
@@ -105,6 +128,7 @@ public class OpenChannelWindow extends GameWindow {
 
         bg.add(worldBtn);
         bg.add(mapBtn);
+        bg.add(tradeBtn);
         bg.add(guildBtn);
         bg.add(partyBtn);
         bg.add(helpBtn);
@@ -125,11 +149,12 @@ public class OpenChannelWindow extends GameWindow {
 
         worldBtn.setStyle(newStyle);
         mapBtn.setStyle(newStyle);
+        tradeBtn.setStyle(newStyle);
         guildBtn.setStyle(newStyle);
         partyBtn.setStyle(newStyle);
         helpBtn.setStyle(newStyle);
 
-        Label privateChannel = new Label("privateChannel", skin);
+        privateChannel = new Label(langBundle.get("privateChannel"), skin);
 
         scrollTable = new Table();
         scrollTable.setBackground(new Image(uiAtlas.findRegion("UiBg")).getDrawable());
@@ -138,6 +163,8 @@ public class OpenChannelWindow extends GameWindow {
         scrollTable.add(worldBtn).left().growX().padTop(6);
         scrollTable.row();
         scrollTable.add(mapBtn).left().fillX();
+        scrollTable.row();
+        scrollTable.add(tradeBtn).left().fillX();
         scrollTable.row();
         scrollTable.add(helpBtn).left().fillX();
         scrollTable.row();
@@ -183,6 +210,8 @@ public class OpenChannelWindow extends GameWindow {
         stage.draw();
 
         new OpenChannelWindowController();
+
+        startServerListening(GameClient.getInstance());
     }
 
     @Override
@@ -190,29 +219,44 @@ public class OpenChannelWindow extends GameWindow {
     }
 
     @Override
-    public void startServerListening(LoginClient loginClient, Encoder encoder) {
-
+    public void startServerListening(DispatchServer client) {
+        this.listeningClient = client;
+        // if its not listening to id by name responses, start listening to it
+        if(!client.isListening("idByNameRetrieved", this))
+            client.addListener("idByNameRetrieved", this);
     }
 
     @Override
     public void stopServerListening() {
-
+        if(listeningClient.isListening("idByNameRetrieved", this))
+            listeningClient.removeListener("idByNameRetrieved", this);
     }
 
     @Override
     public void softKeyboardClosed() {
-
+        this.setY(originalY);
     }
 
     @Override
     public void softKeyboardOpened() {
-
+        originalY = getY();
+        float deltaY = txtFieldOffsetY - RogueFantasy.getKeyboardHeight();
+        if(deltaY < 0) // keyboard obfuscates
+            moveBy(0, -deltaY);
     }
 
     @Override
     public void reloadLanguage() {
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
         this.getTitleLabel().setText(" "+langBundle.format("channels"));
+        enabledCb.setText(langBundle.get("enabled"));
+        closeBtn.setText(langBundle.get("back"));
+        openChannelBtn.setText(langBundle.get("openChannel"));
+        privateChannel.setText(langBundle.get("privateChannel"));
+
+        for(int i = 0; i < bg.getButtons().size; i++) {
+            bg.getButtons().get(i).setText(langBundle.get(bg.getButtons().get(i).getName()));
+        }
     }
 
     public boolean isPointOn(float x, float y) {
@@ -233,6 +277,112 @@ public class OpenChannelWindow extends GameWindow {
             this.remove();
     }
 
+    public void updateCheckedCb() {
+        ChatWindow chatWindow = GameScreen.getInstance().getChatWindow();
+        int chIdx = chatWindow.searchChannel(ChatRegister.ChatChannel.fromString(bg.getChecked().getName()), -1);
+
+        if(chIdx == -1) {
+            if(enabledCb.isChecked()) isUpdate = true;
+            enabledCb.setChecked(false);
+        }
+        else {
+            if(!enabledCb.isChecked()) isUpdate = true;
+            enabledCb.setChecked(true);
+        }
+    }
+
+    /**
+     * Opens channel via its name (same as enum name for each enum, or player name if its private)
+     * If it is already open it will switch to the opened channel
+     * @param channelName   the name of the channel to open
+     * @param recipientId     if it is a private channel, the recipient id
+     */
+    public void openChannel(String channelName, int recipientId) {
+        ChatWindow chatWindow = GameScreen.getInstance().getChatWindow();
+        if(recipientId == -1) // not a private msg
+            chatWindow.createChannel(ChatRegister.ChatChannel.fromString(channelName), recipientId, null, true);
+        else
+            chatWindow.createChannel(ChatRegister.ChatChannel.PRIVATE, recipientId, channelName, true);
+    }
+
+    /**
+     * Closes channel via its name (same as enum name for each enum, or player name if its private)
+     * If channel is not opened, ignores it
+     * @param channelName   the name of the channel to close
+     */
+    public void closeChannel(String channelName) {
+        ChatWindow chatWindow = GameScreen.getInstance().getChatWindow();
+        int recipientId = -1;
+
+        // searches for channel to close
+        int chIdx = chatWindow.searchChannel(ChatRegister.ChatChannel.fromString(bg.getChecked().getName()), recipientId);
+        if(chIdx == -1) { // channel not found
+            Gdx.app.log("chat", "Cannot find chat to close: " + channelName);
+            return;
+        }
+
+        chatWindow.closeChannel(chIdx);
+    }
+
+    public void reset() {
+        bg.setChecked(langBundle.format("worldChat"));
+        updateCheckedCb();
+        recipientTxt.setText("");
+    }
+
+    public boolean hasFocus() {
+        return recipientTxt.hasKeyboardFocus();
+    }
+
+    public static boolean isValidName(String name) {
+        Pattern regex = Pattern.compile("^[a-zA-Z0-9]+( [a-zA-Z0-9]+)*$");
+        if (regex.matcher(name).find())
+            return true;
+        return false;
+    }
+
+    private boolean isPrivateMessageTextValid() {
+        String text = recipientTxt.getText();
+
+        if(recipientTxt.getText().trim().length() == 0) { // empty text, return
+            GameScreen.getInstance().showInfo("invalidLength"); // show invalid length message
+            return false;
+        }
+
+        int minLength = prefs.getInteger("defaultMinNameSize", 2);
+        int maxLength = prefs.getInteger("defaultMaxNameSize", 26);
+        boolean isFit = text.length() <= maxLength ? text.length() >= minLength ? true : false : false;
+
+        if(!isFit) {
+            GameScreen.getInstance().showInfo("invalidLength"); // show invalid length message
+            return false;
+        }
+
+        if(!isValidName(text)) {
+            GameScreen.getInstance().showInfo("invalidName"); // show invalid name message
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
+        Gdx.app.postRunnable(() -> {
+            if(propertyChangeEvent.getPropertyName().equals("idByNameRetrieved")) { // received a login response
+                GameRegister.CharacterIdRequest response = (GameRegister.CharacterIdRequest) propertyChangeEvent.getNewValue();
+                if(response.requester.equals("OpenChannelWindow")) { // this is a response to this module, act
+                    if(response.id == -1) { // player not found - does not exist
+                        GameScreen.getInstance().showInfo("playerDoesNotExist"); // show invalid length message
+                        return;
+                    }
+                    // open private channel with the retrieved id and name
+                    openChannel(response.name, response.id);
+                }
+            }
+        });
+    }
+
     /**
      * Interactions controller
      */
@@ -251,18 +401,39 @@ public class OpenChannelWindow extends GameWindow {
             scrollTable.addListener(new ClickListener() {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
-                    ChatWindow chatWindow = GameScreen.getInstance().getChatWindow();
-                    int chIdx = chatWindow.searchChannel(ChatWindow.ChatChannel.fromString(bg.getChecked().getName()), -1);
-                    if(chIdx == -1) enabledCb.setChecked(false);
-                    else enabledCb.setChecked(true);
+                    updateCheckedCb();
+                }
+            });
+
+            recipientTxt.addListener(new InputListener() {
+                @Override
+                public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+                    if(Gdx.app.getType() == Application.ApplicationType.Android && !RogueFantasy.isKeyboardShowing())
+                        txtFieldOffsetY = recipientTxt.getY();
+                    return false;
                 }
             });
 
             enabledCb.addListener(new ChangeListener() {
                 public void changed(ChangeEvent event, Actor actor) {
+                    if(isUpdate) {isUpdate = false; return;} // change was due to an update, not by player interaction
                     if(enabledCb.isChecked()) {
-
+                        openChannel(bg.getChecked().getName(), -1);
+                    } else {
+                        closeChannel(bg.getChecked().getName());
                     }
+                }
+            });
+
+            openChannelBtn.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    boolean valid = isPrivateMessageTextValid(); // checks if player input is valid
+
+                    if(valid) {
+                        GameClient.getInstance().sendCharacterSearchByName(recipientTxt.getText(), "OpenChannelWindow");
+                    }
+                    //openChannel(recipientTxt.getText(), true);
                 }
             });
         }

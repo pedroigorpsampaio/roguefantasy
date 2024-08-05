@@ -34,6 +34,7 @@ import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.github.tommyettinger.textra.TypingListener;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.DispatchServer;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.network.LoginRegister;
 import com.mygdx.game.util.Encoder;
@@ -267,7 +268,7 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
     /**
      * to be able to access and communicate with servers
      */
-    public void startServerListening(LoginClient loginClient, Encoder encoder) {
+    public void setServer(LoginClient loginClient, Encoder encoder) {
         this.loginClient = loginClient; this.encoder = encoder;
         // if its not listening to registration responses, start listening to it
         if(!loginClient.isListening("registrationResponse", this))
@@ -314,6 +315,11 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
     public void resize(int width, int height) {
         if(infoDialog != null)
             infoDialog.setPosition( stage.getWidth() / 2f - infoDialog.getWidth() / 2f, stage.getHeight() / 2f - infoDialog.getHeight() / 2f );
+    }
+
+    @Override
+    public void startServerListening(DispatchServer client) {
+
     }
 
     /**

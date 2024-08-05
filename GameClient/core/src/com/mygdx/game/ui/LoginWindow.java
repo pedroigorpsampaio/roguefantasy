@@ -29,6 +29,7 @@ import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.Scaling;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.DispatchServer;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.network.LoginRegister;
@@ -191,10 +192,15 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
             infoDialog.setPosition( stage.getWidth() / 2f - infoDialog.getWidth() / 2f, stage.getHeight() / 2f - infoDialog.getHeight() / 2f );
     }
 
+    @Override
+    public void startServerListening(DispatchServer client) {
+
+    }
+
     /**
      * to be able to access and communicate with servers
      */
-    public void startServerListening(LoginClient loginClient, Encoder encoder) {
+    public void setServer(LoginClient loginClient, Encoder encoder) {
         this.loginClient = loginClient; this.encoder = encoder;
         // if its not listening to login responses, start listening to it
         if(!loginClient.isListening("loginResponse", this))

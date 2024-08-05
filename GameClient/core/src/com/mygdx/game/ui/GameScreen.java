@@ -63,6 +63,8 @@ import com.mygdx.game.entity.Entity;
 import com.mygdx.game.entity.EntityController;
 import com.mygdx.game.entity.Projectile;
 import com.mygdx.game.entity.WorldMap;
+import com.mygdx.game.network.ChatClient;
+import com.mygdx.game.network.ChatRegister;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.util.Common;
@@ -82,6 +84,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public static boolean lockWorldRender = true;
     private static GameScreen instance;
     private static GameClient gameClient;
+    private static ChatClient chatClient;
     private final WorldMap world;
     private final OrthographicCamera uiCam;
     private final int resW, resH;
@@ -110,7 +113,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Label ramLabel;
     private Label bCallsLabel;
     private Label mouseOnLabel;
-    private InfoToast infoToast; // for informing player of useful info
+    private InfoToast infoToast, pmToast; // for informing player of useful info
     private Image uiBg, healthBar, healthBarBg;
     private TypingLabel nameLabel, percentLabel;
     private Stack targetUiStack;
@@ -147,7 +150,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Vector3 screenMouse = new Vector3();
     private Vector2 joystickDir = new Vector2(); // the current joystick direction (for android)
     private Texture testTexure;
-    private int chatOffsetY = 0; // chat y offset from bottom
+    public static int chatOffsetY = 0; // chat y offset from bottom
+    private boolean openKeyboard = false;
 
     /** poolable objects **/
 
@@ -187,14 +191,17 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
     /**
      * Prepares the screen/stage of the game
-     * @param manager       the asset manager containing loaded assets
-     * @param gameClient    the reference to the game client responsible for the communication with
-     *                      the game server
+     *
+     * @param manager    the asset manager containing loaded assets
+     * @param gameClient the reference to the game client responsible for the communication with
+     *                   the game server
+     * @param chatClient
      */
-    public GameScreen(AssetManager manager, GameClient gameClient) {
+    public GameScreen(AssetManager manager, GameClient gameClient, ChatClient chatClient) {
         this.game = RogueFantasy.getInstance();
         this.manager = manager;
         this.gameClient = gameClient;
+        this.chatClient = chatClient;
         Entity.assetManager = manager;
         Jukebox.manager = manager;
         entityController = EntityController.getInstance();
@@ -308,7 +315,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         optionsBtn.setY(stage.getHeight() - optionsBtn.getHeight()*optionsBtn.getScaleY());
 
         /**
-         * info toast label
+         * info toast labels
          */
         infoToast = new InfoToast();
         infoToast.label = new Label("infoLabel", skin, "fontMedium", Color.WHITE);
@@ -316,6 +323,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
         infoToast.label.setX(stage.getWidth()/2f - infoToast.label.getWidth()/2f);
         infoToast.label.setY(chatWindow.getY()+chatWindow.getHeight()+chatWindow.getTabHeight()+infoToast.label.getHeight()/3f);
         infoToast.label.setVisible(false);
+        // pm toast
+        pmToast = new InfoToast();
+        pmToast.label = new Label("infoLabel", skin, "fontMedium", ChatWindow.PRIVATE_CHAT_MESSAGE_COLOR);
+        pmToast.label.setAlignment(Align.center);
+        pmToast.label.setX(stage.getWidth()/2f - infoToast.label.getWidth()/2f);
+        pmToast.label.setY(stage.getHeight()/1.2f);
+        pmToast.label.setVisible(false);
 
         /**
          * debug
@@ -411,6 +425,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         deathMsgLabel.setPosition(stage.getWidth()/2f - deathMsgLabel.getWidth()/2f, stage.getHeight()/1.45f - deathMsgLabel.getHeight()/2f);
 
         stage.addActor(infoToast.label);
+        stage.addActor(pmToast.label);
         stage.addActor(fpsLabel);
         stage.addActor(pingLabel);
         stage.addActor(ramLabel);
@@ -537,7 +552,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 }
 
                 if(keycode == Input.Keys.L && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT))
-                    gameClient.logoff();
+                    logoff();
 
                 if(keycode == Input.Keys.D && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
                     CommonUI.enableDebugTex = !CommonUI.enableDebugTex;
@@ -672,6 +687,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
      */
     public void showInfo(String langKey) {
         String info = langBundle.get(langKey);
+        info = info.replaceAll("[\\n]", " "); // if it has \n embedded in it, switch for a space
         infoToast.label.setText(info);
         infoToast.label.setVisible(true);
         infoToast.langKey = langKey;
@@ -690,6 +706,31 @@ public class GameScreen implements Screen, PropertyChangeListener {
             infoToast.label.setText("");
             infoToast.label.setVisible(false);
             infoToast.langKey = null;
+        }
+    };
+
+    /**
+     * Shows private messages received
+     *
+     * @param message the message to be shown
+     */
+    public void showPrivateMessage(String message) {
+        pmToast.label.setText(message);
+        pmToast.label.setVisible(true);
+
+        float lifeTime = 3f + message.length() * 1/24f;
+
+        if(showPmTask.isScheduled())
+            showPmTask.cancel();
+
+        Timer.schedule(showPmTask, lifeTime);
+    }
+
+    private Timer.Task showPmTask = new Timer.Task() {
+        @Override
+        public void run() {
+            pmToast.label.setText("");
+            pmToast.label.setVisible(false);
         }
     };
 
@@ -962,9 +1003,27 @@ public class GameScreen implements Screen, PropertyChangeListener {
             if(RogueFantasy.isKeyboardShowing()) {
                 chatOffsetY = RogueFantasy.getKeyboardHeight();
                 chatWindow.setY(chatOffsetY);
+                chatTabs.setY(chatWindow.getY()+chatWindow.getHeight());
+                infoToast.label.setY(chatWindow.getY()+chatWindow.getHeight()+chatWindow.getTabHeight()+infoToast.label.getHeight()/3f);
             } else {
                 chatOffsetY = 1;
                 chatWindow.setY(chatOffsetY);
+                chatTabs.setY(chatWindow.getY()+chatWindow.getHeight());
+                infoToast.label.setY(chatWindow.getY()+chatWindow.getHeight()+chatWindow.getTabHeight()+infoToast.label.getHeight()/3f);
+            }
+
+            if(RogueFantasy.isKeyboardShowing()) {
+                if(!openKeyboard) { // keyboard just opened
+                    chatOffsetY = RogueFantasy.getKeyboardHeight();
+                    openKeyboard = true;
+                    openChannelWindow.softKeyboardOpened();
+                }
+            } else {
+                //chatOffsetY = 0;
+                if(openKeyboard) { // keyboard just closed
+                    openKeyboard = false;
+                    openChannelWindow.softKeyboardClosed();
+                }
             }
         }
 
@@ -1556,6 +1615,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         testTexure.dispose();
         projectiles.clear();
         floatingTexts.clear();
+        chatWindow.dispose();
     }
 
 //    public void stopUpdateTimer() {
@@ -1707,7 +1767,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     reloadLanguage(); // call method that reloads language and update texts
                     break;
                 case LOGOUT:
-                    gameClient.logoff(); // logs off
+                    logoff(); // logs off
                     break;
                 default:
                     Gdx.app.error("Unknown Window Command", "Current screen received an unknown command from option window");
@@ -1718,6 +1778,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
             if(rebuild && optionWindow.getStage().equals(stage))
                 loadWindow(optionWindow, true, true);
         }
+    }
+
+    private void logoff() {
+        gameClient.logoff();
+        chatClient.logoff();
     }
 
     /**
@@ -1772,7 +1837,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
             if(GameRegister.lag <= 0) {GameRegister.lag = 0; return;} // minimum = no lag simulation
             if(GameRegister.lag >= 2000) {GameRegister.lag = 2000; return;}// maximum = 2 sec
 
-            chatWindow.sendMessage("Debug", -1, ChatWindow.ChatChannel.DEFAULT, "Changed client lag to: " + GameRegister.lag, null, Color.ORANGE, -1, false);
+            chatWindow.sendMessage("Debug", -1, ChatRegister.ChatChannel.DEFAULT, "Changed client lag to: " + GameRegister.lag, null, Color.ORANGE, -1, false);
         }
     }
 

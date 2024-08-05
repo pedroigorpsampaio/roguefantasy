@@ -69,6 +69,7 @@ public class GameRegister {
         kryo.register(DamageType.class);
         kryo.register(AttackType.class);
         kryo.register(LagUpdate.class);
+        kryo.register(CharacterIdRequest.class);
     }
 
     static public class LagUpdate {
@@ -253,5 +254,11 @@ public class GameRegister {
         public ArrayList<Damage> damages = new ArrayList<>();
         public int tileX, tileY;
         public float[] hitBox;
+    }
+
+    public static class CharacterIdRequest {
+        public String name;
+        public int id;
+        public String requester;
     }
 }

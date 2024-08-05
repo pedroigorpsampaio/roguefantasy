@@ -105,7 +105,7 @@ public class GameClient extends DispatchServer {
                 }
                 else if (object instanceof GameRegister.LagUpdate) {
                     GameRegister.LagUpdate msg = (GameRegister.LagUpdate)object;
-                    GameScreen.chatWindow.sendMessage("Debug", -1, ChatWindow.ChatChannel.DEFAULT,
+                    GameScreen.chatWindow.sendMessage("Debug", -1, ChatRegister.ChatChannel.DEFAULT,
                                                 "Changed server lag to: " + msg.increment, null, DEBUG_CHAT_MESSAGE_COLOR, -1, false);
                 }
                 else if (object instanceof AddCharacter) {
@@ -114,20 +114,21 @@ public class GameClient extends DispatchServer {
                     serverController.addCharacter(character);
                     return;
                 }
-
                 else if (object instanceof GameRegister.UpdateState) {
                     serverController.updateState((GameRegister.UpdateState)object);
                     return;
                 }
-
                 else if (object instanceof UpdateCharacter) {
                     serverController.updateCharacter((UpdateCharacter)object);
                     return;
                 }
-
                 else if (object instanceof GameRegister.Teleport) {
                     serverController.teleportCharacter((GameRegister.Teleport)object);
                     return;
+                }
+                else if(object instanceof GameRegister.CharacterIdRequest) {
+                    GameRegister.CharacterIdRequest msg = (GameRegister.CharacterIdRequest)object;
+                    listeners.firePropertyChange("idByNameRetrieved", null, msg);
                 }
                 if (object instanceof RemoveCharacter) {
                     RemoveCharacter msg = (RemoveCharacter)object;
@@ -299,6 +300,20 @@ public class GameClient extends DispatchServer {
             client.sendTCP(response);
     }
 
+    /**
+     * sends a request to retrieve character id by name
+     * @param name      the name of the character to retrieve id
+     * @param requester the name (identifier) of the module that requested the id
+     */
+    public void sendCharacterSearchByName(String name, String requester) {
+        GameRegister.CharacterIdRequest idReq = new GameRegister.CharacterIdRequest();
+        idReq.name = name; idReq.requester = requester;
+
+        if(lagNetwork != null && GameRegister.lagSimulation)
+            lagNetwork.send(idReq, 1);
+        else
+            client.sendTCP(idReq);
+    }
 
     public Map<Integer, Entity.Character> getOnlineCharacters() {
         return serverController.characters;
@@ -357,7 +372,6 @@ public class GameClient extends DispatchServer {
         lup.increment = inc;
         client.sendTCP(lup);
     }
-
 
     static class ServerController {
 

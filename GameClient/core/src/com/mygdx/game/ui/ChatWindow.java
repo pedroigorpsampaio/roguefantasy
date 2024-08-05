@@ -35,11 +35,18 @@ import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.entity.Entity;
+import com.mygdx.game.network.ChatClient;
+import com.mygdx.game.network.ChatRegister;
+import com.mygdx.game.network.DispatchServer;
 import com.mygdx.game.network.GameClient;
+import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Common;
 import com.mygdx.game.util.Encoder;
+import com.mygdx.game.network.ChatRegister.ChatChannel;
 
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -48,12 +55,14 @@ import java.util.List;
 /**
  * A class that encapsulates the chat window
  */
-public class ChatWindow extends GameWindow {
+public class ChatWindow extends GameWindow implements PropertyChangeListener {
     private static final int MAX_CHAT_LOG_DISPLAY_SIZE = 15;
     public static final int MAX_CHAT_MSG_CHARACTERS = 255;
     public static final Color DEFAULT_CHAT_MESSAGE_COLOR = new Color(0.95f, 0.99f, 0.75f, 1f);
     public static final Color SERVER_CHAT_MESSAGE_COLOR = new Color(0.77f, 0.77f, 1f, 1f);
     public static final Color DEBUG_CHAT_MESSAGE_COLOR = new Color(0.97f, 0.67f, 0.3f, 1f);
+    public static final Color PRIVATE_CHAT_SENDER_COLOR =  new Color(0.76f, 0.65f, 1.0f, 1.0f);
+    public static final Color PRIVATE_CHAT_MESSAGE_COLOR =  new Color(0.4f, 0.9f, 0.8f, 1.0f);
     public static final Color TAB_COLOR_SELECTED = new Color(0.4f, 0.9f, 0.8f, 1.0f);
     public static final Color TAB_COLOR_UNSELECTED = new Color(0.2f, 0.4f, 0.1f, 0.7f);
     private static final float CHAT_WIDTH = GameScreen.getStage().getWidth()*0.5f;
@@ -108,20 +117,66 @@ public class ChatWindow extends GameWindow {
         return openChannelWindow;
     }
 
+    /**
+     * Called when receiving messages from chat server
+     */
+    @Override
+    public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
+        Gdx.app.postRunnable(() -> {
+            if(propertyChangeEvent.getPropertyName().equals("messageReceived")) { // received a message
+                ChatRegister.Message message = (ChatRegister.Message) propertyChangeEvent.getNewValue();
+                if(message.channel == ChatChannel.PRIVATE) {
+                    boolean openNewTab = prefs.getBoolean("openChatOnPrivateMsg", false);
+                    int chIdx = searchChannel(ChatChannel.PRIVATE, message.senderId);
+                    if(chIdx == -1) {
+                        if(openNewTab) { // open new chat is enabled, open it and send msg to the newly open chat
+                            createChannel(ChatChannel.PRIVATE, message.senderId, message.sender, false);
+                        } else { // send message to default channel if this chat is not open at the moment and open new chat option is disabled
+                            sendMessage(message.sender, message.senderId, ChatRegister.ChatChannel.DEFAULT,
+                                message.message, null, PRIVATE_CHAT_MESSAGE_COLOR,
+                                -1, false);
+                        }
+                    }
+
+                    if(chIdx != -1 || openNewTab){ // channel is opened, send msg in channel
+                        sendMessage(message.sender, message.senderId, ChatRegister.ChatChannel.PRIVATE,
+                                message.message, null, PRIVATE_CHAT_MESSAGE_COLOR,
+                                message.senderId, false);
+                    }
+
+                    // show pm toast in case chat is not selected
+                    if(chIdx == -1 || (chIdx != -1 && currentChannelIdx != chIdx)) {
+                        StringBuilder sb = new StringBuilder();
+                        sb.append(message.sender);
+                        sb.append(":\n");
+                        sb.append(message.message);
+                        GameScreen.getInstance().showPrivateMessage(String.valueOf(sb));
+                    }
+                }
+            }
+        });
+    }
+
+    public void dispose() {
+        stopServerListening();
+        openChannelWindow.stopServerListening();
+    }
+
     public static class Channel {
         public TextButton btn;
         public List<ChatMessage> log;
         public ChatChannel type;
         public int recipientId; // in case its a private chat
+        public String recipientName; // in case its a private chat
     }
 
     public static class ChatMessage {
-        String sender; // the sender name
-        String message; // the message content without color tag or sender
-        int senderId, recipientId; // sender -1 == server ; recipient -1 == no recipient
-        Color color; // color to display this message
-        long timestamp; // time stamp of message
-        String langKey = null; // in case is a translatable msg from server
+        public String sender; // the sender name
+        public String message; // the message content without color tag or sender
+        public int senderId, recipientId; // sender -1 == server ; recipient -1 == no recipient
+        public Color color; // color to display this message
+        public long timestamp; // time stamp of message
+        public String langKey = null; // in case is a translatable msg from server
     }
 
 
@@ -174,6 +229,8 @@ public class ChatWindow extends GameWindow {
         tbChatTabStyle.checked = new TextureRegionDrawable(skin.getAtlas().findRegion("tab-pressed")).tint(ChatWindow.TAB_COLOR_SELECTED);
         tbChatTabStyle.down = tbChatTabStyle.checked;
         skin.add("chatTab", tbChatTabStyle, TextButton.TextButtonStyle.class);
+
+        startServerListening(ChatClient.getInstance());
     }
 
     @Override
@@ -212,7 +269,7 @@ public class ChatWindow extends GameWindow {
         tabsScrollPane.setupOverscroll(0,0,0);
 
         // create initial channels - except private, guild and party channels (those are created during the game when necessary)
-        createChannel(ChatChannel.DEFAULT, -1, true);
+        createChannel(ChatChannel.DEFAULT, -1, null,true);
         currentChannel = channels.get(0); // starts at default tab always
         currentChannelIdx = 0; // current idx
 
@@ -328,23 +385,10 @@ public class ChatWindow extends GameWindow {
         new ChatController();
 
         // create other channels
-        createChannel(ChatChannel.WORLD, -1, false);
-        createChannel(ChatChannel.MAP, -1, false);
-        createChannel(ChatChannel.HELP, -1, false);
-        createChannel(ChatChannel.DEFAULT, -1, true);
-        createChannel(ChatChannel.WORLD, -1, false);
-        createChannel(ChatChannel.MAP, -1, false);
-        createChannel(ChatChannel.HELP, -1, false);
-        createChannel(ChatChannel.DEFAULT, -1, true);
-        createChannel(ChatChannel.WORLD, -1, false);
-        createChannel(ChatChannel.MAP, -1, false);
-        createChannel(ChatChannel.HELP, -1, false);
-        createChannel(ChatChannel.MAP, -1, false);
-        createChannel(ChatChannel.HELP, -1, false);
-        createChannel(ChatChannel.DEFAULT, -1, true);
-        createChannel(ChatChannel.WORLD, -1, false);
-        createChannel(ChatChannel.MAP, -1, false);
-        createChannel(ChatChannel.HELP, -1, false);
+        createChannel(ChatChannel.WORLD, -1, null,false);
+        createChannel(ChatChannel.MAP, -1, null,false);
+        createChannel(ChatChannel.HELP, -1, null,false);
+        createChannel(ChatChannel.TRADE, -1, null,false);
 
         // build open channel window
         buildOpenChannelWindow();
@@ -361,9 +405,18 @@ public class ChatWindow extends GameWindow {
      * Creates a chat channel adding it to the current chat channels
      * @param type          the type of channel to be created
      * @param recipientId   the recipient id, in case of private message channel
+     * @param recipientName the recipient name, in case of private message channel
      * @param select        if this channel should be selected after creation
      */
-    public void createChannel(ChatChannel type, int recipientId, boolean select) {
+    public void createChannel(ChatChannel type, int recipientId, String recipientName, boolean select) {
+        /**
+         * Do not create private channels for itself
+         */
+        if(recipientId != -1 && recipientId == GameClient.getInstance().getClientId()) {
+            GameScreen.getInstance().showInfo("cannotMessageYourself");
+            return;
+        }
+
         /**
          * Check if channel is already opened
          */
@@ -376,11 +429,16 @@ public class ChatWindow extends GameWindow {
         List<ChatMessage> log = Collections.synchronizedList(new ArrayList<>());
         Channel ch = new Channel();
         ch.log = log; ch.type = type; ch.recipientId = recipientId;
+        ch.recipientName = recipientName;
 
         /**
          * add channel to tabs table
          */
-        TextButton btn = new TextButton(langBundle.get(type.getText()), skin, "chatTab");
+        TextButton btn;
+        if(recipientId == -1) // its not a private msg
+            btn = new TextButton(langBundle.get(type.getText()), skin, "chatTab"); // get translatable tab name
+        else // its a private msg, get recipient name
+            btn = new TextButton(ch.recipientName, skin, "chatTab");
         btn.padTop(1).padBottom(1).padLeft(11).padRight(11);
 
 //        if(select)
@@ -417,15 +475,19 @@ public class ChatWindow extends GameWindow {
 
         ch.btn = btn;
         channels.add(ch);   // add to channels data
+
+        if(select) // if this channel is selected change to it
+            changeTab(searchChannel(ch.type, ch.recipientId));
     }
 
     /**
      * Closes an open channel
      * OBS: Default channel cannot be closed
      *
-     * @param channel   the channel to be closed
+     * @param channelIndex   the index of the channel to be closed
      */
-    private void closeChannel(Channel channel) {
+    public void closeChannel(int channelIndex) {
+        Channel channel = channels.get(channelIndex);
         /**
          * DEFAULT CHANNEL CANT BE CLOSED!!
          */
@@ -444,8 +506,16 @@ public class ChatWindow extends GameWindow {
             tabHorizontalBtns.pack();
             channelTabs.pack();
             channels.remove(chIdx); // remove channel
-            changeTab(chIdx - 1); // changes to left channel (at most it will be standard channel)
+            // if closed channel was the current channel...
+            if(currentChannelIdx == chIdx)
+                changeTab(chIdx - 1); // changes to left channel (at most it will be standard channel)
+            else // update current idx
+                updateCurrentIndex();
         }
+    }
+
+    private void updateCurrentIndex() {
+        currentChannelIdx = searchChannel(currentChannel.type, currentChannel.recipientId);
     }
 
     /**
@@ -485,8 +555,10 @@ public class ChatWindow extends GameWindow {
      * shows the window for opening new channels
      */
     private void showOpenChannelWindow() {
-        if(openChannelWindow.getStage() == null)
+        if(openChannelWindow.getStage() == null) {
+            openChannelWindow.reset();
             stage.addActor(openChannelWindow);
+        }
     }
 
     /**
@@ -524,9 +596,12 @@ public class ChatWindow extends GameWindow {
      * @param channel	the channel to update chat list
      */
     private void updateChatLabel(Channel channel) {
+        if(scrollTable == null) return; // still creating chat window
+
         List<ChatMessage> list = channel.log; // gets chat from tab
         StringBuilder stringBuilder = new StringBuilder(); // str builder that will build chat text
         // chat list may be accessed concurrently by chat client thread when other clients send messages
+
         scrollTable.clear();
         lastChatSaved.setLength(0);
         synchronized(list) {
@@ -649,7 +724,7 @@ public class ChatWindow extends GameWindow {
         sendMsg.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                System.out.println("TODO send message to: " + msg.sender);
+                openChannelWindow.openChannel(msg.sender, msg.senderId);
                 GameScreen.getInstance().hideContextMenu();
             }
         });
@@ -710,14 +785,23 @@ public class ChatWindow extends GameWindow {
         /**
          * Builds table
          */
-        t.add(sendMsg).fillX();
-        t.row();
-        t.add(addContact).fillX();
-        t.row();
-        t.add(ignorePerson).fillX();
-        t.row();
-        t.add(strokeLine).fill().padBottom(5).padTop(8);
-        t.row();
+
+        /**
+         * Section available only for senders that are other players
+         */
+        if(msg.senderId != -1 && msg.senderId != GameClient.getInstance().getClientId()) {
+            t.add(sendMsg).fillX();
+            t.row();
+            t.add(addContact).fillX();
+            t.row();
+            t.add(ignorePerson).fillX();
+            t.row();
+            t.add(strokeLine).fill().padBottom(5).padTop(8);
+            t.row();
+        }
+        /**
+         * Section for all chat messages
+         */
         t.add(cpyMsg).fillX();
         t.row();
         t.add(cpyName).fillX();
@@ -760,6 +844,7 @@ public class ChatWindow extends GameWindow {
      * @param channelIndex  the channel index of the channel to be selected in the channels list
      */
     private void changeTab(int channelIndex) {
+        if(chatScrollPane == null) return; // still building window
         currentChannel = channels.get(channelIndex);
         channels.get(channelIndex).btn.setChecked(true);
         currentChannelIdx = channelIndex;
@@ -826,8 +911,9 @@ public class ChatWindow extends GameWindow {
                     senderChar.renderFloatingText(msg.message);
             }
 
+            /** Send to chat server **/
             if(sendToServer) {
-                //TODO SEND TO SERVER
+                ChatClient.getInstance().sendMessage(msg, channel);
             }
         });
     }
@@ -868,8 +954,11 @@ public class ChatWindow extends GameWindow {
 //                msg.message = message.substring(0, MAX_CHAT_MSG_CHARACTERS-1);
 //            else
             msg.message = trimmedMsg;
-            msg.color = DEFAULT_CHAT_MESSAGE_COLOR;
-            msg.recipientId = -1;
+            Color c = DEFAULT_CHAT_MESSAGE_COLOR;
+            if(currentChannel.type == ChatChannel.PRIVATE)
+                c = PRIVATE_CHAT_SENDER_COLOR;
+            msg.color = c;
+            msg.recipientId = currentChannel.recipientId;
             msg.langKey = null;
             msg.timestamp = System.currentTimeMillis();
 
@@ -879,7 +968,8 @@ public class ChatWindow extends GameWindow {
 
             clearMessageField(false); // we can clear message field since we know message was sent from client
 
-            //TODO SEND TO SERVER
+            /** Send to chat server **/
+            ChatClient.getInstance().sendMessage(msg, currentChannel.type);
 
             /**Create floating text above char that sent msg*/
             if(currentChannel.type == ChatChannel.DEFAULT) {
@@ -889,7 +979,7 @@ public class ChatWindow extends GameWindow {
     }
 
     public boolean hasFocus() {
-        return msgField.hasKeyboardFocus();
+        return msgField.hasKeyboardFocus() || openChannelWindow.hasFocus();
     }
 
     public void setScrollFocus() {
@@ -940,13 +1030,18 @@ public class ChatWindow extends GameWindow {
     }
 
     @Override
-    public void startServerListening(LoginClient loginClient, Encoder encoder) {
-
+    public void startServerListening(DispatchServer client) {
+        this.listeningClient = client;
+        // if its not listening to id by name responses, start listening to it
+        if(!client.isListening("messageReceived", this))
+            client.addListener("messageReceived", this);
     }
 
     @Override
     public void stopServerListening() {
-
+        // if its listening to login responses, stops listening to it
+        if(listeningClient.isListening("messageReceived", this))
+            listeningClient.removeListener("messageReceived", this);
     }
 
     @Override
@@ -969,41 +1064,6 @@ public class ChatWindow extends GameWindow {
 
     public Rectangle getHitBox() {
         return hitBox;
-    }
-
-    /**
-     * Chat channels
-     */
-    public enum ChatChannel {
-        DEFAULT("defaultChat"),
-        WORLD("worldChat"),
-        MAP("mapChat"),
-        GUILD("guildChat"),
-        PARTY("partyChat"),
-        HELP("helpChat"),
-        PRIVATE("`privateChat"),
-        UNKNOWN("unknown");
-
-        private String text;
-
-        ChatChannel(String text) {
-            this.text = text;
-        }
-
-        public String getText() {
-            return this.text;
-        }
-
-        public static ChatChannel fromString(String text) {
-            for (ChatChannel t : ChatChannel.values()) {
-                if (t.text.equalsIgnoreCase(text)) {
-                    return t;
-                }
-            }
-            //throw new Exception("No enum constant with text " + text + " found");
-            return null;
-        }
-
     }
 
     /**
@@ -1043,7 +1103,10 @@ public class ChatWindow extends GameWindow {
             closeChannelBtn.addListener(new ClickListener() {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
-                    closeChannel(currentChannel);
+                    closeChannel(currentChannelIdx);
+                    if(openChannelWindow.getStage()!=null) {
+                        openChannelWindow.updateCheckedCb();
+                    }
                 }
             });
             openChannelBtn.addListener(new ClickListener() {

@@ -19,6 +19,7 @@ import com.badlogic.gdx.utils.I18NBundle;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.DispatchServer;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Encoder;
 
@@ -104,7 +105,7 @@ public class InfoWindow extends GameWindow {
     }
 
     @Override
-    public void startServerListening(LoginClient loginClient, Encoder encoder) {
+    public void startServerListening(DispatchServer client) {
 
     }
 

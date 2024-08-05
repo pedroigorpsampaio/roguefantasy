@@ -1,6 +1,7 @@
 package com.mygdx.server.ui;
 
 import com.esotericsoftware.minlog.Log;
+import com.mygdx.server.network.ChatServer;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -10,18 +11,21 @@ import java.util.HashMap;
  */
 public class CommandDispatcher {
     private CmdReceiver consoleUI;
-    private CmdReceiver loginServer, gameServer;
+    private CmdReceiver loginServer, gameServer, chatServer;
     public CmdReceiver getGameServer() {return gameServer;}
     public void setGameServer(CmdReceiver gameServer) {this.gameServer = gameServer;}
     public CmdReceiver getLoginServer() {return loginServer;}
     public void setLoginServer(CmdReceiver loginServer) {this.loginServer = loginServer;}
+    public CmdReceiver getChatServer() {return chatServer;}
+    public void setChatServer(CmdReceiver chatServer) {this.chatServer = chatServer;}
     HashMap<CmdType, Integer> cmdArgsSize; // size of args for each command
 
     // constructor set references to the command receivers
-    public CommandDispatcher(CmdReceiver consoleUI, CmdReceiver loginServer, CmdReceiver gameServer) {
+    public CommandDispatcher(CmdReceiver consoleUI, CmdReceiver loginServer, CmdReceiver gameServer, ChatServer chatServer) {
         this.consoleUI = consoleUI;
         this.loginServer = loginServer;
         this.gameServer = gameServer;
+        this.chatServer = chatServer;
         // sets arg size for each cmd
         cmdArgsSize = new HashMap<>();
         cmdArgsSize.put(CmdType.ATTRIBUTE, 3);

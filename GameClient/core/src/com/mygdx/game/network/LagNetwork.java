@@ -39,11 +39,20 @@ public class LagNetwork {
         }
     };
 
+    /**
+     * Send UDP message
+     * @param msg   the message to be sent
+     */
     public void send(Object msg) {
         this.messages.add(new QueuedMessage(msg, System.currentTimeMillis()
                 + GameRegister.lag));
     }
 
+    /**
+     * send message UDP/TCP based on type
+     * @param msg   the msg to be sent
+     * @param type  0 for udp, 1 for tcp
+     */
     public void send(Object msg, int type) {
         this.messages.add(new QueuedMessage(msg, System.currentTimeMillis()
                 + GameRegister.lag, type));

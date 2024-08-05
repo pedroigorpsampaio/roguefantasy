@@ -120,6 +120,29 @@ public class GameServer implements CmdReceiver {
                         }
                     }
                 }
+                else if(object instanceof GameRegister.CharacterIdRequest) {
+                    GameRegister.CharacterIdRequest msg = (GameRegister.CharacterIdRequest)object;
+                    // search for id
+                    int id = -1;
+                    File f = new File("characters", msg.name.toLowerCase());
+                    if(f.exists() && !f.isDirectory()) {
+                        DataInputStream input = null;
+                        try {
+                            input = new DataInputStream(new FileInputStream(f));
+                            id = input.readInt();
+                            input.close();
+                        } catch (IOException ex) {
+                            ex.printStackTrace();
+                        } finally {
+                            try {
+                                if (input != null) input.close();
+                            } catch (IOException ignored) {
+                            }
+                        }
+                    }
+                    msg.id = id; // attribute id to msg
+                    c.sendTCP(msg); // send back to client that requested id
+                }
                 else if (object instanceof GameRegister.Response) {
                     GameRegister.Response msg = (GameRegister.Response)object;
                     switch (msg.type) {

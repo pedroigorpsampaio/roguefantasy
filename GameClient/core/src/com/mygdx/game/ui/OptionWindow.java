@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.List;
 import com.badlogic.gdx.scenes.scene2d.ui.SelectBox;
@@ -22,7 +23,9 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
+import com.badlogic.gdx.utils.Scaling;
 import com.mygdx.game.RogueFantasy;
+import com.mygdx.game.network.DispatchServer;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Encoder;
 
@@ -40,6 +43,7 @@ public class OptionWindow extends GameWindow {
     private SelectBox langBox;
     private TextButton backBtn;
     private TextButton logoffBtn;
+    private CheckBox openChatOnPrivateMsgCb;
 
     /**
      * Builds the option window, to be used as an actor in any screen
@@ -106,6 +110,12 @@ public class OptionWindow extends GameWindow {
         langBox.setItems(langBundle.format("en"), langBundle.format("pt_br"), langBundle.format("de"), langBundle.format("es"));
         langBox.setSelectedIndex(prefs.getInteger("lastLangIdx", 0));
 
+        openChatOnPrivateMsgCb = new CheckBox(langBundle.get("openChatOnePrivateMessage"), skin, "newCheckBoxStyle");
+        openChatOnPrivateMsgCb.getImage().setScaling(Scaling.fill);
+        openChatOnPrivateMsgCb.getImageCell().size(26);
+        openChatOnPrivateMsgCb.getImageCell().padTop(6);
+        openChatOnPrivateMsgCb.setChecked(prefs.getBoolean("openChatOnPrivateMsg", false));
+
         // builds options window
         this.getTitleTable().padBottom(6);
         this.defaults().spaceBottom(10).padRight(5).padLeft(5).padBottom(2).minWidth(320);
@@ -121,6 +131,8 @@ public class OptionWindow extends GameWindow {
         this.row();
         this.add(langLabel).colspan(1);
         this.add(langBox).width(240).spaceTop(16);
+        this.row();
+        this.add(openChatOnPrivateMsgCb).colspan(2).center();
         this.row();
         if(parent instanceof GameScreen) { // game screen option buttons
             this.add(logoffBtn).minWidth(182).colspan(1).spaceTop(21).padBottom(10).center().padRight(20);
@@ -139,7 +151,7 @@ public class OptionWindow extends GameWindow {
     }
 
     @Override
-    public void startServerListening(LoginClient loginClient, Encoder encoder) {
+    public void startServerListening(DispatchServer client) {
 
     }
 
@@ -214,6 +226,11 @@ public class OptionWindow extends GameWindow {
             sfxSlider.addListener(new ChangeListener() {
                 public void changed(ChangeEvent event, Actor actor) {
                     changeVolume("sfx", + sfxSlider.getValue());
+                }
+            });
+            openChatOnPrivateMsgCb.addListener(new ChangeListener() {
+                public void changed(ChangeEvent event, Actor actor) {
+                    prefs.putBoolean("openChatOnPrivateMsg", openChatOnPrivateMsgCb.isChecked());
                 }
             });
         }

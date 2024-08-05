@@ -33,6 +33,7 @@ import com.badlogic.gdx.utils.Timer;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.esotericsoftware.minlog.Log;
 import com.mygdx.server.entity.WorldMap;
+import com.mygdx.server.network.ChatServer;
 import com.mygdx.server.network.GameServer;
 import com.mygdx.server.network.LoginServer;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
@@ -58,6 +59,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	// game servers
 	LoginServer loginServer;
 	GameServer gameServer;
+	ChatServer chatServer;
 	// command dispatcher
 	CommandDispatcher dispatcher;
 	// ui vars
@@ -186,7 +188,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 		// starts update timer, that updates UI metrics between set intervals
 		Timer.schedule(controller.updateTimer, 0f, GlobalConfig.METRICS_UPDATE_INTERVAL);
 		// cmd dispatcher
-		dispatcher = new CommandDispatcher(this, loginServer, gameServer);
+		dispatcher = new CommandDispatcher(this, loginServer, gameServer, chatServer);
 		// load map
 		world = WorldMap.getInstance();
 		world.init("world/novaterra.tmx", batch);
@@ -221,11 +223,17 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 			}
 		}
 		if(serverType == ServerChannel.ALL || serverType == ServerChannel.CHAT) {
-			// TODO chat server
+			// starts chat server if not online already
+			if(chatServer == null || !chatServer.isOnline()) {
+				Log.info("cmd", "Starting " +serverType.text+ " server...");
+				chatServer = chatServer.getInstance(); // get game server instance
+				chatServer.connect();  // connects/starts game server
+				dispatcher.setChatServer(chatServer); // sets game server for the command dispatcher
+			} else
+				Log.info("cmd", "Game server is already running!");
 		}
 		if(serverType == ServerChannel.ALL || serverType == ServerChannel.GAME) {
-			// TODO game server
-			// starts login server if not online already
+			// starts game server if not online already
 			if(gameServer == null || !gameServer.isOnline()) {
 				Log.info("cmd", "Starting " +serverType.text+ " server...");
 				gameServer = GameServer.getInstance(); // get game server instance
@@ -239,9 +247,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	// just null servers references here
 	private void stopServer(ServerChannel serverType) {
 		if(serverType == ServerChannel.ALL || serverType == ServerChannel.LOGIN) {loginServer = null;}
-		if(serverType == ServerChannel.ALL || serverType == ServerChannel.CHAT) {
-			// TODO chat server
-		}
+		if(serverType == ServerChannel.ALL || serverType == ServerChannel.CHAT) {chatServer = null;}
 		if(serverType == ServerChannel.ALL || serverType == ServerChannel.GAME) {gameServer = null;}
 	}
 
@@ -366,6 +372,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 	public void dispose () {
 		loginServer.stop(); // stops server to save it
 		gameServer.stop();
+		chatServer.stop();
 		batch.dispose();
 		stage.dispose();
 		skin.dispose();
@@ -381,9 +388,10 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 
 		loginServer.stop();
 		gameServer.stop();
+		chatServer.stop();
 
 		// waits until both servers are saved and closed before finishing process
-		while(loginServer.isOnline() || gameServer.isOnline());
+		while(loginServer.isOnline() || gameServer.isOnline() || chatServer.isOnline());
 
 		new Thread(new Runnable() {
 			@Override
@@ -620,7 +628,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				else b.append("offline");
 				b.append("\n");
 				b.append("Chat Server: ");
-				//if(loginServer.isOnline()) b.append("online");
+				if(chatServer != null && chatServer.isOnline()) b.append("online");
 				//else b.append("offline");
 				b.append("\n");
 				b.append("Game Server: ");
@@ -628,7 +636,7 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				else b.append("offline");
 				b.append("\n\n");
 				b.append("Players online: ");
-				if(loginIsOn) b.append(gameServer.getNumberOfPlayersOnline());
+				if(gameServer != null && gameServer.isOnline()) b.append(gameServer.getNumberOfPlayersOnline());
 				b.append("\n");
 				b.append("CPU Usage: ");
 				b.append((int)(cpuLoad*1000f));

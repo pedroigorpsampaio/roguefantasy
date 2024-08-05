@@ -112,7 +112,7 @@ public class MainMenuScreen implements Screen {
         // creates login window
         loginWindow = new LoginWindow(game, stage, this, manager , " "+langBundle.format("loginWindowTitle"),
                                         skin, "newWindowStyle");
-        loginWindow.startServerListening(loginClient, encoder);
+        loginWindow.setServer(loginClient, encoder);
 
         // creates info window
         infoWindow = new InfoWindow(game, stage,this, manager, " "+langBundle.format("info"),
@@ -121,7 +121,7 @@ public class MainMenuScreen implements Screen {
         // creates register window
         registerWindow = new RegisterWindow(game, stage, this, manager, " "+langBundle.format("register"),
                 skin, "newWindowStyle");
-        registerWindow.startServerListening(loginClient, encoder);
+        registerWindow.setServer(loginClient, encoder);
 
         // label that describes the project name/version
         String descStr = " "+ langBundle.format("game") + " " + langBundle.format("version");
@@ -194,7 +194,7 @@ public class MainMenuScreen implements Screen {
     public void render(float delta) {
         ScreenUtils.clear(0.2f, 0.2f, 0.2f, 1);
 
-        // if its on android, change chat y position offset if keyboard is showing for current window
+        // if its on android, change y position offset if keyboard is showing for current window
         if(Gdx.app.getType() == Application.ApplicationType.Android) {
             if(RogueFantasy.isKeyboardShowing()) {
                 if(!openKeyboard) { // keyboard just opened
