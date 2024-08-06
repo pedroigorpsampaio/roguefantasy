@@ -119,6 +119,15 @@ public class LoadScreen implements Screen {
             fontMedium.fontParameters.magFilter = Texture.TextureFilter.Linear;
             fontMedium.fontParameters.minFilter = Texture.TextureFilter.Linear;
             manager.load("fonts/immortalMedium.ttf", BitmapFont.class, fontMedium);
+            FreetypeFontLoader.FreeTypeFontLoaderParameter fontLarge = new FreetypeFontLoader.FreeTypeFontLoaderParameter();
+            // large font
+            fontLarge.fontFileName = "fonts/immortal.ttf";
+            fontLarge.fontParameters.size = 30;
+            fontLarge.fontParameters.borderColor = Color.BLACK;
+            fontLarge.fontParameters.borderWidth = 2f;
+            fontLarge.fontParameters.magFilter = Texture.TextureFilter.Linear;
+            fontLarge.fontParameters.minFilter = Texture.TextureFilter.Linear;
+            manager.load("fonts/fontLarge.ttf", BitmapFont.class, fontLarge);
             // chat font
             FreetypeFontLoader.FreeTypeFontLoaderParameter fontChat = new FreetypeFontLoader.FreeTypeFontLoaderParameter();
             fontChat.fontFileName = "fonts/immortal.ttf";
@@ -147,9 +156,11 @@ public class LoadScreen implements Screen {
             skin = manager.get("skin/neutralizer/neutralizer-ui.json", Skin.class);
             // gets font loaded
             BitmapFont fontMedium = manager.get("fonts/immortalMedium.ttf", BitmapFont.class);
+            BitmapFont fontLarge = manager.get("fonts/fontLarge.ttf", BitmapFont.class);
             BitmapFont fontChat = manager.get("fonts/chatFont.ttf", BitmapFont.class);
             BitmapFont fontFloatingText = manager.get("fonts/floatingTextFont.ttf", BitmapFont.class);
             fontMedium.getData().markupEnabled = true;
+            fontLarge.getData().markupEnabled = true;
             fontChat.getData().markupEnabled = true;
             fontFloatingText.getData().markupEnabled = true;
             // creates the typist font containing emojis and game icons that is ready for effects
@@ -167,6 +178,7 @@ public class LoadScreen implements Screen {
             skin.add("emojiFont", emojiFont, Font.class);
             skin.add("iconFont", iconFont, Font.class);
             skin.add("fontMedium", fontMedium, BitmapFont.class);
+            skin.add("fontLarge", fontLarge, BitmapFont.class);
             skin.add("fontChat", fontChat, BitmapFont.class);
             skin.add("floatingTextFont", floatingTextFont, Font.class);
             // creates new styles based on the new font
@@ -179,6 +191,12 @@ public class LoadScreen implements Screen {
             lStyle.font = fontMedium;
             lStyle.fontColor = Color.WHITE;
             skin.add("newLabelStyle", lStyle, Label.LabelStyle.class);
+
+            Label.LabelStyle largeLabelStyle = skin.get(Label.LabelStyle.class);
+            largeLabelStyle.font = fontLarge;
+            largeLabelStyle.font.getData().scale(1.2f);
+            largeLabelStyle.fontColor = Color.WHITE;
+            skin.add("largeLabelStyle", largeLabelStyle, Label.LabelStyle.class);
 
             Label.LabelStyle lChatStyle = skin.get(Label.LabelStyle.class);
             lChatStyle.font = fontChat;

@@ -6,6 +6,7 @@ import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
 import com.mygdx.server.db.DbController;
 import com.mygdx.server.entity.Component;
+import com.mygdx.server.entity.EntityController;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
 import com.mygdx.server.network.ChatRegister.Message;
@@ -89,22 +90,59 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
      * @param msg   the message to be distributed
      */
     private void DispatchMessage(CharacterConnection writer, Message msg) {
-        /**
-         * For private messages, just send it to the recipient player (if player is online)
-         * if not send player offline response
-         */
-        //TODO IGNORE MESSAGE WITH RECIPIENT ID SAME AS WRITER ID IN PRIVATE MSG
-        if(msg.channel == ChatRegister.ChatChannel.PRIVATE) {
-            if(msg.recipientId == writer.writer.id) // don't send msg to itself
-                return;
-            CharacterConnection recipient = loggedIn.get(msg.recipientId);
-;           if(recipient == null) { // recipient is not online
-                writer.sendTCP(new ChatRegister.Response(ChatRegister.Response.Type.PLAYER_IS_OFFLINE));
-            } else { // recipient is online, send the message
-                recipient.sendTCP(msg);
-            }
+
+        switch (msg.channel) {
+            case PRIVATE:
+                sendPrivateMessage(writer, msg);
+                break;
+            case DEFAULT:
+                sendDefaultMessage(writer, msg);
+                break;
+            default:
+                break;
         }
 
+    }
+
+    /**
+     * Send default message to players in AoI of writer
+     *
+     * @param writer the writer of the message
+     * @param msg   the message to be distributed
+     */
+    private void sendDefaultMessage(CharacterConnection writer, Message msg) {
+        // writer character
+        Component.Character character = GameServer.getInstance().getLoggedCharacter(writer.writer.id);
+
+        synchronized (character.aoIEntities.characters) {
+            Iterator<Map.Entry<Integer, Component.Character>> it = character.aoIEntities.characters.entrySet().iterator();
+            while (it.hasNext()) { // iterate through characters in AoI of writer
+                Map.Entry<Integer, Component.Character> entry = it.next();
+                if(entry.getKey() == writer.writer.id) // don't send to itself
+                    continue;
+                CharacterConnection recipient = loggedIn.get(entry.getKey());
+                if(recipient != null) // makes sure that recipient is logged in chat server still
+                    recipient.sendTCP(msg);
+            }
+        }
+    }
+
+    /**
+     * For private messages, just send it to the recipient player (if player is online)
+     * if not send player offline response
+     *
+     * @param writer the writer of the message
+     * @param msg   the message to be distributed
+     */
+    private void sendPrivateMessage(CharacterConnection writer, Message msg) {
+        if(msg.recipientId == writer.writer.id) // don't send msg to itself
+            return;
+        CharacterConnection recipient = loggedIn.get(msg.recipientId);
+        if(recipient == null) { // recipient is not online
+            writer.sendTCP(new ChatRegister.Response(ChatRegister.Response.Type.PLAYER_IS_OFFLINE));
+        } else { // recipient is online, send the message
+            recipient.sendTCP(msg);
+        }
     }
 
     public void connect() {

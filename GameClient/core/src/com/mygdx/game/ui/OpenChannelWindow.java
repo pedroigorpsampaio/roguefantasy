@@ -378,6 +378,9 @@ public class OpenChannelWindow extends GameWindow implements PropertyChangeListe
                     }
                     // open private channel with the retrieved id and name
                     openChannel(response.name, response.id);
+                    // close open channel window
+                    if(getStage() != null)
+                        hideOpenChannelWindow();
                 }
             }
         });

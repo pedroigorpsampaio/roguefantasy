@@ -231,6 +231,8 @@ public class OptionWindow extends GameWindow {
             openChatOnPrivateMsgCb.addListener(new ChangeListener() {
                 public void changed(ChangeEvent event, Actor actor) {
                     prefs.putBoolean("openChatOnPrivateMsg", openChatOnPrivateMsgCb.isChecked());
+                    //updates preferences
+                    prefs.flush();
                 }
             });
         }

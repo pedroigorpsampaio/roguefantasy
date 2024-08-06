@@ -33,16 +33,14 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
+import com.badlogic.gdx.utils.Timer;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.entity.Entity;
 import com.mygdx.game.network.ChatClient;
 import com.mygdx.game.network.ChatRegister;
 import com.mygdx.game.network.DispatchServer;
 import com.mygdx.game.network.GameClient;
-import com.mygdx.game.network.GameRegister;
-import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Common;
-import com.mygdx.game.util.Encoder;
 import com.mygdx.game.network.ChatRegister.ChatChannel;
 
 import java.beans.PropertyChangeEvent;
@@ -125,36 +123,75 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         Gdx.app.postRunnable(() -> {
             if(propertyChangeEvent.getPropertyName().equals("messageReceived")) { // received a message
                 ChatRegister.Message message = (ChatRegister.Message) propertyChangeEvent.getNewValue();
-                if(message.channel == ChatChannel.PRIVATE) {
-                    boolean openNewTab = prefs.getBoolean("openChatOnPrivateMsg", false);
-                    int chIdx = searchChannel(ChatChannel.PRIVATE, message.senderId);
-                    if(chIdx == -1) {
-                        if(openNewTab) { // open new chat is enabled, open it and send msg to the newly open chat
-                            createChannel(ChatChannel.PRIVATE, message.senderId, message.sender, false);
-                        } else { // send message to default channel if this chat is not open at the moment and open new chat option is disabled
-                            sendMessage(message.sender, message.senderId, ChatRegister.ChatChannel.DEFAULT,
-                                message.message, null, PRIVATE_CHAT_MESSAGE_COLOR,
-                                -1, false);
-                        }
-                    }
 
-                    if(chIdx != -1 || openNewTab){ // channel is opened, send msg in channel
-                        sendMessage(message.sender, message.senderId, ChatRegister.ChatChannel.PRIVATE,
-                                message.message, null, PRIVATE_CHAT_MESSAGE_COLOR,
-                                message.senderId, false);
-                    }
+                // gets channel index
+                int chIdx = searchChannel(message.channel, message.senderId);
 
-                    // show pm toast in case chat is not selected
-                    if(chIdx == -1 || (chIdx != -1 && currentChannelIdx != chIdx)) {
-                        StringBuilder sb = new StringBuilder();
-                        sb.append(message.sender);
-                        sb.append(":\n");
-                        sb.append(message.message);
-                        GameScreen.getInstance().showPrivateMessage(String.valueOf(sb));
-                    }
+                // in case msg is on a channel different to current channel, update has a new msg bool
+                if(chIdx != -1 && currentChannelIdx != chIdx) {
+                    channels.get(chIdx).hasNewMessage = true;
+                    channels.get(chIdx).startBlinking();
+                }
+
+                switch(message.channel) {
+                    case PRIVATE:
+                        receivePrivateMessage(message, chIdx);
+                        break;
+                    case DEFAULT:
+                        receiveDefaultMessage(message);
+                        break;
+                    default:
+                        break;
                 }
             }
         });
+    }
+
+    /**
+     * Deals with default messages received (from AoI players)
+     * @param message   the message received
+     */
+    private void receiveDefaultMessage(ChatRegister.Message message) {
+        sendMessage(message.sender, message.senderId, ChatRegister.ChatChannel.DEFAULT,
+                message.message, null, DEFAULT_CHAT_MESSAGE_COLOR,
+                -1, false);
+    }
+
+    /**
+     * Deals with private messages received
+     *
+     * @param message the message received
+     * @param chIdx   the index of the private channel if its opened
+     */
+    private void receivePrivateMessage(ChatRegister.Message message, int chIdx) {
+        boolean openNewTab = prefs.getBoolean("openChatOnPrivateMsg", false);
+
+        if(chIdx == -1) {
+            if(openNewTab) { // open new chat is enabled, open it and send msg to the newly open chat
+                int idx = createChannel(ChatChannel.PRIVATE, message.senderId, message.sender, false);
+                channels.get(idx).hasNewMessage = true;
+                channels.get(idx).startBlinking();
+            } else { // send message to default channel if this chat is not open at the moment and open new chat option is disabled
+                sendMessage(message.sender, message.senderId, ChatRegister.ChatChannel.DEFAULT,
+                        message.message, null, PRIVATE_CHAT_MESSAGE_COLOR,
+                        message.senderId, false);
+            }
+        }
+
+        if(chIdx != -1 || openNewTab){ // channel is opened, send msg in channel
+            sendMessage(message.sender, message.senderId, ChatRegister.ChatChannel.PRIVATE,
+                    message.message, null, PRIVATE_CHAT_MESSAGE_COLOR,
+                    message.senderId, false);
+        }
+
+        // show pm toast in case chat is not selected
+        if(chIdx == -1 || (chIdx != -1 && currentChannelIdx != chIdx)) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(message.sender);
+            sb.append(":\n");
+            sb.append(message.message);
+            GameScreen.getInstance().showPrivateMessage(String.valueOf(sb));
+        }
     }
 
     public void dispose() {
@@ -163,11 +200,38 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
     }
 
     public static class Channel {
+        public static float blinkInterval = 1f;
         public TextButton btn;
         public List<ChatMessage> log;
         public ChatChannel type;
         public int recipientId; // in case its a private chat
         public String recipientName; // in case its a private chat
+        public boolean hasNewMessage = false; // in case there is a new msg not seen by player
+        public Color originalColor = Color.WHITE;
+
+        public void startBlinking() {
+            if(blink.isScheduled())
+                blink.cancel();
+
+            Timer.schedule(blink, 0, blinkInterval);
+        }
+
+        public void stopBlinking() {
+            if(blink.isScheduled())
+                blink.cancel();
+            // make sure we are at original color
+            btn.getLabel().setColor(originalColor);
+        }
+
+        private Timer.Task blink = new Timer.Task() {
+            @Override
+            public void run() {
+                if(btn.getLabel().getColor().equals(originalColor)) {
+                    btn.getLabel().setColor(new Color(1.0f, 0.34f, 0.1f, 1.0f));
+                } else
+                    btn.getLabel().setColor(originalColor);
+            }
+        };
     }
 
     public static class ChatMessage {
@@ -407,14 +471,15 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
      * @param recipientId   the recipient id, in case of private message channel
      * @param recipientName the recipient name, in case of private message channel
      * @param select        if this channel should be selected after creation
+     * @return  the index of the channel after creation in channels list, or -1 if channel was not created properly
      */
-    public void createChannel(ChatChannel type, int recipientId, String recipientName, boolean select) {
+    public int createChannel(ChatChannel type, int recipientId, String recipientName, boolean select) {
         /**
          * Do not create private channels for itself
          */
         if(recipientId != -1 && recipientId == GameClient.getInstance().getClientId()) {
             GameScreen.getInstance().showInfo("cannotMessageYourself");
-            return;
+            return -1;
         }
 
         /**
@@ -423,7 +488,7 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         int chIdx = searchChannel(type, recipientId);
         if(chIdx != -1) { // found channel already opened
             changeTab(chIdx);
-            return;
+            return -1;
         }
 
         List<ChatMessage> log = Collections.synchronizedList(new ArrayList<>());
@@ -478,6 +543,8 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
 
         if(select) // if this channel is selected change to it
             changeTab(searchChannel(ch.type, ch.recipientId));
+
+        return channels.size()-1;
     }
 
     /**
@@ -852,6 +919,10 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         chatScrollPane.layout();
         chatScrollPane.setScrollPercentY(100);
         chatScrollPane.updateVisualScroll();
+        if(currentChannel.hasNewMessage) { // stops blinking if it was blinking due to new message
+            currentChannel.hasNewMessage = false;
+            currentChannel.stopBlinking();
+        }
     }
 
     /** only scrolls to the end if bar is at the end,
@@ -904,8 +975,8 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                 scrollToEnd(); // scroll to keep up with chat log (only scrolls if bar is already bottom)
             }
 
-            /**Create floating text above char that sent msg*/
-            if(channel == ChatChannel.DEFAULT) {
+            /**Create floating text above char that sent msg if its default msg (and not pm)*/
+            if(channel == ChatChannel.DEFAULT && recipientId == -1) {
                 Entity.Character senderChar = GameClient.getInstance().getCharacter(senderId);
                 if(senderChar != null)
                     senderChar.renderFloatingText(msg.message);
@@ -1076,11 +1147,16 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
             sendBtn.addListener(new ClickListener() {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
-                    if(!msgField.getText().equals("")) {
-                        sendMessage(GameClient.getInstance().getClientCharacter().name, GameClient.getInstance().getClientCharacter().id,
-                                currentChannel.type, msgField.getText(), null, DEFAULT_CHAT_MESSAGE_COLOR, -1, true);
-                        clearMessageField(false); // clear message field
-                    }
+                    String txt = msgField.getText();
+                    if(txt == "" || txt.trim().length() == 0) return; // returns if there is no message
+
+                    Color c = DEFAULT_CHAT_MESSAGE_COLOR;
+                    if(currentChannel.type == ChatChannel.PRIVATE) // if its private use sender private color
+                        c = PRIVATE_CHAT_SENDER_COLOR;
+
+                    sendMessage(GameClient.getInstance().getClientCharacter().name, GameClient.getInstance().getClientCharacter().id,
+                            currentChannel.type, txt, null, c, currentChannel.recipientId, true);
+                    clearMessageField(false); // clear message field
                 }
             });
             msgField.setTextFieldFilter((textField, c) -> {return chatFilter(textField, c);}); // filter unwanted chars

@@ -808,6 +808,10 @@ public class GameServer implements CmdReceiver {
         character.connection.sendTCP(tp);
     }
 
+    public Component.Character getLoggedCharacter(int id) {
+        return loggedIn.get(id).character;
+    }
+
     // This holds per connection state.
     public static class CharacterConnection extends Connection {
         public Component.Character character;

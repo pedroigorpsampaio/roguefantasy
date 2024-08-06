@@ -113,7 +113,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Label ramLabel;
     private Label bCallsLabel;
     private Label mouseOnLabel;
-    private InfoToast infoToast, pmToast; // for informing player of useful info
+    private static InfoToast infoToast, pmToast; // for informing player of useful info
     private Image uiBg, healthBar, healthBarBg;
     private TypingLabel nameLabel, percentLabel;
     private Stack targetUiStack;
@@ -325,11 +325,17 @@ public class GameScreen implements Screen, PropertyChangeListener {
         infoToast.label.setVisible(false);
         // pm toast
         pmToast = new InfoToast();
-        pmToast.label = new Label("infoLabel", skin, "fontMedium", ChatWindow.PRIVATE_CHAT_MESSAGE_COLOR);
+        pmToast.label = new Label("infoLabel", skin, "largeLabelStyle");
+        pmToast.label.setColor(ChatWindow.PRIVATE_CHAT_MESSAGE_COLOR);
         pmToast.label.setAlignment(Align.center);
-        pmToast.label.setX(stage.getWidth()/2f - infoToast.label.getWidth()/2f);
-        pmToast.label.setY(stage.getHeight()/1.2f);
         pmToast.label.setVisible(false);
+        pmToast.label.setFontScale(1.2f);
+        float widthPm = stage.getWidth()/2.5f;
+        pmToast.label.setWidth(widthPm);
+        pmToast.label.setWrap(true);
+        pmToast.label.layout();
+        pmToast.label.setX(stage.getWidth()/2f -  pmToast.label.getWidth()/2f);
+        pmToast.label.setY(stage.getHeight()/1.2f - pmToast.label.getHeight()/2f);
 
         /**
          * debug
@@ -703,9 +709,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Timer.Task showInfoTask = new Timer.Task() {
         @Override
         public void run() {
-            infoToast.label.setText("");
-            infoToast.label.setVisible(false);
-            infoToast.langKey = null;
+            hideToast(infoToast);
         }
     };
 
@@ -729,8 +733,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Timer.Task showPmTask = new Timer.Task() {
         @Override
         public void run() {
-            pmToast.label.setText("");
-            pmToast.label.setVisible(false);
+            hideToast(pmToast);
         }
     };
 
@@ -809,8 +812,19 @@ public class GameScreen implements Screen, PropertyChangeListener {
         if(deathMsgLabel.hasEnded())
             deathMsgLabel.restart(); // restart if it has ended
         stage.addActor(deathMsgLabel);
-
+        
+        hideToast(pmToast);
         // let the respawn btn be shown by render method after animation
+    }
+
+    /**
+     * Just hides toast
+     * @param toast the toast to hide
+     */
+    private static void hideToast(InfoToast toast) {
+        toast.label.setText("");
+        toast.label.setVisible(false);
+        toast.langKey = null;
     }
 
     public static void hideDeathUI() {
