@@ -70,7 +70,8 @@ public class EntityController {
             //Entity e = getInstance().dominion.createEntityAs(prefab); // create prefab that will persist throughout execution
             Entity e = EntityController.getInstance().getDominion().createEntity(
                     new Component.Tag(prefab.get(Component.Tag.class).id, prefab.get(Component.Tag.class).name),
-                    new Component.Position(prefab.get(Component.Position.class).x, prefab.get(Component.Position.class).y),
+                    new Component.Position(prefab.get(Component.Position.class).mapId, prefab.get(Component.Position.class).floor,
+                                            prefab.get(Component.Position.class).x, prefab.get(Component.Position.class).y),
                     new Component.Velocity(0, 0),
                     new Component.Attributes(prefab.get(Component.Attributes.class).width,
                             prefab.get(Component.Attributes.class).height,
@@ -80,7 +81,8 @@ public class EntityController {
                             prefab.get(Component.Attributes.class).range,
                             prefab.get(Component.Attributes.class).visionRange,
                             prefab.get(Component.Attributes.class).attack, prefab.get(Component.Attributes.class).defense),
-                    new Component.Spawn(0, new Component.Position(prefab.get(Component.Position.class).x, prefab.get(Component.Position.class).y),
+                    new Component.Spawn(0, new Component.Position(prefab.get(Component.Position.class).mapId, prefab.get(Component.Position.class).floor,
+                                                                            prefab.get(Component.Position.class).x, prefab.get(Component.Position.class).y),
                             prefab.get(Component.Spawn.class).respawnTime, prefab.get(Component.Spawn.class).respawnRange)
             ).setState(Component.AI.State.IDLE);
             e.setEnabled(false); // prefabs are not enabled as they are only for creation of other entities

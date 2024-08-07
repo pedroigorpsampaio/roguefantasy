@@ -551,8 +551,8 @@ public class GameClient extends DispatchServer {
                 EntityController.getInstance().entities.put(character.uId, character); // put on list of entities (which will manage if its visible or not)
                 if(character.id == instance.clientCharId) {
                     instance.clientUid = character.uId;
-                    GameScreen.lockWorldRender = false;
-                    GameScreen.respawnAnimOn = true;
+                    // calls method to act after loading of client character
+                    GameScreen.getInstance().onClientCharacterLoaded();
                 }
             } else { // if its already on list, get it to update it
                 character = characters.get(msg.character.id);

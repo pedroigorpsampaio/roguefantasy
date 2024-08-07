@@ -137,6 +137,12 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                     case PRIVATE:
                         receivePrivateMessage(message, chIdx);
                         break;
+                    case HELP:
+                    case TRADE:
+                    case WORLD:
+                    case MAP:
+                        receiveChannelMessage(message, chIdx);
+                        break;
                     case DEFAULT:
                         receiveDefaultMessage(message);
                         break;
@@ -145,6 +151,20 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                 }
             }
         });
+    }
+
+    /**
+     * Deals with normal channel messages (excluding default channel)
+     * @param message   the message received
+     * @param chIdx   the index of the channel if its opened, -1 if its not opened
+     */
+    private void receiveChannelMessage(ChatRegister.Message message, int chIdx) {
+        // first check if channel is opened (if not, ignore message)
+        if(chIdx == -1) return;
+        // else, send message to the intended channel
+        sendMessage(message.sender, message.senderId, message.channel,
+                message.message, null, DEFAULT_CHAT_MESSAGE_COLOR,
+                -1, false);
     }
 
     /**
@@ -448,17 +468,25 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         // instantiate the controller that adds listeners and acts when needed
         new ChatController();
 
-        // create other channels
-        createChannel(ChatChannel.WORLD, -1, null,false);
-        createChannel(ChatChannel.MAP, -1, null,false);
-        createChannel(ChatChannel.HELP, -1, null,false);
-        createChannel(ChatChannel.TRADE, -1, null,false);
-
         // build open channel window
         buildOpenChannelWindow();
 
         // create welcome message
         sendMessage("[Server]", -1, ChatChannel.DEFAULT, langBundle.get("welcomeChatMessage"), "welcomeChatMessage", SERVER_CHAT_MESSAGE_COLOR, -1, false);
+    }
+
+    /**
+     * Create default channels that need registry
+     * so this should be called after client character is loaded
+     */
+    public void createDefaultChannels() {
+        if(GameClient.getInstance().getClientCharacter() == null) return;
+
+        // create other channels
+        createChannel(ChatChannel.WORLD, -1, null,false);
+        createChannel(ChatChannel.MAP, -1, null,false);
+        createChannel(ChatChannel.HELP, -1, null,false);
+        createChannel(ChatChannel.TRADE, -1, null,false);
     }
 
     private float getIconsWidth() {
@@ -544,6 +572,10 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         if(select) // if this channel is selected change to it
             changeTab(searchChannel(ch.type, ch.recipientId));
 
+        // send registration message to server if channels are registry-based
+        if(ch.type == ChatChannel.TRADE || ch.type == ChatChannel.WORLD || ch.type == ChatChannel.HELP)
+            ChatClient.getInstance().sendRegistryUpdate(ch.type, true);
+
         return channels.size()-1;
     }
 
@@ -578,6 +610,9 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                 changeTab(chIdx - 1); // changes to left channel (at most it will be standard channel)
             else // update current idx
                 updateCurrentIndex();
+            // send registration message to server if channels are registry-based to unregister client in closed channel
+            if(channel.type == ChatChannel.TRADE || channel.type == ChatChannel.WORLD || channel.type == ChatChannel.HELP)
+                ChatClient.getInstance().sendRegistryUpdate(channel.type, false);
         }
     }
 

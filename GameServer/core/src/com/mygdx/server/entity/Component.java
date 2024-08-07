@@ -606,7 +606,7 @@ public class Component {
 
             if(hitTarget.isScheduled()) {
                 float hitTargetMillisToExec = hitTarget.getExecuteTimeMillis();
-                System.out.println("sTOP: " + target.id);
+                //System.out.println("sTOP: " + target.id);
                 hitTarget.cancel();
                 long elapsed = System.currentTimeMillis() - lastHitSchedule;
                 int correctHits = (int)(elapsed/(1000f/ attr.attackSpeed)) + 1;
@@ -932,11 +932,15 @@ public class Component {
     }
 
     public static class Position {
+        public int mapId, floor;
         public float x, y;
         public float lastVelocityX = 0, lastVelocityY = 0; // the last velocities that changed the position values
         public Vector2 lastTilePos = null; // the last position in tile state 2d array (i,j)
 
-        public Position(float x, float y) {this.x = x; this.y = y;}
+        public Position(int mapId, int floor, float x, float y) {
+            this.mapId = mapId; this.floor = floor;
+            this.x = x; this.y = y;
+        }
 
         /**
          * Checks and updates position in 2d Array of entities if different from last one
@@ -1108,7 +1112,7 @@ public class Component {
         public float respawnRange; // range of possible respawn position offset
 
         public Spawn() {
-            position = new Position(0,0);
+            position = new Position(0,0, 0, 0);
         }
 
         public Spawn(int id, Position position, float respawnTime, float respawnRange) {
@@ -1145,7 +1149,7 @@ public class Component {
                         Entity newSpawn = EntityController.getInstance().getDominion().createEntity(
                                 "Herr Wolfgang IV",
                                 new Component.Tag(prefab.get(Component.Tag.class).id, prefab.get(Component.Tag.class).name),
-                                new Component.Position(position.x, position.y),
+                                new Component.Position(position.mapId, position.floor, position.x, position.y),
                                 new Component.Velocity(0, 0),
                                 new Component.Attributes(prefab.get(Component.Attributes.class).width,
                                         prefab.get(Component.Attributes.class).height,
@@ -1155,7 +1159,7 @@ public class Component {
                                         prefab.get(Attributes.class).range,
                                         prefab.get(Attributes.class).visionRange,
                                         prefab.get(Attributes.class).attack, prefab.get(Attributes.class).defense),
-                                new Component.Spawn(id, new Component.Position(position.x, position.y),
+                                new Component.Spawn(id, new Component.Position(position.mapId, position.floor, position.x, position.y),
                                         prefab.get(Spawn.class).respawnTime, prefab.get(Spawn.class).respawnRange)
                         ).setState(Component.AI.State.IDLE);
                         newSpawn.add(new Component.AI(newSpawn));

@@ -686,6 +686,19 @@ public class GameScreen implements Screen, PropertyChangeListener {
     }
 
     /**
+     * This method is called when client character is loaded from game-server
+     * It is a safe method to perform initial operations that depends on client character info
+     * and is also used for managing locks related to logging in
+     */
+    public void onClientCharacterLoaded() {
+        // sets render and animation flags
+        lockWorldRender = false;
+        respawnAnimOn = true;
+        // create default chats for chat window after client character is loaded
+        chatWindow.createDefaultChannels();
+    }
+
+    /**
      * Shows information to player through info toast label
      * that appears for a set amount of time above chat window
      *

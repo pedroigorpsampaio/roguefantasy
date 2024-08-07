@@ -1,7 +1,5 @@
 package com.mygdx.server.network;
 
-import static com.mygdx.server.network.GameRegister.Interaction.ATTACK_ENTITY;
-
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Timer;
@@ -28,8 +26,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
-import dev.dominion.ecs.api.Entity;
 
 
 /**
@@ -307,6 +303,13 @@ public class GameServer implements CmdReceiver {
                     synchronized (loggedIn) {
                         loggedIn.remove(connection.character.tag.id); // remove from logged in list
                     }
+                    // remove from world map hashmap
+                    Map<Integer, CharacterConnection> mapPlayers = WorldMap.getInstance().worldMaps.get(connection.character.position.mapId).players;
+                    synchronized (mapPlayers) {
+                        //System.out.println("BEFORE: " + mapPlayers.size());
+                        mapPlayers.remove(connection.character.tag.id);
+                        //System.out.println("AFTER: " + mapPlayers.size());
+                    }
 
                     // saves character
                     saveCharacter(connection.character);
@@ -386,7 +389,7 @@ public class GameServer implements CmdReceiver {
         character.attr = new Component.Attributes(character.attr.width, character.attr.height, character.attr.maxHealth, character.attr.health,
                                                       character.attr.speed, character.attr.attackSpeed, character.attr.range, character.attr.visionRange,
                                                         character.attr.attack, character.attr.defense);
-        character.position = new Component.Position(character.position.x, character.position.y);
+        character.position = new Component.Position(character.position.mapId, character.position.floor, character.position.x, character.position.y);
         character.connection = c;
 
         // if character is dead, respawn it
@@ -396,7 +399,11 @@ public class GameServer implements CmdReceiver {
         character.updatePositionIn2dArray();
         c.character = character;
 
+        // add to logged in hashmap
         loggedIn.putIfAbsent(character.tag.id, c);
+
+        // add to world map hashmap
+        WorldMap.getInstance().worldMaps.get(character.position.mapId).players.putIfAbsent(character.tag.id, c);
 
         // dispatch event for ai reactors
 //        EntityController.getInstance().dispatchEventToAll
@@ -423,6 +430,8 @@ public class GameServer implements CmdReceiver {
             output = new DataOutputStream(new FileOutputStream(file));
             output.writeInt(character.tag.id);
             output.writeInt(character.role_level);
+            output.writeInt(character.position.mapId);
+            output.writeInt(character.position.floor);
             output.writeFloat(character.position.x);
             output.writeFloat(character.position.y);
             output.writeFloat(character.attr.maxHealth);
@@ -488,6 +497,8 @@ public class GameServer implements CmdReceiver {
             input = new DataInputStream(new FileInputStream(file));
             character.tag.id = input.readInt();
             character.role_level = input.readInt();
+            character.position.mapId = input.readInt();
+            character.position.floor = input.readInt();
             character.position.x = input.readFloat();
             character.position.y = input.readFloat();
             character.attr.maxHealth = input.readFloat();
@@ -771,7 +782,7 @@ public class GameServer implements CmdReceiver {
             character.token = Encoder.generateNewToken();
             character.role_level = conn.charData.roleLevel;
             character.tag = new Component.Tag(conn.charData.id, conn.charData.character);
-            character.position = new Component.Position(26, 4);
+            character.position = new Component.Position(0,0, 26, 4);
             character.attr = new Component.Attributes(32f*RogueFantasyServer.world.getUnitScale(), 48f*RogueFantasyServer.world.getUnitScale(),
                                 100f, 100f, 250f*RogueFantasyServer.world.getUnitScale(),1f,
                                 0.5f, 10f, 10f, 0f);

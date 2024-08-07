@@ -137,4 +137,22 @@ public class ChatClient extends DispatchServer {
             client.close();
         }).start();
     }
+
+    /**
+     * Sends a message to the chat server requesting update in registry for this client
+     * for chat channels that require registration to be able to receive/send messages
+     * @param type      the type of the channel to update registry of this client
+     * @param register  true if this update is to register, false if it is to unregister
+     */
+    public void sendRegistryUpdate(ChatRegister.ChatChannel type, boolean register) {
+        ChatRegister.ChatRegistration cr = new ChatRegister.ChatRegistration();
+        cr.channel = type; cr.register = register; cr.id = GameClient.getInstance().getClientId();
+        cr.name = GameClient.getInstance().getClientCharacter().name;
+
+        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+            lagNetwork.send(cr, 1);
+        } else {
+            client.sendTCP(cr);
+        }
+    }
 }

@@ -65,6 +65,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
 import dev.dominion.ecs.api.Entity;
 
@@ -97,9 +98,22 @@ public class WorldMap implements InputProcessor {
     private Component.Character spectatee; // the spectatee to watch for debug from server view
     private ArrayList<TiledMapTileLayer> cutLayers; // the spliced map layers containing only in view tiles to player
 
-    private WorldMap() {
+    public Map<Integer, MapData> worldMaps; // map containing data about every existing map including players on it at the moment
 
+    public static class MapData {
+        public MapType type;
+        public Map<Integer, GameServer.CharacterConnection> players;
+
+        public MapData(MapType type) {
+            this.type = type;
+            this.players = new ConcurrentHashMap<>();
+        }
     }
+
+    private WorldMap() {
+        worldMaps = new ConcurrentHashMap<>();
+    }
+
     // loads map from file and prepares the vars for controlling world state
     public void init(String fileName, SpriteBatch batch) {
         Log.info("game-server", "Loading world map...");
@@ -149,9 +163,13 @@ public class WorldMap implements InputProcessor {
         invIsotransform = new Matrix4(isoTransform);
         invIsotransform.inv();
 
+        /** TODO: Implement multiple maps and multiple floors. For now only nova terra map exists, mapId = 0 **/
         TiledMapTileLayer entityLayer =  (TiledMapTileLayer) map.getLayers().get(2);
         loadEntityLayer(entityLayer); // loads entity layer of floor
-        loadObjects(map.getLayers().get(3)); // loads object layer of floor
+        loadObjects(0, map.getLayers().get(3)); // loads object layer of floor
+
+        // adds nova terra to the world map player data hashmap
+        worldMaps.putIfAbsent(MapType.NOVA_TERRA.id, new MapData(MapType.NOVA_TERRA));
     }
 
     public static WorldMap getInstance() {
@@ -163,10 +181,14 @@ public class WorldMap implements InputProcessor {
     /**
      * Loads objects from the object layer of the map, which includes portals, spawns and more.
      *
+     * @param mapId   the current map being loaded
      * @param layer   the object layer of the floor
      */
-    private void loadObjects(MapLayer layer) {
+    private void loadObjects(int mapId, MapLayer layer) {
         nCreatures = 0;
+        // gets current floor of objects
+        int floor = Integer.parseInt(layer.getName().replaceAll("[^0-9]", ""));
+        System.out.println(floor);
         for (MapObject object : layer.getObjects()) {
             if (object instanceof RectangleMapObject) {
                 RectangleMapObject rectangleMapObject = (RectangleMapObject) object;
@@ -237,7 +259,7 @@ public class WorldMap implements InputProcessor {
                                     tiledMapTileMapObject.getName(),
                                     new Component.Tag(tiledMapTileMapObject.getProperties().get("creature_id", Integer.class),
                                                         tiledMapTileMapObject.getName()),
-                                    new Component.Position(worldPos.x, worldPos.y),
+                                    new Component.Position(mapId, floor, worldPos.x, worldPos.y),
                                     new Component.Velocity(0, 0),
                                     new Component.Attributes(
                                             tiledMapTileMapObject.getProperties().get("creature_width", Integer.class)
@@ -253,7 +275,7 @@ public class WorldMap implements InputProcessor {
                                             tiledMapTileMapObject.getProperties().get("creature_vision_range", Float.class),
                                             tiledMapTileMapObject.getProperties().get("creature_attack", Integer.class),
                                             tiledMapTileMapObject.getProperties().get("creature_defense", Integer.class)),
-                                    new Component.Spawn(nCreatures, new Component.Position(worldPos.x, worldPos.y),
+                                    new Component.Spawn(nCreatures, new Component.Position(mapId, floor, worldPos.x, worldPos.y),
                                             tiledMapTileMapObject.getProperties().get("respawn_time", Integer.class),
                                             tiledMapTileMapObject.getProperties().get("respawn_range", Integer.class))
                             ).setState(Component.AI.State.IDLE);
@@ -1206,5 +1228,41 @@ public class WorldMap implements InputProcessor {
         public int tileX, tileY;
         public Rectangle hitBox;
         public int destX, destY;
+    }
+
+    public enum MapType {
+        NOVA_TERRA ("Nova Terra", 0),
+        ;
+
+        private String text;
+        private int id;
+
+        MapType(String text, int id) {
+            this.text = text; this.id = id;
+        }
+
+        public String getText() {
+            return this.text;
+        }
+        public int getId() { return this.id; }
+
+        public static MapType fromString(String text) {
+            for (MapType m : MapType.values()) {
+                if (m.getText().equalsIgnoreCase(text)) {
+                    return m;
+                }
+            }
+            return null;
+        }
+
+        public static MapType fromId(int id) {
+            for (MapType m : MapType.values()) {
+                if (m.getId() == id) {
+                    return m;
+                }
+            }
+            return null;
+        }
+
     }
 }

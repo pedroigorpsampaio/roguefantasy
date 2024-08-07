@@ -29,6 +29,7 @@ public class ChatRegister {
         kryo.register(Response.Type.class);
         kryo.register(ChatChannel.class);
         kryo.register(Message.class);
+        kryo.register(ChatRegistration.class);
     }
 
     static public class Writer {
@@ -45,6 +46,13 @@ public class ChatRegister {
         public Type type;
         public Response() {this.type = Type.DISCARD;}
         public Response(Type type) {this.type = type;}
+    }
+
+    static public class ChatRegistration {
+        public boolean register;
+        public ChatChannel channel;
+        public int id;
+        public String name;
     }
 
     static public class Message {
