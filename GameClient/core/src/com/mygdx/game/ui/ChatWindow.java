@@ -1,5 +1,6 @@
 package com.mygdx.game.ui;
 
+import static com.mygdx.game.network.ChatRegister.MESSAGE_REGISTRY_CHANNEL_COOLDOWN;
 import static com.mygdx.game.ui.CommonUI.MAX_LINE_CHARACTERS_FLOATING_TEXT;
 
 import com.badlogic.gdx.Application;
@@ -14,6 +15,7 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
@@ -56,7 +58,8 @@ import java.util.List;
 public class ChatWindow extends GameWindow implements PropertyChangeListener {
     private static final int MAX_CHAT_LOG_DISPLAY_SIZE = 15;
     public static final int MAX_CHAT_MSG_CHARACTERS = 255;
-    public static final Color DEFAULT_CHAT_MESSAGE_COLOR = new Color(0.95f, 0.99f, 0.75f, 1f);
+    public static final Color DEFAULT_CHAT_SENDER_COLOR = new Color(0.95f, 0.99f, 0.75f, 1f);
+    public static final Color DEFAULT_CHAT_MESSAGE_COLOR = new Color(0.75f, 0.99f, 0.65f, 1f);
     public static final Color SERVER_CHAT_MESSAGE_COLOR = new Color(0.77f, 0.77f, 1f, 1f);
     public static final Color DEBUG_CHAT_MESSAGE_COLOR = new Color(0.97f, 0.67f, 0.3f, 1f);
     public static final Color PRIVATE_CHAT_SENDER_COLOR =  new Color(0.76f, 0.65f, 1.0f, 1.0f);
@@ -132,6 +135,8 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                     channels.get(chIdx).hasNewMessage = true;
                     channels.get(chIdx).startBlinking();
                 }
+
+                System.out.println("New msg: " +message.channel + " / " + message );
 
                 switch(message.channel) {
                     case PRIVATE:
@@ -408,7 +413,7 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         pxColor.dispose();
         newStyle.background.setLeftWidth(8f);
         newStyle.focusedBackground.setLeftWidth(8f);
-        newStyle.focusedFontColor = DEFAULT_CHAT_MESSAGE_COLOR;
+        newStyle.focusedFontColor = DEFAULT_CHAT_SENDER_COLOR;
         newStyle.messageFontColor = new Color(0.75f, 0.79f, 0.55f, 1f);
         msgField.setStyle(newStyle);
         //msgField.setMessageText(langBundle.format("chatTipMessage"));
@@ -1044,6 +1049,12 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
             
             Entity.Character senderChar = GameClient.getInstance().getClientCharacter();
 
+            // check cool down of registry channels
+            if(isInCoolDown(currentChannel.type)) {
+                clearMessageField(false);
+                return;
+            }
+
             List<String> texts = Common.splitEqually(trimmedMsg, MAX_LINE_CHARACTERS_FLOATING_TEXT);
 
             /** block player from messaging if it is full of floating text already **/
@@ -1060,7 +1071,7 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
 //                msg.message = message.substring(0, MAX_CHAT_MSG_CHARACTERS-1);
 //            else
             msg.message = trimmedMsg;
-            Color c = DEFAULT_CHAT_MESSAGE_COLOR;
+            Color c = DEFAULT_CHAT_SENDER_COLOR;
             if(currentChannel.type == ChatChannel.PRIVATE)
                 c = PRIVATE_CHAT_SENDER_COLOR;
             msg.color = c;
@@ -1082,6 +1093,38 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                 GameClient.getInstance().getClientCharacter().renderFloatingText(msg.message);
             }
         });
+    }
+
+    public boolean isInCoolDown(ChatChannel type) {
+        int secondsLeft = 0;
+        Entity.Character senderChar = GameClient.getInstance().getClientCharacter();
+
+        if(type == ChatChannel.TRADE) {
+            secondsLeft = MathUtils.ceil((System.currentTimeMillis() - senderChar.lastTradeTs) / 1000f);
+            if(secondsLeft > MESSAGE_REGISTRY_CHANNEL_COOLDOWN) {
+                senderChar.lastTradeTs = System.currentTimeMillis();
+                return false;
+            }
+        } else if(type == ChatChannel.HELP) {
+            secondsLeft = MathUtils.ceil((System.currentTimeMillis() - senderChar.lastHelpTs) / 1000f);
+            if(secondsLeft > MESSAGE_REGISTRY_CHANNEL_COOLDOWN) {
+                senderChar.lastHelpTs = System.currentTimeMillis();
+                return false;
+            }
+        } else if(type == ChatChannel.WORLD) {
+            secondsLeft = MathUtils.ceil((System.currentTimeMillis() - senderChar.lastWorldTs) / 1000f);
+            if(secondsLeft > MESSAGE_REGISTRY_CHANNEL_COOLDOWN) {
+                senderChar.lastWorldTs = System.currentTimeMillis();
+                return false;
+            }
+        } else { // its a channel with no cool down
+            return false;
+        }
+
+        secondsLeft = MESSAGE_REGISTRY_CHANNEL_COOLDOWN - secondsLeft;
+        GameScreen.getInstance().showInfo("channelCooldown", secondsLeft);
+
+        return true;
     }
 
     public boolean hasFocus() {
@@ -1185,7 +1228,7 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                     String txt = msgField.getText();
                     if(txt == "" || txt.trim().length() == 0) return; // returns if there is no message
 
-                    Color c = DEFAULT_CHAT_MESSAGE_COLOR;
+                    Color c = DEFAULT_CHAT_SENDER_COLOR;
                     if(currentChannel.type == ChatChannel.PRIVATE) // if its private use sender private color
                         c = PRIVATE_CHAT_SENDER_COLOR;
 

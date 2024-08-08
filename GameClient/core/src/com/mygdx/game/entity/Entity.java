@@ -785,6 +785,7 @@ public abstract class Entity implements Comparable<Entity> {
         private Polygon collider = new Polygon(); // this players collider
         public AtomicLong lastRequestId;
         public boolean assetsLoaded = false;
+        public long lastTradeTs = 0, lastWorldTs = 0, lastHelpTs = 0; // for registry channel cool downs
         Texture spriteSheet;
         Map<Direction, Animation<TextureRegion>> walk, idle, attack; // animations
         private AtomicReference<Entity> target = new AtomicReference<>(); // the current character target - selected entity

@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 public class ChatRegister {
 
     static public final int port = 43574; // LOGIN SERVER PORT (ONLY TCP FOR LOGIN SERVER)
+    public static final int MESSAGE_REGISTRY_CHANNEL_COOLDOWN = 9;
 
     /**
      * Registers objects that are going to be sent over the network
@@ -35,6 +36,7 @@ public class ChatRegister {
     static public class Writer {
         String name;
         int id;
+        long lastTradeTs = 0, lastWorldTs = 0, lastHelpTs = 0;
     }
 
     // contains information flag data to be shared between client and server

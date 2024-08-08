@@ -181,10 +181,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public static void addFloatingText(FloatingText floatingText) {floatingTexts.add(floatingText);}
     public static Pool<FloatingText> getFloatingTextPool() {return floatingTextPool;}
 
+
+
     /**
      * A lil class for information label with a lang key for its content in different languages
      */
     public static class InfoToast {
+        public Object arg0;
         Label label;
         String langKey;
     }
@@ -710,6 +713,33 @@ public class GameScreen implements Screen, PropertyChangeListener {
         infoToast.label.setText(info);
         infoToast.label.setVisible(true);
         infoToast.langKey = langKey;
+
+        float lifeTime = 1f + info.length() * 1/24f;
+
+        if(showInfoTask.isScheduled())
+            showInfoTask.cancel();
+
+        Timer.schedule(showInfoTask, lifeTime);
+    }
+
+    public void showInfo(String langKey, Object arg) {
+        String info = "";
+
+        if(arg instanceof Integer)
+            info = langBundle.format(langKey, (int)arg);
+        else if(arg instanceof String)
+            info = langBundle.format(langKey, (String)arg);
+
+        if(info.equals("")) {
+            System.out.println("Unknown argument type for bundle retrieval");
+            return;
+        }
+
+        info = info.replaceAll("[\\n]", " "); // if it has \n embedded in it, switch for a space
+        infoToast.label.setText(info);
+        infoToast.label.setVisible(true);
+        infoToast.langKey = langKey;
+        infoToast.arg0 = arg;
 
         float lifeTime = 1f + info.length() * 1/24f;
 
@@ -1774,8 +1804,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
         chatWindow.reloadLanguage();
         // if info label is active, set text in new language
-        if(infoToast.label.isVisible())
-            infoToast.label.setText(langBundle.get(infoToast.langKey));
+        if(infoToast.label.isVisible()) {
+            if(infoToast.arg0 == null)
+                infoToast.label.setText(langBundle.get(infoToast.langKey));
+            else {
+                String info = "";
+                if(infoToast.arg0 instanceof Integer)
+                    info = langBundle.format(infoToast.langKey, (int)infoToast.arg0);
+                else if(infoToast.arg0 instanceof String)
+                    info = langBundle.format(infoToast.langKey, (String)infoToast.arg0);
+                infoToast.label.setText(info);
+            }
+        }
         openChannelWindow.reloadLanguage();
     }
 

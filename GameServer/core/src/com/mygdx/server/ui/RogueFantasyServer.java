@@ -638,6 +638,15 @@ public class RogueFantasyServer extends ApplicationAdapter implements CmdReceive
 				b.append("Players online: ");
 				if(gameServer != null && gameServer.isOnline()) b.append(gameServer.getNumberOfPlayersOnline());
 				b.append("\n");
+				b.append("Global chat users: ");
+				b.append(ChatServer.getInstance().worldRegistry.size());
+				b.append("\n");
+				b.append("Trade chat users: ");
+				b.append(ChatServer.getInstance().tradeRegistry.size());
+				b.append("\n");
+				b.append("Help chat users: ");
+				b.append(ChatServer.getInstance().helpRegistry.size());
+				b.append("\n\n");
 				b.append("CPU Usage: ");
 				b.append((int)(cpuLoad*1000f));
 				b.append("%");

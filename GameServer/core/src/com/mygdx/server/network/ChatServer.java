@@ -1,5 +1,7 @@
 package com.mygdx.server.network;
 
+import static com.mygdx.server.network.ChatRegister.MESSAGE_REGISTRY_CHANNEL_COOLDOWN;
+
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
@@ -83,6 +85,10 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
                 CharacterConnection connection = (CharacterConnection)c;
                 synchronized (loggedIn) {
                     loggedIn.remove(connection.writer.id); // remove from logged in list
+                    //remove from registry
+                    helpRegistry.remove(connection.writer.id);
+                    worldRegistry.remove(connection.writer.id);
+                    tradeRegistry.remove(connection.writer.id);
                 }
             }
         });
@@ -96,32 +102,44 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
      */
     private void UpdateClientRegistry(CharacterConnection connection, ChatRegister.ChatRegistration msg) {
         Map<Integer, CharacterConnection> registry = null;
+        StringBuilder sb = new StringBuilder();
+
 
         switch(msg.channel) {
             case TRADE:
                 registry = tradeRegistry;
                 //System.out.println("TRADE REGISTRY SOLICITATION: ");
+                sb.append("Trade Chat: ");
                 break;
             case HELP:
                 registry = helpRegistry;
                 //System.out.println("HELP REGISTRY SOLICITATION: ");
+                sb.append("Help Chat: ");
                 break;
             case WORLD:
                 registry = worldRegistry;
                 //System.out.println("WORLD REGISTRY SOLICITATION: ");
+                sb.append("Global Chat: ");
                 break;
             default:
                 //System.out.println("Channel does not have a registry: " + msg.channel);
                 return;
         }
 
+        sb.append("Player ");
+        sb.append(msg.name);
+
         if(msg.register) {
             registry.putIfAbsent(msg.id, connection);
             //System.out.println(msg.name + " REGISTERED");
+            sb.append(" registered");
         } else {
             registry.remove(msg.id);
             //System.out.println(msg.name + " UNREGISTERED");
+            sb.append(" unregistered");
         }
+
+        Log.info("chat-server", String.valueOf(sb));
     }
 
     /**
@@ -138,13 +156,23 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
                 sendPrivateMessage(writer, msg);
                 break;
             case TRADE:
-                sendRegistryChannelMessage(writer, msg, tradeRegistry);
+                if((System.currentTimeMillis() - writer.writer.lastTradeTs) / 1000f > MESSAGE_REGISTRY_CHANNEL_COOLDOWN) {  // respect cooldown also server-side
+                    sendRegistryChannelMessage(writer, msg, tradeRegistry);
+                    writer.writer.lastTradeTs = System.currentTimeMillis();
+                }
                 break;
             case HELP:
-                sendRegistryChannelMessage(writer, msg, helpRegistry);
+                if((System.currentTimeMillis() - writer.writer.lastHelpTs) / 1000f > MESSAGE_REGISTRY_CHANNEL_COOLDOWN) {  // respect cooldown also server-side
+                    sendRegistryChannelMessage(writer, msg, helpRegistry);
+                    writer.writer.lastHelpTs = System.currentTimeMillis();
+                }
                 break;
             case WORLD:
-                sendRegistryChannelMessage(writer, msg, worldRegistry);
+                if((System.currentTimeMillis() - writer.writer.lastWorldTs) / 1000f > MESSAGE_REGISTRY_CHANNEL_COOLDOWN) {  // respect cooldown also server-side
+                    sendRegistryChannelMessage(writer, msg, worldRegistry);
+                    writer.writer.lastWorldTs = System.currentTimeMillis();
+                }
+                break;
             case MAP:
                 sendMapMessage(writer, msg);
                 break;
