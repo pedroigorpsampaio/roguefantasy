@@ -8,6 +8,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
@@ -48,7 +49,9 @@ import com.mygdx.game.network.ChatRegister.ChatChannel;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.GregorianCalendar;
 import java.util.Iterator;
 import java.util.List;
 
@@ -233,6 +236,8 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         public String recipientName; // in case its a private chat
         public boolean hasNewMessage = false; // in case there is a new msg not seen by player
         public Color originalColor = Color.WHITE;
+        public boolean changeLock = true;
+        StringBuilder lastChatSaved = new StringBuilder();
 
         public void startBlinking() {
             if(blink.isScheduled())
@@ -546,6 +551,7 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
 
         tabsButtonGroup.add(btn);
         btn.setChecked(select);
+        // change listener for dealing with tab changes
         btn.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
@@ -562,8 +568,12 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                         tabsScrollPane.setScrollX(newX);
                     }
                     changeTab(searchChannel(ch.type, ch.recipientId));
+
                 } else { // this button was unchecked
                     //btn.setColor(TAB_COLOR_UNSELECTED);
+                    int chIdx = searchChannel(ch.type, ch.recipientId);
+                    if(chIdx != -1) // channel still exists, was not closed
+                        channels.get(chIdx).changeLock = true;
                 }
             }
         });
@@ -573,6 +583,29 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
 
         ch.btn = btn;
         channels.add(ch);   // add to channels data
+
+        // listener to open tab context menu
+        if(Gdx.app.getType() == Application.ApplicationType.Desktop) {
+            btn.addCaptureListener(new ClickListener(Input.Buttons.RIGHT) {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    openContextMenuTab(ch);
+                }
+            });
+        } else if (Gdx.app.getType() == Application.ApplicationType.Android) {
+            btn.addCaptureListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    // only show if channel is already selected, to not mess up with change tab listener
+                    if(!ch.changeLock)
+                        openContextMenuTab(ch);
+
+                    if(btn.isChecked())
+                        ch.changeLock = false;
+                }
+
+            });
+        }
 
         if(select) // if this channel is selected change to it
             changeTab(searchChannel(ch.type, ch.recipientId));
@@ -618,6 +651,10 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
             // send registration message to server if channels are registry-based to unregister client in closed channel
             if(channel.type == ChatChannel.TRADE || channel.type == ChatChannel.WORLD || channel.type == ChatChannel.HELP)
                 ChatClient.getInstance().sendRegistryUpdate(channel.type, false);
+        }
+
+        if(openChannelWindow.getStage()!=null) {
+            openChannelWindow.updateCheckedCb();
         }
     }
 
@@ -710,7 +747,7 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         // chat list may be accessed concurrently by chat client thread when other clients send messages
 
         scrollTable.clear();
-        lastChatSaved.setLength(0);
+        channel.lastChatSaved.setLength(0);
         synchronized(list) {
             int count=0;
             Iterator i = list.iterator(); // Must be in synchronized block
@@ -720,20 +757,20 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                 stringBuilder.append(msg.color);
                 stringBuilder.append("]");
                 stringBuilder.append(Common.getTimeTag(msg.timestamp));
-                lastChatSaved.append(Common.getTimeTag(msg.timestamp));
+                channel.lastChatSaved.append(Common.getTimeTag(msg.timestamp));
                 stringBuilder.append(" ");
-                lastChatSaved.append(" ");
+                channel.lastChatSaved.append(" ");
                 stringBuilder.append(msg.sender);
-                lastChatSaved.append(msg.sender);
+                channel.lastChatSaved.append(msg.sender);
                 stringBuilder.append(": ");
-                lastChatSaved.append(": ");
+                channel.lastChatSaved.append(": ");
                 if(msg.langKey!=null) {// get translated msg if its a translatable server msg
                     stringBuilder.append(langBundle.format(msg.langKey));
-                    lastChatSaved.append(langBundle.format(msg.langKey));
+                    channel.lastChatSaved.append(langBundle.format(msg.langKey));
                 }
                 else {
                     stringBuilder.append(msg.message);
-                    lastChatSaved.append(msg.message);
+                    channel.lastChatSaved.append(msg.message);
                 }
                 stringBuilder.append("[]");
                 //if(i.hasNext())
@@ -765,7 +802,7 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                 scrollTable.add(l).growX().padRight(20).padLeft(5).padTop(-1f);
                 if(i.hasNext()) {
                     scrollTable.row();
-                    lastChatSaved.append("\n");
+                    channel.lastChatSaved.append("\n");
                 }
 
                 stringBuilder.setLength(0);
@@ -777,7 +814,6 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         //chatHistoryLabel.setText(stringBuilder);
         //chatScrollPane.layout();
     }
-    StringBuilder lastChatSaved = new StringBuilder();
 
     /**
      * Open chat context menu based on message clicked.
@@ -855,28 +891,27 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         cpyMsg.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                System.out.println("TODO tell that copied message: " + msg.message);
                 Common.copyToClipboard(msg.message);
-
                 GameScreen.getInstance().hideContextMenu();
+                GameScreen.getInstance().showInfo("copiedMessage");
             }
         });
 
         cpyName.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                System.out.println("TODO tell that copied name: " + msg.sender);
                 Common.copyToClipboard(msg.sender);
                 GameScreen.getInstance().hideContextMenu();
+                GameScreen.getInstance().showInfo("copiedName");
             }
         });
 
         cpyAll.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                Common.copyToClipboard(String.valueOf(lastChatSaved));
+                Common.copyToClipboard(String.valueOf(currentChannel.lastChatSaved));
                 GameScreen.getInstance().hideContextMenu();
-                System.out.println("TODO tell that copied all chat: " + lastChatSaved);
+                GameScreen.getInstance().showInfo("copiedAll");
             }
         });
 
@@ -923,6 +958,187 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
          */
         GameScreen.getInstance().showContextMenu(t);
         pxColor.dispose();
+    }
+
+    /**
+     * Open channel context menu based on tab clicked.
+     * Builds the table with the respective interaction buttons and send to the screen to show it
+     * @param channel   the chat channel clicked to open context menu on
+     */
+    private void openContextMenuTab(Channel channel) {
+        Table t = new Table();
+
+        /**
+         * Context menu buttons
+         */
+        TextButton closeTab = new TextButton(langBundle.format("close"), skin);
+        TextButton clearTab = new TextButton(langBundle.get("contextMenuClearMessages"), skin);
+        TextButton saveTab = new TextButton(langBundle.get("contextMenuSaveMessages"), skin);
+
+        /**
+         * Context menu button style
+         */
+        TextButton.TextButtonStyle newStyle = new TextButton.TextButtonStyle(closeTab.getStyle());
+        Pixmap pxColor = new Pixmap(1, 1, Pixmap.Format.RGB888);
+        pxColor.setColor(new Color(0x75757575));
+        pxColor.fill();
+        newStyle.up = null;
+        newStyle.over = new Image(new Texture(pxColor)).getDrawable();
+        newStyle.down = null;
+        newStyle.font.getData().setScale(0.81f, 0.81f);
+
+        /**
+         * Default config
+         */
+        closeTab.setStyle(newStyle);
+        closeTab.getLabel().setAlignment(Align.left);
+        clearTab.setStyle(newStyle);
+        clearTab.getLabel().setAlignment(Align.left);
+        saveTab.setStyle(newStyle);
+        saveTab.getLabel().setAlignment(Align.left);
+
+        /**
+         * Listeners
+         */
+        closeTab.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                closeChannel(searchChannel(channel.type, channel.recipientId));
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+
+        clearTab.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                clearChannelLog(channel);
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+
+        saveTab.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                saveChannelLog(channel);
+                GameScreen.getInstance().hideContextMenu();
+                // TODO TELL THAT CHAT WAS SAVED LOCATION NAME ETC
+            }
+        });
+
+        /**
+         * Decorations
+         */
+        Pixmap strokePixmap = new Pixmap(1, 1, Pixmap.Format.RGB888);
+        strokePixmap.setColor(new Color(0.4f, 0.4f, 0.4f, 1.0f));
+        strokePixmap.drawLine(0,0,1,0);
+        Image strokeLine = new Image(new Texture(strokePixmap));
+        strokePixmap.dispose();
+
+        /**
+         * Builds table
+         */
+
+        /**
+         * Section available only for tabs that are not default tab, which is not closeable
+         */
+        if(channel.type != ChatChannel.DEFAULT) {
+            t.add(closeTab).fillX();
+            t.row();
+            t.add(strokeLine).fill().padBottom(5).padTop(8);
+            t.row();
+        }
+        /**
+         * Section for all chat tabs
+         */
+        t.add(clearTab).fillX();
+        t.row();
+        t.add(saveTab).fillX();
+        t.pack();
+        t.layout();
+        t.validate();
+
+        /**
+         * Send to screen to be shown
+         */
+        GameScreen.getInstance().showContextMenu(t);
+        pxColor.dispose();
+    }
+
+    /**
+     * Saves channel messages in a log file
+     * @param channel   the channel to save the messages
+     */
+    private void saveChannelLog(Channel channel) {
+        if(String.valueOf(channel.lastChatSaved).trim().length() == 0) return; // don't save empty chats
+
+        Calendar calendar = GregorianCalendar.getInstance(); // creates a new calendar instance
+        int year =  calendar.get(Calendar.YEAR);
+        int month = calendar.get(Calendar.MONTH) + 1;
+        int day = calendar.get(Calendar.DAY_OF_MONTH);
+        int hours = calendar.get(Calendar.HOUR_OF_DAY);
+        int minutes = calendar.get(Calendar.MINUTE);
+        int seconds = calendar.get(Calendar.SECOND);
+
+        //System.out.println(String.valueOf(lastChatSaved));
+        StringBuilder sbPath = new StringBuilder("Chat/");
+        sbPath.append(channel.type.getText());
+        sbPath.append(".txt");
+
+        StringBuilder sbText = new StringBuilder("Chat Channel: ");
+        sbText.append(channel.type.getText());
+        sbText.append("\nDate: ");
+        if (day <= 9) sbText.append('0'); // avoid using format methods to decrease work
+        sbText.append(day);
+        sbText.append("-");
+        if (month <= 9) sbText.append('0'); // avoid using format methods to decrease work
+        sbText.append(month);
+        sbText.append("-");
+        sbText.append(year);
+        sbText.append(" ");
+        if (hours <= 9) sbText.append('0'); // avoid using format methods to decrease work
+        sbText.append(hours);
+        sbText.append(":");
+        if (minutes <= 9) sbText.append('0');
+        sbText.append(minutes);
+        sbText.append(":");
+        if (seconds <= 9) sbText.append('0');
+        sbText.append(seconds);
+        sbText.append(" (SERVER TIME)");
+        sbText.append("\n\n");
+        sbText.append(channel.lastChatSaved);
+        sbText.append("\n\n\n");
+
+        FileHandle file = null;
+
+        if(Gdx.app.getType() == Application.ApplicationType.Desktop) {
+            file = Gdx.files.local(String.valueOf(sbPath));
+        } else if(Gdx.app.getType() == Application.ApplicationType.Android) {
+            file = Gdx.files.external(String.valueOf(sbPath));
+        } else {
+            return;
+        }
+
+        file.writeString(String.valueOf(sbText), true);
+
+        GameScreen.getInstance().showInfo("chatMessagesSaved", String.valueOf(sbPath));
+    }
+
+    /**
+     * Clear the message log for the channel received in parameter
+     * @param channel   the channel to clear the message log
+     */
+    private void clearChannelLog(Channel channel) {
+        synchronized (channel.log) {
+            channel.log.clear();
+        }
+
+        if(currentChannelIdx == searchChannel(channel.type, channel.recipientId))
+            updateChatLabel(channel);
+
+        if(channel.hasNewMessage) { // stops blinking if it was blinking due to new message
+            channel.hasNewMessage = false;
+            channel.stopBlinking();
+        }
     }
 
     /**
