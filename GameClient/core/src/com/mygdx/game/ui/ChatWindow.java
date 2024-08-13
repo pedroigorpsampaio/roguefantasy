@@ -67,6 +67,7 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
     public static final Color DEBUG_CHAT_MESSAGE_COLOR = new Color(0.97f, 0.67f, 0.3f, 1f);
     public static final Color PRIVATE_CHAT_SENDER_COLOR =  new Color(0.76f, 0.65f, 1.0f, 1.0f);
     public static final Color PRIVATE_CHAT_MESSAGE_COLOR =  new Color(0.4f, 0.9f, 0.8f, 1.0f);
+    public static final Color LOOK_MESSAGE_COLOR = new Color(0.2f, 0.9f, 0.2f, 1.0f);
     public static final Color TAB_COLOR_SELECTED = new Color(0.4f, 0.9f, 0.8f, 1.0f);
     public static final Color TAB_COLOR_UNSELECTED = new Color(0.2f, 0.4f, 0.1f, 0.7f);
     private static final float CHAT_WIDTH = GameScreen.getStage().getWidth()*0.5f;
@@ -139,7 +140,7 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
                     channels.get(chIdx).startBlinking();
                 }
 
-                System.out.println("New msg: " +message.channel + " / " + message );
+                //System.out.println("New msg: " +message.channel + " / " + message );
 
                 switch(message.channel) {
                     case PRIVATE:

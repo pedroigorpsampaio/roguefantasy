@@ -9,10 +9,12 @@ import static com.mygdx.game.ui.CommonUI.FLOATING_CHAT_TEXT_SCALE;
 import static com.mygdx.game.ui.CommonUI.MAX_LINE_CHARACTERS_FLOATING_TEXT;
 import static com.mygdx.game.ui.CommonUI.getPixmapCircle;
 import static com.mygdx.game.ui.GameScreen.camera;
+import static com.mygdx.game.ui.GameScreen.openChannelWindow;
 import static com.mygdx.game.ui.GameScreen.shapeDebug;
 
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
@@ -30,13 +32,19 @@ import com.badlogic.gdx.math.Polygon;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
+import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
+import com.mygdx.game.network.ChatRegister;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.ui.ChatWindow;
@@ -106,6 +114,8 @@ public abstract class Entity implements Comparable<Entity> {
     public ArrayList<FloatingText> currentFloatingTexts = new ArrayList<>();
     public FloatingText tagFloatingText = null;
     public Rectangle tagHitBox = new Rectangle();
+    public boolean isStationary = false;
+    protected int level = 1; // the level of this entity
 
     public Entity() {
         /**
@@ -499,6 +509,235 @@ public abstract class Entity implements Comparable<Entity> {
      */
     public abstract void respawn();
 
+    public Table buildContextMenu() {
+        Table t = new Table();
+
+        final Entity e = this;
+
+        I18NBundle langBundle = assetManager.get("lang/langbundle", I18NBundle.class);
+
+        /**
+         * Context menu buttons
+         */
+        TextButton lookBtn = new TextButton(langBundle.format("contextMenuLook"), skin);
+
+        TextButton attackBtn = new TextButton(langBundle.get("contextMenuAttack"), skin);
+        TextButton followBtn = new TextButton(langBundle.get("contextMenuFollow"), skin);
+
+        TextButton sendMessageBtn = new TextButton(langBundle.format("contextMenuSendMessage", this.entityName), skin);
+        TextButton addContactBtn = new TextButton(langBundle.get("contextMenuAddContact"), skin);
+        TextButton ignoreBtn = new TextButton(langBundle.format("contextMenuIgnorePerson", this.entityName), skin);
+
+        TextButton invitePartyBtn = new TextButton(langBundle.format("contextMenuInviteParty"), skin);
+        TextButton tradeBtn = new TextButton(langBundle.get("contextMenuRequestTrade"), skin);
+
+        TextButton setOutfitBtn = new TextButton(langBundle.format("contextMenuSetOutfit"), skin);
+        TextButton cpyNameBtn = new TextButton(langBundle.get("contextMenuCopyName"), skin);
+
+        /**
+         * Context menu button style
+         */
+        TextButton.TextButtonStyle newStyle = new TextButton.TextButtonStyle(lookBtn.getStyle());
+        Pixmap pxColor = new Pixmap(1, 1, Pixmap.Format.RGB888);
+        pxColor.setColor(new Color(0x75757575));
+        pxColor.fill();
+        newStyle.up = null;
+        newStyle.over = new Image(new Texture(pxColor)).getDrawable();
+        newStyle.down = null;
+        newStyle.font.getData().setScale(0.81f, 0.81f);
+
+        /**
+         * Default config
+         */
+        lookBtn.setStyle(newStyle);
+        lookBtn.getLabel().setAlignment(Align.left);
+        attackBtn.setStyle(newStyle);
+        attackBtn.getLabel().setAlignment(Align.left);
+        followBtn.setStyle(newStyle);
+        followBtn.getLabel().setAlignment(Align.left);
+        sendMessageBtn.setStyle(newStyle);
+        sendMessageBtn.getLabel().setAlignment(Align.left);
+        addContactBtn.setStyle(newStyle);
+        addContactBtn.getLabel().setAlignment(Align.left);
+        ignoreBtn.setStyle(newStyle);
+        ignoreBtn.getLabel().setAlignment(Align.left);
+        invitePartyBtn.setStyle(newStyle);
+        invitePartyBtn.getLabel().setAlignment(Align.left);
+        tradeBtn.setStyle(newStyle);
+        tradeBtn.getLabel().setAlignment(Align.left);
+        setOutfitBtn.setStyle(newStyle);
+        setOutfitBtn.getLabel().setAlignment(Align.left);
+        cpyNameBtn.setStyle(newStyle);
+        cpyNameBtn.getLabel().setAlignment(Align.left);
+
+        /**
+         * Listeners
+         */
+        lookBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                GameScreen.getInstance().showLookMessage(generateLookInfo());
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+        attackBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if(uId != GameClient.getInstance().getClientUid()) // makes sure to not attack itself
+                    GameClient.getInstance().getClientCharacter().setTarget(e);
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+        followBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("Implement FOLLOW ENTITY");
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+        sendMessageBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if(type != GameRegister.EntityType.CHARACTER) return; // can only send msg to other players
+                if(uId == GameClient.getInstance().getClientUid()) return; // makes sure to not send msg to itself
+                openChannelWindow.openChannel(entityName, contextId);
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+        addContactBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("Implement ADD TO CONTACT LIST");
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+        ignoreBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("Implement ADD TO IGNORE LIST");
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+        invitePartyBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("Implement PARTY INVITATION");
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+        tradeBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("Implement TRADING");
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+        setOutfitBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                System.out.println("Implement CHANGE OUTFIT");
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+        cpyNameBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                Common.copyToClipboard(entityName);
+                GameScreen.getInstance().hideContextMenu();
+                GameScreen.getInstance().showInfo("copiedName");
+            }
+        });
+
+        /**
+         * Decorations
+         */
+        Pixmap strokePixmap = new Pixmap(1, 1, Pixmap.Format.RGB888);
+        strokePixmap.setColor(new Color(0.4f, 0.4f, 0.4f, 1.0f));
+        strokePixmap.drawLine(0,0,1,0);
+        Image strokeLine1 = new Image(new Texture(strokePixmap));
+        Image strokeLine2 = new Image(new Texture(strokePixmap));
+        Image strokeLine3 = new Image(new Texture(strokePixmap));
+        Image strokeLine4 = new Image(new Texture(strokePixmap));
+        strokePixmap.dispose();
+
+        /**
+         * Builds table
+         */
+
+        t.add(lookBtn).fillX();
+        t.row();
+
+        if(strokeLine1.getStage() == null) {
+            t.add(strokeLine1).fill().padBottom(5).padTop(8).height(2);
+            t.row();
+        }
+
+        /**
+         * Section available for other attack-able entities that are not player
+         */
+        if(this.uId != GameClient.getInstance().getClientCharacter().uId && this.isTargetAble) {
+            t.add(attackBtn).fillX();
+            t.row();
+        }
+
+        /**
+         * Section available for other moving entities that are not player
+         */
+        if(this.uId != GameClient.getInstance().getClientCharacter().uId && !this.isStationary && this.isInteractive) {
+            t.add(followBtn).fillX();
+            t.row();
+            if(strokeLine2.getStage() == null) {
+                t.add(strokeLine2).fill().padBottom(5).padTop(8).height(2);
+                t.row();
+            }
+        }
+
+        /**
+         * Section available only for other players that are not client
+         */
+        if(this.uId != GameClient.getInstance().getClientCharacter().uId && this.type == GameRegister.EntityType.CHARACTER) {
+            t.add(sendMessageBtn).fillX();
+            t.row();
+            t.add(addContactBtn).fillX();
+            t.row();
+            t.add(ignoreBtn).fillX();
+            t.row();
+            if(strokeLine3.getStage() == null) {
+                t.add(strokeLine3).fill().padBottom(5).padTop(8).height(2);
+                t.row();
+            }
+            t.add(invitePartyBtn).fillX();
+            t.row();
+            t.add(tradeBtn).fillX();
+            t.row();
+
+            if(strokeLine4.getStage() != null) {
+                t.add(strokeLine4).fill().padBottom(5).padTop(8).height(2);
+                t.row();
+            }
+
+        }
+
+        /**
+         * Section available only to client character
+         */
+        if(this.uId == GameClient.getInstance().getClientCharacter().uId) {
+            t.add(setOutfitBtn).fillX();
+            t.row();
+        }
+
+        t.add(cpyNameBtn).fillX();
+        t.pack();
+        t.layout();
+        t.validate();
+
+        pxColor.dispose();
+
+        return t;
+    }
+
+    public abstract String generateLookInfo();
+
     public enum Direction {
         NORTHWEST(-1, 1),
         NORTH(0, 1),
@@ -830,8 +1069,17 @@ public abstract class Entity implements Comparable<Entity> {
             return target.get();
         }
 
-        public synchronized void setTarget(Entity e) {
-            if(getTarget() != null && e != null && e.uId == getTarget().uId) return; // same target as before, do nothing
+        /**
+         * Sets entity as current target
+         * if param received is null, will clear current target
+         * @param entity    the entity to set as target (if null, will clear current target)
+         */
+        public synchronized void setTarget(Entity entity) {
+            Entity e = null;
+            boolean sameTarget = getTarget() != null && entity != null && entity.uId == getTarget().uId;
+
+            if(!sameTarget) e = entity; // not same target as before
+
             if(e != null && !e.isTargetAble) return; // if its not targetable return
             if(isUnmovable()) return; // in case unmovable(logging in, teleportin...) cannot interact
             if(e != null && (e.isUnmovable() || e.state == GameRegister.EntityState.TELEPORTING_IN
@@ -947,6 +1195,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.target.set(null);
             this.contextId = this.id;
             this.type = GameRegister.EntityType.CHARACTER;
+            this.isStationary = false;
             this.isInteractive = true;
             this.isTargetAble = true;
             this.map = "Nova Terra";
@@ -1513,6 +1762,22 @@ public abstract class Entity implements Comparable<Entity> {
             updateHealth(maxHealth); // makes sure health is back to max
         }
 
+        @Override
+        public String generateLookInfo() {
+            I18NBundle langBundle = assetManager.get("lang/langbundle", I18NBundle.class);
+
+            StringBuilder sb = new StringBuilder();
+
+            sb.append(entityName);
+            sb.append(" (");
+            sb.append(langBundle.get("level"));
+            sb.append(" ");
+            sb.append(this.level);
+            sb.append(")");
+
+            return String.valueOf(sb);
+        }
+
         /**
          * Checks if chat floating text collides with character tag (for client only)
          * @return true if collides, false otherwise
@@ -1793,6 +2058,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.isObfuscator = tile.getProperties().get("obfuscator", Boolean.class);
             this.contextId = this.wallId;
             this.type = GameRegister.EntityType.WALL;
+            this.isStationary = true;
 
             float tileWidth = TEX_WIDTH * unitScale;
             float tileHeight = TEX_HEIGHT * unitScale;
@@ -1861,6 +2127,13 @@ public abstract class Entity implements Comparable<Entity> {
         @Override
         public void respawn() {
 
+        }
+
+        @Override
+        public String generateLookInfo() {
+            StringBuilder sb = new StringBuilder();
+            sb.append(entityName);
+            return String.valueOf(sb);
         }
 
         @Override
@@ -1947,6 +2220,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.isObfuscator = tile.getProperties().get("obfuscator", Boolean.class);
             this.contextId = this.spawnId;
             this.type = GameRegister.EntityType.TREE;
+            this.isStationary = true;
             this.isInteractive = true;
             this.isTargetAble = true;
             this.uId = EntityController.getInstance().generateUid();
@@ -2077,6 +2351,13 @@ public abstract class Entity implements Comparable<Entity> {
             this.isTargetAble = true;
             updateHealth(maxHealth);
         }
+
+        @Override
+        public String generateLookInfo() {
+            StringBuilder sb = new StringBuilder();
+            sb.append(entityName);
+            return String.valueOf(sb);
+        }
     }
 
     public static class Creature extends Entity {
@@ -2120,6 +2401,7 @@ public abstract class Entity implements Comparable<Entity> {
             this.range = range;
             this.contextId = this.spawnId;
             this.type = GameRegister.EntityType.CREATURE;
+            this.isStationary = false;
             this.isInteractive = true;
             this.isTargetAble = true;
             direction = Direction.SOUTHWEST;
@@ -2303,6 +2585,13 @@ public abstract class Entity implements Comparable<Entity> {
             this.isInteractive = true;
             this.isTargetAble = true;
             updateHealth(maxHealth);
+        }
+
+        @Override
+        public String generateLookInfo() {
+            StringBuilder sb = new StringBuilder();
+            sb.append(entityName);
+            return String.valueOf(sb);
         }
 
         @Override

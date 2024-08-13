@@ -98,7 +98,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private static Stack targetStack;
     public static ChatWindow chatWindow;
     private static Table chatTabs; // tabs of chat window
-    private static OpenChannelWindow openChannelWindow; // open channel window
+    public static OpenChannelWindow openChannelWindow; // open channel window
     private Image closestEntityImg, targetImg;
     private Button selectTargetBtn;
     private static Button lastTargetBtn, nextTargetBtn, optionsBtn;
@@ -113,7 +113,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Label ramLabel;
     private Label bCallsLabel;
     private Label mouseOnLabel;
-    private static InfoToast infoToast, pmToast; // for informing player of useful info
+    private static InfoToast infoToast, pmToast, lookToast; // for informing player of useful info
     private Image uiBg, healthBar, healthBarBg;
     private TypingLabel nameLabel, percentLabel;
     private Stack targetUiStack;
@@ -122,7 +122,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private RogueFantasy game;
     private Preferences prefs;
     private OptionWindow optionWindow;
-    private ContextWindow contextWindow;
+    private static ContextWindow contextWindow;
     private I18NBundle langBundle;
     private Texture bgTexture;
     private Image bg;
@@ -180,8 +180,6 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private static final Queue<FloatingText> floatingTexts = new ConcurrentLinkedQueue<FloatingText>();
     public static void addFloatingText(FloatingText floatingText) {floatingTexts.add(floatingText);}
     public static Pool<FloatingText> getFloatingTextPool() {return floatingTextPool;}
-
-
 
     /**
      * A lil class for information label with a lang key for its content in different languages
@@ -339,6 +337,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
         pmToast.label.layout();
         pmToast.label.setX(stage.getWidth()/2f -  pmToast.label.getWidth()/2f);
         pmToast.label.setY(stage.getHeight()/1.2f - pmToast.label.getHeight()/2f);
+        // look toast
+        lookToast = new InfoToast();
+        lookToast.label = new Label("infoLabel", skin, "largeLabelStyle");
+        lookToast.label.setColor(ChatWindow.LOOK_MESSAGE_COLOR);
+        lookToast.label.setAlignment(Align.center);
+        lookToast.label.setVisible(false);
+        lookToast.label.setFontScale(1.2f);
+        lookToast.label.setWidth(widthPm);
+        lookToast.label.setWrap(true);
+        lookToast.label.layout();
+        lookToast.label.setX(stage.getWidth()/2f -  lookToast.label.getWidth()/2f);
+        lookToast.label.setY(stage.getHeight()/2f - lookToast.label.getHeight()/2f);
 
         /**
          * debug
@@ -435,6 +445,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         stage.addActor(infoToast.label);
         stage.addActor(pmToast.label);
+        stage.addActor(lookToast.label);
         stage.addActor(fpsLabel);
         stage.addActor(pingLabel);
         stage.addActor(ramLabel);
@@ -466,8 +477,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y))
                         hideContextMenu();
 
-                    if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
-                        //showContextMenu(null); TODO IMPLEMENT CONTEXT MENU ON DIFFERENT TARGETS, ITEMS, AND SOME TILES?
+                    if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {  // show context menu if left control is pressed if hover entity not null
+                        if(WorldMap.hoverEntity != null)
+                            showContextMenu(WorldMap.hoverEntity.buildContextMenu());
                     }
                 }
             }
@@ -477,9 +489,16 @@ public class GameScreen implements Screen, PropertyChangeListener {
             public void clicked(InputEvent event, float x, float y) {
                 //if ( Gdx.app.getType() == Application.ApplicationType.Desktop) {
                     // context menu is on stage, remove if touch up happens outside of it
-                    if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y))
-                        hideContextMenu();
+                if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y)) {
+                    hideContextMenu();
+                }
                 //}
+                if ( Gdx.app.getType() == Application.ApplicationType.Desktop) {
+                    if (Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {  // show look info directly on ctrl+left click in desktop
+                        if (WorldMap.hoverEntity != null)
+                            GameScreen.getInstance().showLookMessage(WorldMap.hoverEntity.generateLookInfo());
+                    }
+                }
             }
         });
         stage.addListener(new InputListener(){
@@ -630,15 +649,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
             public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
                 if(Gdx.app.getType() == Application.ApplicationType.Desktop) {
                     if (contextWindow.getStage()!=null) return false; //context menu is opened
-                    if (Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) return false; // left control is pressed (do not target)
-                    // if its first touch and there is a interactive entity, select it
-                    if(Gdx.input.justTouched() && button == 1 && !onStageActor) { // Only acts on world if it did not hit any UI actor)
-                        //if(WorldMap.hoverEntity != null)
-//                        if(GameClient.getInstance().getClientCharacter().getTarget() != null
-//                         && GameClient.getInstance().getClientCharacter().getTarget() == WorldMap.hoverEntity)
-//                            GameClient.getInstance().getClientCharacter().getTarget().takeDamage(); // for debug atm
+                    if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) return false; // if left control is selected ignore and return
 
-                        GameClient.getInstance().getClientCharacter().setTarget(WorldMap.hoverEntity);
+                    // if its first touch and there is a interactive entity, interact with it
+                    if(Gdx.input.justTouched() && button == 1 && !onStageActor) { // Only acts on world if it did not hit any UI actor)
+                        if(WorldMap.hoverEntity == null || WorldMap.hoverEntity.uId != GameClient.getInstance().getClientCharacter().uId) // if null or not player, select as new target
+                            GameClient.getInstance().getClientCharacter().setTarget(WorldMap.hoverEntity);
                     }
                 }
                 return true;
@@ -652,13 +668,15 @@ public class GameScreen implements Screen, PropertyChangeListener {
                         screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(1), Gdx.input.getY(1), 0f));
                         unprojectedMouse = camera.unproject(vec3);
                     }
-                    // if its first touch and there is a interactive entity, select it
                     if(!onStageActor) { // Only acts on world if it did not hit any UI actor)
                         //if(WorldMap.hoverEntity != null)
-                        if(pointer == 1)
-                            GameClient.getInstance().getClientCharacter().setTarget(WorldMap.hoverEntity);
-                        else if(!joystick.isActive())
-                            GameClient.getInstance().getClientCharacter().setTarget(WorldMap.hoverEntity);
+                        if(pointer == 1 || !joystick.isActive()) { // if first finger and no joystick or second finger with joystick active
+                            if(WorldMap.hoverEntity != null) { // show context menu on tap (long press will attack now)
+                                showContextMenu(WorldMap.hoverEntity.buildContextMenu());
+                            } else { // if tap on no entity, stop attacking (if its attacking)
+                                GameClient.getInstance().getClientCharacter().setTarget(null);
+                            }
+                        }
                     }
                     if (!Gdx.input.isTouched(0)) {
                         joystick.setActive(false);
@@ -767,16 +785,41 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         float lifeTime = 3f + message.length() * 1/24f;
 
-        if(showPmTask.isScheduled())
-            showPmTask.cancel();
+        if(hidePmTask.isScheduled())
+            hidePmTask.cancel();
 
-        Timer.schedule(showPmTask, lifeTime);
+        Timer.schedule(hidePmTask, lifeTime);
     }
 
-    private Timer.Task showPmTask = new Timer.Task() {
+    /**
+     * Show look message containing information about
+     * the examined entity by client player
+     * @param info  the information about the entity examined
+     */
+    public void showLookMessage(String info) {
+        lookToast.label.setText(langBundle.format("lookMessage", info));
+        lookToast.label.setVisible(true);
+
+        float lifeTime = 3f + info.length() * 1/24f;
+
+        if(hideLookToast.isScheduled())
+            hideLookToast.cancel();
+
+        Timer.schedule(hideLookToast, lifeTime);
+    }
+
+
+    private Timer.Task hidePmTask = new Timer.Task() {
         @Override
         public void run() {
             hideToast(pmToast);
+        }
+    };
+
+    private Timer.Task hideLookToast = new Timer.Task() {
+        @Override
+        public void run() {
+            hideToast(lookToast);
         }
     };
 
@@ -784,7 +827,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         return instance;
     }
 
-    public void hideContextMenu() {
+    public static void hideContextMenu() {
         //contextWindow.remove();
         removeWindowWithAction(contextWindow, fadeOut(0.1f));
     }
@@ -796,6 +839,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
      */
     public void showContextMenu(Table options) {
         hideContextMenu();
+
+        if(!gameClient.getClientCharacter().isAlive) // do not show context menu if player is dead
+            return;
+
         Color c = contextWindow.getColor();
         contextWindow.setColor(c.r, c.g, c.b, 1f);
         contextWindow.loadTable(options);
@@ -851,6 +898,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public static void showDeathUI() {
         hideAndroidTargetInteraction();
         hideChatWindow();
+        hideContextMenu();
 //        deathMsgLabel.setText(deathMsgLabel.storedText);
         if(deathMsgLabel.hasEnded())
             deathMsgLabel.restart(); // restart if it has ended
@@ -1608,7 +1656,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
      * Updates cursor based on current hovered entity
      */
     private void updateCursor() {
-        if(WorldMap.hoverEntity == null || !gameClient.getClientCharacter().isAlive) {
+        if(WorldMap.hoverEntity == null || !gameClient.getClientCharacter().isAlive ||
+                WorldMap.hoverEntity.uId == GameClient.getInstance().getClientCharacter().uId) {
             Gdx.graphics.setCursor(CommonUI.cursorBank.get("Cursor Default"));
             return;
         }
@@ -1741,6 +1790,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
         @Override
         public boolean longPress(float x, float y) {
             if(onStageActor) return false; // Only acts with joystick if it did not hit any UI actor
+
+            if(WorldMap.hoverEntity != null) { // if long press on an entity , set it as target.
+                GameClient.getInstance().getClientCharacter().setTarget(WorldMap.hoverEntity);
+                onStageActor = true;
+                return true;
+            }
 
             if(!Gdx.input.isTouched(1) && Gdx.app.getType() == Application.ApplicationType.Android) {
                 screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));

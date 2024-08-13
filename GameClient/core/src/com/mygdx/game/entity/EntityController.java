@@ -87,13 +87,11 @@ public class EntityController {
                     }
                 }
 
-                if(e.uId != GameClient.getInstance().getClientCharacter().uId) { // only considers other entities and not client character
-                    if(e.isInteractive && !GameScreen.onStageActor) {// Only acts on world if it did not hit any UI actor
-                        boolean mouseHit = e.rayCast(GameScreen.unprojectedMouse);
-                        if (mouseHit) { // hover on an entity
-                            foundHoverEntity = true;
-                            WorldMap.hoverEntity = e;
-                        }
+                if(e.isInteractive && !GameScreen.onStageActor) {// Only acts on world if it did not hit any UI actor
+                    boolean mouseHit = e.rayCast(GameScreen.unprojectedMouse);
+                    if (mouseHit) { // hover on an entity
+                        foundHoverEntity = true;
+                        WorldMap.hoverEntity = e;
                     }
                 }
 

@@ -178,6 +178,13 @@ public class Projectile extends Entity implements Pool.Poolable {
 
     }
 
+    @Override
+    public String generateLookInfo() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(entityName);
+        return String.valueOf(sb);
+    }
+
     /**
      * Renders this projectile
      * @param batch
