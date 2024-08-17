@@ -61,6 +61,10 @@ public class Common {
         return String.valueOf(sb);
     }
 
+    public static boolean isVowel(char c) {
+        return "AEIOUaeiou".indexOf(c) != -1;
+    }
+
     public static long getRamUsage() {
         return (runtime.totalMemory() - runtime.freeMemory()) / MB;
     }

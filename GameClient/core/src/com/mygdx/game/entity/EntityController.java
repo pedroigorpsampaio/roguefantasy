@@ -211,10 +211,10 @@ public class EntityController {
                     continue;
 
                 boolean selectable;
-                if(Gdx.app.getType() == Application.ApplicationType.Desktop) // discard non target-able entities from closest targeting with space
+                //if(Gdx.app.getType() == Application.ApplicationType.Desktop) // discard non target-able entities from closest targeting with space
                     selectable = e.isTargetAble;
-                else // on android include interactive entities to help interactions with UI interaction with closest entities button
-                    selectable = e.isInteractive;
+                //else // on android include interactive entities to help interactions with UI interaction with closest entities button
+                   // selectable = e.isInteractive;
 
                 if(selectable) {
                     return e;

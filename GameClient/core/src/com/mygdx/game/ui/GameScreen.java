@@ -443,9 +443,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
         respawnBtn.setPosition(stage.getWidth()/2f - respawnBtn.getWidth()/2f, stage.getHeight()/2.75f - respawnBtn.getHeight()/2f);
         deathMsgLabel.setPosition(stage.getWidth()/2f - deathMsgLabel.getWidth()/2f, stage.getHeight()/1.45f - deathMsgLabel.getHeight()/2f);
 
-        stage.addActor(infoToast.label);
-        stage.addActor(pmToast.label);
-        stage.addActor(lookToast.label);
+//        stage.addActor(infoToast.label);
+//        stage.addActor(pmToast.label);
+//        stage.addActor(lookToast.label);
         stage.addActor(fpsLabel);
         stage.addActor(pingLabel);
         stage.addActor(ramLabel);
@@ -732,6 +732,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         infoToast.label.setVisible(true);
         infoToast.langKey = langKey;
 
+        stage.addActor(infoToast.label);
+
         float lifeTime = 1f + info.length() * 1/24f;
 
         if(showInfoTask.isScheduled())
@@ -782,6 +784,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public void showPrivateMessage(String message) {
         pmToast.label.setText(message);
         pmToast.label.setVisible(true);
+        stage.addActor(pmToast.label);
 
         float lifeTime = 3f + message.length() * 1/24f;
 
@@ -799,6 +802,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public void showLookMessage(String info) {
         lookToast.label.setText(langBundle.format("lookMessage", info));
         lookToast.label.setVisible(true);
+        stage.addActor(lookToast.label);
 
         float lifeTime = 3f + info.length() * 1/24f;
 
@@ -916,6 +920,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         toast.label.setText("");
         toast.label.setVisible(false);
         toast.langKey = null;
+        toast.label.remove();
     }
 
     public static void hideDeathUI() {

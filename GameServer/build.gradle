@@ -69,5 +69,6 @@ project(":core") {
         implementation 'org.postgresql:postgresql:42.7.3'
         implementation 'dev.dominion.ecs:dominion-ecs-engine:0.9.0'
         implementation 'org.openjdk.jol:jol-core:0.10'
+        implementation 'org.mongodb:mongodb-driver-sync:5.1.2'
     }
 }

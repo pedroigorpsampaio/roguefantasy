@@ -7,6 +7,7 @@ import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
+import com.mygdx.server.db.MongoDb;
 import com.mygdx.server.entity.Component;
 import com.mygdx.server.entity.EntityController;
 import com.mygdx.server.entity.WorldMap;
@@ -59,6 +60,22 @@ public class GameServer implements CmdReceiver {
         // For consistency, the classes to be sent over the network are
         // registered by the same method for both the client and server.
         GameRegister.register(server);
+
+        /** mongodb test **/
+//        Component.Character character = new Component.Character();
+//        character.token = Encoder.generateNewToken();
+//        character.role_level = 1;
+//        character.tag = new Component.Tag(102, "testete");
+//        character.position = new Component.Position(0,0, 26, 4);
+//        character.attr = new Component.Attributes(32f, 48f,
+//                100f, 100f, 250f,1f,
+//                0.5f, 10f, 10f, 0f);
+//        saveCharacter(character);
+//
+//        character.position.x = 5201;
+//
+//        Component.Character loadedChar = loadCharacter(character);
+//        System.out.println("SAVED POSITION X: " + loadedChar.position.x);
 
         server.addListener(new Listener() {
             public void received (Connection c, Object object) {
@@ -118,25 +135,25 @@ public class GameServer implements CmdReceiver {
                 }
                 else if(object instanceof GameRegister.CharacterIdRequest) {
                     GameRegister.CharacterIdRequest msg = (GameRegister.CharacterIdRequest)object;
-                    // search for id
-                    int id = -1;
-                    File f = new File("characters", msg.name.toLowerCase());
-                    if(f.exists() && !f.isDirectory()) {
-                        DataInputStream input = null;
-                        try {
-                            input = new DataInputStream(new FileInputStream(f));
-                            id = input.readInt();
-                            input.close();
-                        } catch (IOException ex) {
-                            ex.printStackTrace();
-                        } finally {
-                            try {
-                                if (input != null) input.close();
-                            } catch (IOException ignored) {
-                            }
-                        }
-                    }
-                    msg.id = id; // attribute id to msg
+
+//                    File f = new File("characters", msg.name.toLowerCase());
+//                    if(f.exists() && !f.isDirectory()) {
+//                        DataInputStream input = null;
+//                        try {
+//                            input = new DataInputStream(new FileInputStream(f));
+//                            id = input.readInt();
+//                            input.close();
+//                        } catch (IOException ex) {
+//                            ex.printStackTrace();
+//                        } finally {
+//                            try {
+//                                if (input != null) input.close();
+//                            } catch (IOException ignored) {
+//                            }
+//                        }
+//                    }
+                    // search for id: -1 equals character not found!
+                    msg.id = MongoDb.findCharacterIdByName(msg.name); // attribute id to msg
                     c.sendTCP(msg); // send back to client that requested id
                 }
                 else if (object instanceof GameRegister.Response) {
@@ -416,42 +433,50 @@ public class GameServer implements CmdReceiver {
     }
 
     boolean saveCharacter (Component.Character character) {
-        File file = new File("characters", character.tag.name.toLowerCase());
-        file.getParentFile().mkdirs();
+        /**
+         * Save to MongoDb
+         */
+        return MongoDb.saveCharacter(character);
 
-        if (character.tag.id == 0) {
-            String[] children = file.getParentFile().list();
-            if (children == null) return false;
-            character.tag.id = children.length + 1;
-        }
-
-        DataOutputStream output = null;
-        try {
-            output = new DataOutputStream(new FileOutputStream(file));
-            output.writeInt(character.tag.id);
-            output.writeInt(character.role_level);
-            output.writeInt(character.position.mapId);
-            output.writeInt(character.position.floor);
-            output.writeFloat(character.position.x);
-            output.writeFloat(character.position.y);
-            output.writeFloat(character.attr.maxHealth);
-            output.writeFloat(character.attr.health);
-            output.writeFloat(character.attr.speed);
-            output.writeFloat(character.attr.width);
-            output.writeFloat(character.attr.height);
-            output.writeFloat(character.attr.attackSpeed);
-            output.writeFloat(character.attr.attack);
-            output.writeFloat(character.attr.defense);
-            return true;
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            return false;
-        } finally {
-            try {
-                output.close();
-            } catch (IOException ignored) {
-            }
-        }
+        /**
+         * Save to file
+         */
+//        File file = new File("characters", character.tag.name.toLowerCase());
+//        file.getParentFile().mkdirs();
+//
+//        if (character.tag.id == 0) {
+//            String[] children = file.getParentFile().list();
+//            if (children == null) return false;
+//            character.tag.id = children.length + 1;
+//        }
+//
+//        DataOutputStream output = null;
+//        try {
+//            output = new DataOutputStream(new FileOutputStream(file));
+//            output.writeInt(character.tag.id);
+//            output.writeInt(character.role_level);
+//            output.writeInt(character.position.mapId);
+//            output.writeInt(character.position.floor);
+//            output.writeFloat(character.position.x);
+//            output.writeFloat(character.position.y);
+//            output.writeFloat(character.attr.maxHealth);
+//            output.writeFloat(character.attr.health);
+//            output.writeFloat(character.attr.speed);
+//            output.writeFloat(character.attr.width);
+//            output.writeFloat(character.attr.height);
+//            output.writeFloat(character.attr.attackSpeed);
+//            output.writeFloat(character.attr.attack);
+//            output.writeFloat(character.attr.defense);
+//            return true;
+//        } catch (IOException ex) {
+//            ex.printStackTrace();
+//            return false;
+//        } finally {
+//            try {
+//                output.close();
+//            } catch (IOException ignored) {
+//            }
+//        }
     }
 
     public static void updatePingSimulation(CharacterConnection conn, int inc) {
@@ -487,39 +512,47 @@ public class GameServer implements CmdReceiver {
     }
 
     Component.Character loadCharacter (Component.Character character) {
-        File file = new File("characters", character.tag.name.toLowerCase());
-        if (!file.exists()) { // creates char if it does not exist yet
-            saveCharacter(character);
-            return character;
-        }
-        DataInputStream input = null;
-        try {
-            input = new DataInputStream(new FileInputStream(file));
-            character.tag.id = input.readInt();
-            character.role_level = input.readInt();
-            character.position.mapId = input.readInt();
-            character.position.floor = input.readInt();
-            character.position.x = input.readFloat();
-            character.position.y = input.readFloat();
-            character.attr.maxHealth = input.readFloat();
-            character.attr.health = input.readFloat();
-            character.attr.speed = input.readFloat();
-            character.attr.width = input.readFloat();
-            character.attr.height = input.readFloat();
-            character.attr.attackSpeed = input.readFloat();
-            character.attr.attack = input.readFloat();
-            character.attr.defense = input.readFloat();
-            input.close();
-            return character;
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            return null;
-        } finally {
-            try {
-                if (input != null) input.close();
-            } catch (IOException ignored) {
-            }
-        }
+        /**
+         * Load from mongo db
+         */
+        return MongoDb.loadCharacter(character);
+
+        /**
+         * Load from file
+         */
+//        File file = new File("characters", character.tag.name.toLowerCase());
+//        if (!file.exists()) { // creates char if it does not exist yet
+//            saveCharacter(character);
+//            return character;
+//        }
+//        DataInputStream input = null;
+//        try {
+//            input = new DataInputStream(new FileInputStream(file));
+//            character.tag.id = input.readInt();
+//            character.role_level = input.readInt();
+//            character.position.mapId = input.readInt();
+//            character.position.floor = input.readInt();
+//            character.position.x = input.readFloat();
+//            character.position.y = input.readFloat();
+//            character.attr.maxHealth = input.readFloat();
+//            character.attr.health = input.readFloat();
+//            character.attr.speed = input.readFloat();
+//            character.attr.width = input.readFloat();
+//            character.attr.height = input.readFloat();
+//            character.attr.attackSpeed = input.readFloat();
+//            character.attr.attack = input.readFloat();
+//            character.attr.defense = input.readFloat();
+//            input.close();
+//            return character;
+//        } catch (IOException ex) {
+//            ex.printStackTrace();
+//            return null;
+//        } finally {
+//            try {
+//                if (input != null) input.close();
+//            } catch (IOException ignored) {
+//            }
+//        }
     }
 
     /**

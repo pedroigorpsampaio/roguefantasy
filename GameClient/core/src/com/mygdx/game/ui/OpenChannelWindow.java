@@ -369,7 +369,7 @@ public class OpenChannelWindow extends GameWindow implements PropertyChangeListe
     @Override
     public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
         Gdx.app.postRunnable(() -> {
-            if(propertyChangeEvent.getPropertyName().equals("idByNameRetrieved")) { // received a login response
+            if(propertyChangeEvent.getPropertyName().equals("idByNameRetrieved")) { // received a if by name response
                 GameRegister.CharacterIdRequest response = (GameRegister.CharacterIdRequest) propertyChangeEvent.getNewValue();
                 if(response.requester.equals("OpenChannelWindow")) { // this is a response to this module, act
                     if(response.id == -1) { // player not found - does not exist

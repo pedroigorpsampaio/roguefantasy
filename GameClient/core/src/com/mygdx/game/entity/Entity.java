@@ -25,7 +25,6 @@ import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
-import com.badlogic.gdx.math.Circle;
 import com.badlogic.gdx.math.Interpolation;
 import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Polygon;
@@ -44,10 +43,8 @@ import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
-import com.mygdx.game.network.ChatRegister;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
-import com.mygdx.game.ui.ChatWindow;
 import com.mygdx.game.ui.CommonUI;
 import com.mygdx.game.ui.FloatingText;
 import com.mygdx.game.ui.GameScreen;
@@ -2079,6 +2076,7 @@ public abstract class Entity implements Comparable<Entity> {
             if(tile.getProperties().get("type", String.class).equals("portal")) {
                 this.type = GameRegister.EntityType.PORTAL;
                 this.isInteractive = true;
+                this.entityName = "Portal";
 
                 hitBox = new Polygon(new float[] {
                         0, 0,
@@ -2131,7 +2129,14 @@ public abstract class Entity implements Comparable<Entity> {
 
         @Override
         public String generateLookInfo() {
+            I18NBundle langBundle = assetManager.get("lang/langbundle", I18NBundle.class);
             StringBuilder sb = new StringBuilder();
+            sb.append(langBundle.get("articleMascSing"));
+            if(langBundle.getLocale().getLanguage().equals("en")) {
+                if(Common.isVowel(entityName.charAt(0)))
+                    sb.append("n");
+            }
+            sb.append(" ");
             sb.append(entityName);
             return String.valueOf(sb);
         }
