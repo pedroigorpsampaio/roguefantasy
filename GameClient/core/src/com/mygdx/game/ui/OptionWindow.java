@@ -321,8 +321,9 @@ public class OptionWindow extends GameWindow {
         private void backBtnOnClick(InputEvent event, float x, float y) {
             if(parent instanceof MainMenuScreen)
                 remove(); // removes option window
-            else if(parent instanceof  GameScreen)
-                CommonUI.removeWindowWithAction(getInstance(), fadeOut(0.2f));
+            else if(parent instanceof  GameScreen) {
+                GameScreen.getInstance().toggleWindow(getInstance(), false, true);
+            }
         }
     }
 

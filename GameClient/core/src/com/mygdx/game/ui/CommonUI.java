@@ -39,6 +39,8 @@ public class CommonUI {
     public static final float FLOATING_CHAT_TEXT_SCALE = 1f;
     public static final float TARGET_UI_WIDTH = 340;
     public static final float TARGET_UI_HEIGHT = 105;
+    public static final float MENU_ICONS_PADDING = 25f;
+    public static final Color MENU_BUTTON_OPENED_COLOR = new Color(0.75f, 0.99f, 0.85f, 1f);
     public static final float TARGET_UI_BG_ALPHA = 1.00f;
     public static final boolean ENABLE_TARGET_UI = false;
     public static final boolean FADE_CLIENT_TAG_ON_ALL_FLOATING_TEXT = true;

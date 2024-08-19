@@ -1,5 +1,6 @@
 package com.mygdx.game.ui;
 
+import static com.badlogic.gdx.scenes.scene2d.actions.Actions.fadeOut;
 import static com.mygdx.game.network.ChatRegister.MESSAGE_REGISTRY_CHANNEL_COOLDOWN;
 import static com.mygdx.game.ui.CommonUI.MAX_LINE_CHARACTERS_FLOATING_TEXT;
 
@@ -36,6 +37,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
+import com.badlogic.gdx.utils.SnapshotArray;
 import com.badlogic.gdx.utils.Timer;
 import com.mygdx.game.RogueFantasy;
 import com.mygdx.game.entity.Entity;
@@ -226,6 +228,37 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
     public void dispose() {
         stopServerListening();
         openChannelWindow.stopServerListening();
+    }
+
+    public void clearWindows() {
+        if(openChannelWindow.getStage() != null)
+            CommonUI.removeWindowWithAction(openChannelWindow, fadeOut(0.2f));
+    }
+
+    public boolean isOnActor(Actor actor) {
+        if(actor.equals(sendBtn) || actor.equals(msgField))
+            return true;
+        else
+            return false;
+    }
+
+    public boolean isOnChatWindowLog(Actor actor) {
+        if(scrollTable == null || actor == null) return false;
+
+        // if click hits scroll table, its on chat window log and should not prevent interaction
+        if(actor.equals(scrollTable))
+            return true;
+        // also if its not in any of the label children
+        SnapshotArray<Actor> children = scrollTable.getChildren();
+        Actor[] items = children.begin();
+        for (int i = 0, n = children.size; i < n; i++) {
+            Actor a = items[i];
+            if(a.equals(actor))
+                return true;
+        }
+        children.end();
+
+        return false;
     }
 
     public static class Channel {
@@ -1442,6 +1475,8 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
             sendBtn.addListener(new ClickListener() {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
+                    GameScreen.onStageActor = true;
+
                     String txt = msgField.getText();
                     if(txt == "" || txt.trim().length() == 0) return; // returns if there is no message
 

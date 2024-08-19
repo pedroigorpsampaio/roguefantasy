@@ -6,6 +6,7 @@ import static com.badlogic.gdx.scenes.scene2d.actions.Actions.scaleTo;
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.sequence;
 import static com.mygdx.game.ui.CommonUI.ENABLE_TARGET_UI;
 import static com.mygdx.game.ui.CommonUI.FADE_CLIENT_TAG_ON_ALL_FLOATING_TEXT;
+import static com.mygdx.game.ui.CommonUI.MENU_ICONS_PADDING;
 import static com.mygdx.game.ui.CommonUI.removeWindowWithAction;
 
 import com.badlogic.gdx.Application;
@@ -101,7 +102,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public static OpenChannelWindow openChannelWindow; // open channel window
     private Image closestEntityImg, targetImg;
     private Button selectTargetBtn;
-    private static Button lastTargetBtn, nextTargetBtn, optionsBtn;
+    private static Button lastTargetBtn;
+    private static Button nextTargetBtn;
+    static Button optionsBtn;
+    static Button contactsBtn;
     private FitViewport uiViewport;
     private Font font;
     private Timer updateTimer;
@@ -122,6 +126,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private RogueFantasy game;
     private Preferences prefs;
     private OptionWindow optionWindow;
+    private ContactWindow contactWindow;
     private static ContextWindow contextWindow;
     private I18NBundle langBundle;
     private Texture bgTexture;
@@ -152,12 +157,16 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private Texture testTexure;
     public static int chatOffsetY = 0; // chat y offset from bottom
     private boolean openKeyboard = false;
+    private Actor onActor = null; // actor that mouse is currently on (null if none)
+    private boolean draggingActor = false;
+    private boolean firstTouchOnActor = false;
+
 
     /** poolable objects **/
 
     // array containing the active projectiles.
     private static final Array<Projectile> projectiles = new Array<Projectile>();
-    private Actor onActor = null; // actor that mouse is currently on (null if none)
+    private boolean isPanning = false;
 
     public static void addProjectile(Projectile projectile) {projectiles.add(projectile);}
     // projectile pool.
@@ -271,6 +280,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
         up = new TextureRegionDrawable(new TextureRegion(new Sprite(region)));
         optionsBtn = new Button(up, up.tint(Color.GRAY));
 
+        region = uiAtlas.findRegion("contactsIcon");
+        up = new TextureRegionDrawable(new TextureRegion(new Sprite(region)));
+        contactsBtn = new Button(up, up.tint(Color.GRAY));
+
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
 
@@ -305,6 +318,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
         optionWindow = new OptionWindow(game, stage, this, manager, " "+langBundle.format("option"),
                 skin, "newWindowStyle");
 
+        contactWindow = new ContactWindow(game, stage, this, manager, " "+langBundle.format("contacts"),
+                skin, "newWindowStyle");
+
         contextWindow = new ContextWindow(game, stage, this, manager, "", skin, "newWindowStyle");
 
         /**
@@ -312,8 +328,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
          */
         optionsBtn.setTransform(true);
         optionsBtn.setScale(4f, 4f);
-        optionsBtn.setX(stage.getWidth() - optionsBtn.getWidth()*optionsBtn.getScaleX());
-        optionsBtn.setY(stage.getHeight() - optionsBtn.getHeight()*optionsBtn.getScaleY());
+        optionsBtn.setX(stage.getWidth() - optionsBtn.getWidth()*optionsBtn.getScaleX()-MENU_ICONS_PADDING);
+        optionsBtn.setY(stage.getHeight() - optionsBtn.getHeight()*optionsBtn.getScaleY()-MENU_ICONS_PADDING);
+
+        contactsBtn.setTransform(true);
+        contactsBtn.setScale(4f, 4f);
+        contactsBtn.setX(optionsBtn.getX() - contactsBtn.getWidth()*contactsBtn.getScaleX()-MENU_ICONS_PADDING);
+        contactsBtn.setY(optionsBtn.getY());
 
         /**
          * info toast labels
@@ -452,6 +473,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         stage.addActor(bCallsLabel);
         stage.addActor(mouseOnLabel);
         stage.addActor(optionsBtn);
+        stage.addActor(contactsBtn);
         /**
          * Android UI only
          */
@@ -579,6 +601,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     }
                 }
 
+                /**
+                 * SHORTCUTS
+                 */
+
                 if(keycode == Input.Keys.L && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT))
                     logoff();
 
@@ -587,7 +613,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 }
 
                 if(keycode == Input.Keys.O && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
-                    loadWindow(optionWindow, true, true);
+                    toggleWindow(optionWindow, false, true);
+                }
+
+                if(keycode == Input.Keys.F && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
+                    toggleWindow(contactWindow, false, false);
                 }
 
                 // lag simulation controls
@@ -648,7 +678,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
             @Override
             public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
                 if(Gdx.app.getType() == Application.ApplicationType.Desktop) {
+                    screenMouse = stage.getViewport().getCamera().unproject(new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f));
+                    onActor = isActorHit(screenMouse.x, screenMouse.y);
+                    firstTouchOnActor = onActor == null ? false : true;
+
                     if (contextWindow.getStage()!=null) return false; //context menu is opened
+
                     if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) return false; // if left control is selected ignore and return
 
                     // if its first touch and there is a interactive entity, interact with it
@@ -899,10 +934,25 @@ public class GameScreen implements Screen, PropertyChangeListener {
         stage.addActor(chatTabs);
     }
 
+    public static void hideMenuButtons() {
+        if(optionsBtn.getStage() != null)
+            optionsBtn.remove();
+        if(contactsBtn.getStage() != null)
+            contactsBtn.remove();
+    }
+
+    public static void showMenuButtons() {
+        if(optionsBtn.getStage() == null)
+            stage.addActor(optionsBtn);
+        if(contactsBtn.getStage() == null)
+            stage.addActor(contactsBtn);
+    }
+
     public static void showDeathUI() {
         hideAndroidTargetInteraction();
         hideChatWindow();
         hideContextMenu();
+        hideMenuButtons();
 //        deathMsgLabel.setText(deathMsgLabel.storedText);
         if(deathMsgLabel.hasEnded())
             deathMsgLabel.restart(); // restart if it has ended
@@ -928,6 +978,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         deathMsgLabel.remove();
         showAndroidTargetInteraction();
         showChatWindow();
+        showMenuButtons();
     }
 
     public static void showAndroidTargetInteraction() {
@@ -1172,7 +1223,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 movement.x = joystickDir.x;
                 movement.y = joystickDir.y;
             } else if (Gdx.app.getType() == Application.ApplicationType.Desktop) {    // if its on pc move accordingly
-                if (Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor && !onStageActorDown &&
+                if (Gdx.input.isButtonPressed(Input.Buttons.LEFT) && ((!onStageActor && !onStageActorDown && !draggingActor) || isPanning) &&
                 contextWindow.getStage()==null) { // only left mouse button walks and if not on ui stage actor or context menu is opened
                     if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) { // if ctrl is pressed, just change direction
                         touchPos = new Vector2(unprojectedMouse.x - clientChar.spriteW / 2f,  // compensate to use center of char sprite as anchor
@@ -1299,6 +1350,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         updateCamera(); // updates camera
         updateProjectiles(); // update alive projectiles
+        updateMenuButtons(); // update menu buttons - highlights if menus are opened
 
         batch.setProjectionMatrix(camera.combined); // sets camera for projection
 
@@ -1561,6 +1613,18 @@ public class GameScreen implements Screen, PropertyChangeListener {
         stage.draw();
     }
 
+    private void toggleMenuButtonColor(GameWindow window, Button btn) {
+        if(window.getStage() == null) {
+            btn.setColor(Color.WHITE);
+        } else
+            btn.setColor(CommonUI.MENU_BUTTON_OPENED_COLOR);
+    }
+
+    private void updateMenuButtons() {
+        toggleMenuButtonColor(contactWindow, contactsBtn);
+        toggleMenuButtonColor(optionWindow, optionsBtn);
+    }
+
     /**
      * Show map and zone label on ui for a short period of time
      */
@@ -1697,10 +1761,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
         uiCam.update();
 
         /**
-         * Update windows
+         * Update centered windows
          */
         optionWindow.setPosition(stage.getWidth() / 2.0f , stage.getHeight() / 2.0f, Align.center);
         optionWindow.resize(width, height);
+
+//        contactWindow.setPosition(stage.getWidth() / 2.0f , stage.getHeight() / 2.0f, Align.center);
+//        contactWindow.resize(width, height);
     }
 
     @Override
@@ -1765,6 +1832,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 screenMouse = stage.getViewport().getCamera().unproject(new Vector3(x, y, 0f));
                 onActor = isActorHit(screenMouse.x, screenMouse.y);
                 onStageActor = onActor == null ? false : true;
+                firstTouchOnActor = onActor == null ? false : true;
 
                 if(!onStageActor) {
                     vec3 = new Vector3(x, y,0); //  use second touch for interactions instead, first touch is movement
@@ -1818,7 +1886,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         @Override
         public boolean pan(float x, float y, float deltaX, float deltaY) {
-            if(onStageActor) return false; // Only acts with joystick if it did not hit any UI actor
+            if(firstTouchOnActor) {
+                draggingActor = true;
+                isPanning = false;
+                return false; // Only acts with joystick if it did not hit any UI actor
+            } else {
+                isPanning = true;
+            }
 
             if(!Gdx.input.isTouched(1) && Gdx.app.getType() == Application.ApplicationType.Android
                 && !joystick.isActive()) { // on pan we want only to activate it on first pan, to not change initial position on each callback
@@ -1832,6 +1906,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         @Override
         public boolean panStop(float x, float y, int pointer, int button) {
+            if(draggingActor) draggingActor = false;
+            if(isPanning) isPanning = false;
             return false;
         }
 
@@ -1855,6 +1931,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
     private void clearWindows() {
         if(optionWindow.getStage() != null)
             CommonUI.removeWindowWithAction(optionWindow, fadeOut(0.2f));
+        if(contactWindow.getStage() != null)
+            CommonUI.removeWindowWithAction(contactWindow, fadeOut(0.2f));
+        chatWindow.clearWindows();
     }
 
     /**
@@ -1927,6 +2006,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
         // centers game window if centered is set to true
         if(centered)
             gameWindow.setPosition(stage.getWidth() / 2.0f , stage.getHeight() / 2.0f, Align.center);
+        else {
+            if(gameWindow.lastPosition == null) {
+                gameWindow.lastPosition = new Vector2(stage.getWidth() / 2.0f - gameWindow.getWidth()/2f,
+                                        stage.getHeight() / 2.0f  - gameWindow.getHeight()/2f);
+            }
+            gameWindow.setPosition(gameWindow.lastPosition.x, gameWindow.lastPosition.y);
+        }
 
         if(gameWindow.getCaptureListeners().size == 0) {
             gameWindow.addCaptureListener(new InputListener() {
@@ -2029,14 +2115,27 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
                     onStageActor = true;
-                    if(optionWindow.getStage()==null) {
-                        loadWindow(optionWindow, true, true);
-                    }
-                    else {
-                        CommonUI.removeWindowWithAction(optionWindow, fadeOut(0.2f));
-                    }
+                    toggleWindow(optionWindow,false, true);
                 }
             });
+            contactsBtn.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    onStageActor = true;
+                    toggleWindow(contactWindow, false, false);
+                }
+            });
+        }
+    }
+
+    void toggleWindow(GameWindow window, boolean single, boolean centered) {
+        if(window.getStage()==null) {
+            loadWindow(window, single, centered);
+        }
+        else {
+            if(window.lastPosition != null) // for draggable windows
+                window.lastPosition.set(window.getX(), window.getY());
+            CommonUI.removeWindowWithAction(window, fadeOut(0.1f));
         }
     }
 }

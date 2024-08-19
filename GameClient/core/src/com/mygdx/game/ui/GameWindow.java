@@ -6,6 +6,7 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Cursor;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -39,6 +40,7 @@ public abstract class GameWindow extends Window {
     protected LoginClient loginClient;
     protected Encoder encoder;
     protected DispatchServer listeningClient;
+    protected Vector2 lastPosition;
     /**
      * Sets the window vars to be properly used in the game stage
      * Build should be implemented by each subclass and should build
@@ -67,6 +69,8 @@ public abstract class GameWindow extends Window {
 
         // gets preferences reference, that stores simple data persisted between executions
         prefs = Gdx.app.getPreferences("globalPrefs");
+
+        this.lastPosition = null;
     }
 
     /**
