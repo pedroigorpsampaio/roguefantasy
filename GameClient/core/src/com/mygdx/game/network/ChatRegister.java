@@ -4,7 +4,10 @@ package com.mygdx.game.network;
 import com.badlogic.gdx.graphics.Color;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryonet.EndPoint;
+import com.mygdx.game.entity.Entity;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -31,12 +34,22 @@ public class ChatRegister {
         kryo.register(ChatChannel.class);
         kryo.register(Message.class);
         kryo.register(ChatRegistration.class);
+        kryo.register(Map.class);
+        kryo.register(ConcurrentHashMap.class);
+        kryo.register(ContactsRequest.class);
+        kryo.register(Comparable.class);
     }
 
-    static public class Writer {
-        String name;
-        int id;
-        long lastTradeTs = 0, lastWorldTs = 0, lastHelpTs = 0;
+    static public class Writer implements Comparable<Writer> {
+        public String name;
+        public int id;
+        public boolean online;
+        public long lastTradeTs = 0, lastWorldTs = 0, lastHelpTs = 0;
+
+        @Override
+        public int compareTo(Writer writer) {
+            return name.compareTo(writer.name);
+        }
     }
 
     // contains information flag data to be shared between client and server
@@ -99,5 +112,10 @@ public class ChatRegister {
             return null;
         }
 
+    }
+
+    public static class ContactsRequest {
+        public int requesterId;
+        public Map<Integer, Writer> contacts = new ConcurrentHashMap<>();
     }
 }

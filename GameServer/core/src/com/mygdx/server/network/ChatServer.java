@@ -6,16 +6,13 @@ import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
-import com.mygdx.server.db.DbController;
 import com.mygdx.server.entity.Component;
-import com.mygdx.server.entity.EntityController;
 import com.mygdx.server.entity.WorldMap;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
 import com.mygdx.server.ui.CommandDispatcher.Command;
 import com.mygdx.server.network.ChatRegister.Message;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,6 +58,7 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
                     connection.writer.id = msg.id;
                     connection.writer.name = msg.name;
                     loggedIn.putIfAbsent(msg.id, connection);
+                    warnContacts(msg.id, true); // "warn" clients that has this client as contact of online status
                 }
                 else if(object instanceof ChatRegister.Response) {
                     ChatRegister.Response msg = (ChatRegister.Response) object;
@@ -77,7 +75,11 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
                 }
                 else if(object instanceof Message) {
                     Message msg = (Message) object;
-                    DispatchMessage(connection, msg);
+                    dispatchMessage(connection, msg);
+                }
+                else if(object instanceof ChatRegister.ContactsRequest) {
+                    ChatRegister.ContactsRequest msg = (ChatRegister.ContactsRequest) object;
+                    sendContacts(connection, msg.requesterId);
                 }
             }
 
@@ -85,6 +87,7 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
                 CharacterConnection connection = (CharacterConnection)c;
                 synchronized (loggedIn) {
                     loggedIn.remove(connection.writer.id); // remove from logged in list
+                    warnContacts(connection.writer.id, false); // "warn" clients that has this client as contact of online status
                     //remove from registry
                     helpRegistry.remove(connection.writer.id);
                     worldRegistry.remove(connection.writer.id);
@@ -93,6 +96,51 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
             }
         });
 
+    }
+
+    /**
+     * Warns online players that have "id" character as contact of a change of online status
+     * @param id        the id of the character that had a change of online status
+     * @param online    the online status to update interested players
+     */
+    private void warnContacts(int id, boolean online) {
+        // TODO WARN CONTACTS THAT IS ONLINE/OFFLINE - QUERY EACH LOGGED PLAYER TO SEE IF IT HAS ID AS CONTACT
+    }
+
+    /**
+     * Sends current stored contacts of the requester to the requester
+     * @param connection    the requester connection
+     * @param requesterId   the requester id
+     */
+    private void sendContacts(CharacterConnection connection, int requesterId) {
+        /**
+         * TODO - STORE AND LOAD CONTACTS IN MONGO DB (FOR EACH CHAR, LIST OF IDS:NAMES? or JUST IDS)
+         */
+        ChatRegister.ContactsRequest cr = new ChatRegister.ContactsRequest();
+
+        cr.requesterId = requesterId;
+
+        ChatRegister.Writer wr = new ChatRegister.Writer();
+        wr.name = "Rios2a"; wr.id = 18; wr.online = isCharacterOnline(18);
+        cr.contacts.putIfAbsent(18, wr);
+
+        ChatRegister.Writer wr2 = new ChatRegister.Writer();
+        wr2.name = "Rios"; wr2.id = 12; wr2.online = isCharacterOnline(12);
+        cr.contacts.putIfAbsent(12, wr2);
+
+        ChatRegister.Writer wr3 = new ChatRegister.Writer();
+        wr3.name = "Endor"; wr3.id = 15; wr3.online = isCharacterOnline(15);
+        cr.contacts.putIfAbsent(15, wr3);
+
+        ChatRegister.Writer wr4 = new ChatRegister.Writer();
+        wr4.name = "Rydok"; wr4.id = 14; wr4.online = isCharacterOnline(14);
+        cr.contacts.putIfAbsent(14, wr4);
+
+        connection.sendTCP(cr);
+    }
+
+    private boolean isCharacterOnline(int id) {
+        return loggedIn.containsKey(id);
     }
 
     /**
@@ -149,7 +197,7 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
      * @param writer the writer of the message
      * @param msg   the message to be distributed
      */
-    private void DispatchMessage(CharacterConnection writer, Message msg) {
+    private void dispatchMessage(CharacterConnection writer, Message msg) {
 
         switch (msg.channel) {
             case PRIVATE:

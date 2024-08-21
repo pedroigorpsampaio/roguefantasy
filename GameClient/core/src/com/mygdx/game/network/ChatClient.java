@@ -2,6 +2,8 @@ package com.mygdx.game.network;
 
 import java.beans.PropertyChangeSupport;
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.esotericsoftware.kryonet.Client;
 import com.esotericsoftware.kryonet.Connection;
@@ -13,16 +15,22 @@ import com.mygdx.game.ui.GameScreen;
 
 public class ChatClient extends DispatchServer {
     private static ChatClient instance; // login client instance
+    public boolean isContactsLoaded;
     private Client client;
     String name="";
     String host = "192.168.0.192";
     private LagNetwork lagNetwork;
+
+    public static Map<Integer, ChatRegister.Writer> contacts = new ConcurrentHashMap<>(); // contacts of this client
+
 
     public boolean isConnected() {return isConnected;}
     private boolean isConnected = false;
 
     protected ChatClient () {
         super(); // calls constructor of the superclass to instantiate listeners list
+
+        isContactsLoaded = false;
 
         client = new Client(65535, 65535);
         client.start();
@@ -57,6 +65,10 @@ public class ChatClient extends DispatchServer {
                         default:
                             break;
                     }
+                } else if(object instanceof ChatRegister.ContactsRequest) {
+                    ChatRegister.ContactsRequest msg = (ChatRegister.ContactsRequest) object;
+                    contacts = msg.contacts;
+                    isContactsLoaded = true;
                 }
             }
 
@@ -154,5 +166,16 @@ public class ChatClient extends DispatchServer {
         } else {
             client.sendTCP(cr);
         }
+    }
+
+    /**
+     * Sends a request to server to load client contacts
+     * @param id    the client id to load contacts
+     */
+    public void loadContacts(int id) {
+        ChatRegister.ContactsRequest cr = new ChatRegister.ContactsRequest();
+        cr.requesterId = id;
+
+        client.sendTCP(cr);
     }
 }

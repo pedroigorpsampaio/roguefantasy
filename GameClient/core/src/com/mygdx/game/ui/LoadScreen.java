@@ -400,6 +400,8 @@ public class LoadScreen implements Screen {
                 }).start();
                 while(gameClient.getClientCharacter() == null);
                 chatClient.login(gameClient.getClientCharacter()); // send msg to chat server log in correctly in chat
+                chatClient.loadContacts(gameClient.getClientCharacter().id); // loads client contacts
+                while(!chatClient.isContactsLoaded);
                 game.setScreen(gameScreen);
             }
         }));

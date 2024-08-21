@@ -496,8 +496,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
             public void clicked(InputEvent event, float x, float y) {
                 if ( Gdx.app.getType() == Application.ApplicationType.Desktop) {
                     // context menu is on stage, remove if touch up happens outside of it
-                    if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y))
-                        hideContextMenu();
+//                    if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y))
+//                        hideContextMenu();
 
                     if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {  // show context menu if left control is pressed if hover entity not null
                         if(WorldMap.hoverEntity != null)
@@ -511,9 +511,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
             public void clicked(InputEvent event, float x, float y) {
                 //if ( Gdx.app.getType() == Application.ApplicationType.Desktop) {
                     // context menu is on stage, remove if touch up happens outside of it
-                if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y)) {
-                    hideContextMenu();
-                }
+//                if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y)) {
+//                    hideContextMenu();
+//                }
                 //}
                 if ( Gdx.app.getType() == Application.ApplicationType.Desktop) {
                     if (Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {  // show look info directly on ctrl+left click in desktop
@@ -682,7 +682,13 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     onActor = isActorHit(screenMouse.x, screenMouse.y);
                     firstTouchOnActor = onActor == null ? false : true;
 
-                    if (contextWindow.getStage()!=null) return false; //context menu is opened
+                    // context menu is on stage, remove if touch up happens outside of it
+                    if (contextWindow.getStage()!=null) {
+                        if(!contextWindow.isPointOn(screenMouse.x, screenMouse.y))
+                            hideContextMenu();
+
+                        return false;
+                    }
 
                     if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) return false; // if left control is selected ignore and return
 
@@ -1833,6 +1839,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 onActor = isActorHit(screenMouse.x, screenMouse.y);
                 onStageActor = onActor == null ? false : true;
                 firstTouchOnActor = onActor == null ? false : true;
+
+                if (contextWindow.getStage() != null && !contextWindow.isPointOn(screenMouse.x, screenMouse.y)) {
+                    hideContextMenu();
+                }
 
                 if(!onStageActor) {
                     vec3 = new Vector3(x, y,0); //  use second touch for interactions instead, first touch is movement
