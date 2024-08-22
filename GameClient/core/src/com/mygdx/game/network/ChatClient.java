@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.badlogic.gdx.Gdx;
 import com.esotericsoftware.kryonet.Client;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
@@ -22,6 +23,46 @@ public class ChatClient extends DispatchServer {
     private LagNetwork lagNetwork;
 
     public static Map<Integer, ChatRegister.Writer> contacts = new ConcurrentHashMap<>(); // contacts of this client
+
+    /**
+     * Adds the contact to local map and and send message to server to store contact server-side
+     * @param contact   the contact to be added for this client contacts list
+     */
+    public static void addContact(ChatRegister.Writer contact) {
+        // if contact is already on map, return showing info toast
+        if(contacts.containsKey(contact.id)) {
+            GameScreen.getInstance().showInfo("contactAlreadyRegistered");
+            return;
+        }
+
+        // add to the local list (if not there yet)
+        synchronized (contacts) {
+            contacts.put(contact.id, contact);
+        }
+
+        // send contact to be saved server-side
+        // TODO SEND CONTACT TO BE STORED SERVER SIDE TO CURRENT CLIENT
+    }
+
+    /**
+     * Removes the contact from local map and and send message to server to remove contact server-side
+     * @param id   the id of the contact to be removed from this client contacts list
+     */
+    public static void removeContact(int id) {
+        // if contact is not on list, return (does not need to show toast, player won't input text for contact removal, this should be a bug if it happens)
+        if(!contacts.containsKey(id)) {
+            Gdx.app.log("contacts", "Error removing contact: contact does not exist in map - " + id);
+            return;
+        }
+
+        // remove from the local list
+        synchronized (contacts) {
+            contacts.remove(id);
+        }
+
+        // send message to exclude contact server-side
+        // TODO SEND CONTACT TO BE STORED SERVER SIDE TO CURRENT CLIENT
+    }
 
 
     public boolean isConnected() {return isConnected;}

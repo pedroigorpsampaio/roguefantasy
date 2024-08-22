@@ -15,11 +15,14 @@ import com.badlogic.gdx.graphics.glutils.ImmediateModeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.scenes.scene2d.Action;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.ui.TextField;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.Timer;
@@ -27,7 +30,6 @@ import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
 import com.mygdx.game.RogueFantasy;
 
-import java.lang.management.ManagementFactory;
 import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -104,6 +106,33 @@ public class CommonUI {
             dialog.button(langBundle.format("ok"), skin, tbStyle).padBottom(10);
             dialog.key(Input.Keys.ENTER, true).key(Input.Keys.ESCAPE, false);
         }
+        dialog.getTitleTable().padTop(9).padBottom(15).padLeft(2).padRight(6);
+        dialog.pack();
+        dialog.show(stage);
+        return dialog;
+    }
+
+    // creates an input dialog from the parameters provided
+    // storing the input into text button name (to retrieve text input after press, use getName() on button callback on passed parameter)
+    public static Dialog createInputDialog(Stage stage, Skin skin, String title, String content, TextField textField, TextButton confirm, int textLimit) {
+        // hides android soft keyboard if its open
+        if(RogueFantasy.isKeyboardShowing())
+            Gdx.input.setOnscreenKeyboardVisible(false);
+
+        Dialog dialog = new Dialog(title, skin, "newWindowStyle");
+
+        // username text field
+//        TextField textField = new TextField("", skin, "newTextFieldStyle");
+        textField.setMessageText(" "+ content);
+        textField.setAlignment(Align.center);
+        textField.setFocusTraversal(false);
+        textField.setMaxLength(textLimit);
+
+        dialog.getContentTable().add(textField).fillX().minWidth(420).padLeft(4).padRight(4).padTop(10).padBottom(1).minHeight(50);
+
+        dialog.button(confirm);
+//        dialog.key(Input.Keys.ENTER, confirm.getClickListener()).key(Input.Keys.ESCAPE, false);
+
         dialog.getTitleTable().padTop(9).padBottom(15).padLeft(2).padRight(6);
         dialog.pack();
         dialog.show(stage);

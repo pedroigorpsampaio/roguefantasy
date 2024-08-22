@@ -10,9 +10,11 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
 import com.badlogic.gdx.scenes.scene2d.ui.HorizontalGroup;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
@@ -20,6 +22,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.I18NBundle;
@@ -241,7 +244,7 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         removeContact.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                System.out.println("TODO  REMOVE CONTACT FROM CLIENT LIST AND SEND REMOVE MSG TO SERVER");
+                removeContact(contact.id);
                 //TODO REMOVE CONTACT FROM CLIENT LIST AND SEND REMOVE MSG TO SERVER
                 GameScreen.getInstance().hideContextMenu();
             }
@@ -259,7 +262,7 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         addNewContact.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                System.out.println("TODO ADD CONTACT: OPEN TEXT FIELD TO WRITE CONTACT NAME - CHECK IF USER EXIST SIMILAR TO OPENCHANNEL - IF SO ADD IN CLIENT AND SEND ADD MSG TO SERVER");
+                openAddNewContactDialog();
                 //TODO ADD CONTACT: OPEN TEXT FIELD TO WRITE CONTACT NAME - CHECK IF USER EXIST SIMILAR TO OPENCHANNEL - IF SO ADD IN CLIENT AND SEND ADD MSG TO SERVER
                 GameScreen.getInstance().hideContextMenu();
             }
@@ -319,6 +322,26 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         pxColor.dispose();
     }
 
+    private void openAddNewContactDialog() {
+        TextButton confirm = new TextButton(langBundle.get("ok"), skin);
+
+        CommonUI.createInputDialog(stage, skin, langBundle.format("addContact"),
+                langBundle.format("enterNewContactName"), friendNameInputTxt, confirm, prefs.getInteger("defaultMaxNameSize", 26));
+
+        confirm.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                boolean valid = isFriendNameTextValid(); // checks if player input is valid
+
+                if(valid) {
+                    GameClient.getInstance().sendCharacterSearchByName(friendNameInputTxt.getText(), "ContactWindow");
+                }
+
+                friendNameInputTxt.setText("");
+            }
+        });
+    }
+
     /**
      * Adds contact to the map and to the label list
      * @param id    the id of the contact to be added
@@ -326,7 +349,13 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
      * @param online if the contact is currently online
      */
     public void addContact(int id, String name, boolean online) {
+        // create contact with the provided info
+        ChatRegister.Writer wr = new ChatRegister.Writer();
+        wr.online = online; wr.id = id; wr.name = name;
+        ChatClient.addContact(wr); // chat client will add contact to local list and send msg to server to save it
 
+        // rebuild contacts list
+        buildContacts(orderByName);
     }
 
     /**
@@ -334,7 +363,11 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
      * @param id    the id of the contact to be removed
      */
     public void removeContact(int id) {
+        // remove contact from local and server storage
+        ChatClient.removeContact(id);
 
+        // rebuild contacts list
+        buildContacts(orderByName);
     }
 
     @Override
@@ -480,6 +513,8 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
     }
 
     public boolean hasFocus() {
+        if(friendNameInputTxt == null) return false;
+
         return friendNameInputTxt.hasKeyboardFocus();
     }
 
@@ -520,11 +555,14 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         Gdx.app.postRunnable(() -> {
             if(propertyChangeEvent.getPropertyName().equals("idByNameRetrieved")) { // received a if by name response
                 GameRegister.CharacterIdRequest response = (GameRegister.CharacterIdRequest) propertyChangeEvent.getNewValue();
-                if(response.requester.equals("OpenChannelWindow")) { // this is a response to this module, act
+                if(response.requester.equals("ContactWindow")) { // this is a response to this module, act
                     if(response.id == -1) { // player not found - does not exist
                         GameScreen.getInstance().showInfo("playerDoesNotExist"); // show invalid length message
                         return;
                     }
+                    // if name input exists
+                    // add contact to local list (if its not there already - addContact will check)
+                    addContact(response.id, response.name, response.online);
                 }
             }
         });

@@ -528,7 +528,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
             public boolean keyDown(InputEvent event, int keycode) {
                 if ( Gdx.app.getType() == Application.ApplicationType.Desktop && contextWindow.getStage()!=null) return false; //context menu is opened
                 if( Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor) return false; // ignore if there is clicking/touching
-                if(chatWindow.hasFocus()) return false; // dont walk if chat window has focus
+                if(outOfFocus()) return false; // dont walk if chat window has focus
 
                 if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) movement.y += 1;
                 else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) movement.y += 1;
@@ -553,7 +553,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                  * NON-MOVEMENT INTERACTIONS
                  */
                 if(keycode == Input.Keys.ESCAPE) {
-                    if(chatWindow.hasFocus())
+                    if(outOfFocus())
                         chatWindow.clearMessageField(false);
                     else if(contextWindow.getStage()!=null)
                         hideContextMenu(); //context menu is opened
@@ -563,8 +563,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
                 if ( Gdx.app.getType() == Application.ApplicationType.Desktop && contextWindow.getStage()!=null) return false; //context menu is opened
 
-                if(keycode == Input.Keys.ENTER) {
-                    if(chatWindow.hasFocus())
+                if(keycode == Input.Keys.ENTER || keycode == Input.Keys.NUMPAD_ENTER) {
+                    if(outOfFocus())
                         chatWindow.sendMessage();
                     else
                         chatWindow.setFocus();
@@ -578,7 +578,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 }
 
                 if(keycode == Input.Keys.TAB && !Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) && !Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {// tab targeting
-                    if(!chatWindow.hasFocus()) {
+                    if(!outOfFocus()) {
                         Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), false);
                         if(nextTarget == null || nextTarget.uId != GameClient.getInstance().getClientUid()) // makes sure to not attack itself
                             GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
@@ -586,7 +586,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 }
 
                 if(keycode == Input.Keys.TAB && Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)  && !Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {// tab targeting in reverse
-                    if(!chatWindow.hasFocus()) {
+                    if(!outOfFocus()) {
                         Entity nextTarget = EntityController.getInstance().getNextTargetEntity(GameClient.getInstance().getClientCharacter().getTarget(), true);
                         if(nextTarget == null || nextTarget.uId != GameClient.getInstance().getClientUid()) // makes sure to not attack itself
                             GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
@@ -594,7 +594,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 }
 
                 if(keycode == Input.Keys.SPACE) {// closest interactive entity targeting
-                    if(!chatWindow.hasFocus()) {
+                    if(!outOfFocus()) {
                         Entity nextTarget = EntityController.getInstance().getNextTargetEntity();
                         if(nextTarget == null || nextTarget.uId != GameClient.getInstance().getClientUid()) // makes sure to not attack itself
                             GameClient.getInstance().getClientCharacter().setTarget(nextTarget);
@@ -642,7 +642,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
                  * MOVEMENT INTERACTIONS
                  */
                 if( Gdx.input.isButtonPressed(Input.Buttons.LEFT) && !onStageActor) return false; // ignore if there is clicking/touching in world
-                if(chatWindow.hasFocus()) return false; // dont walk if chat window has focus
+                if(outOfFocus()) return false; // dont walk if chat window has focus
 
                 if (keycode == Input.Keys.W && !Gdx.input.isKeyPressed(Input.Keys.UP)) movement.y -= 1;
                 else if (keycode == Input.Keys.UP && !Gdx.input.isKeyPressed(Input.Keys.W)) movement.y -= 1;
@@ -745,6 +745,10 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 update();
             }
         },0,GameRegister.clientTickrate());
+    }
+
+    public boolean outOfFocus() {
+        return chatWindow.hasFocus() || contactWindow.hasFocus();
     }
 
     /**

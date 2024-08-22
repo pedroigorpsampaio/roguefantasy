@@ -259,6 +259,7 @@ public class GameRegister {
     public static class CharacterIdRequest {
         public String name;
         public int id;
+        public boolean online;
         public String requester;
     }
 }

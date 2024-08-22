@@ -154,6 +154,7 @@ public class GameServer implements CmdReceiver {
 //                    }
                     // search for id: -1 equals character not found!
                     msg.id = MongoDb.findCharacterIdByName(msg.name); // attribute id to msg
+                    msg.online = loggedIn.containsKey(msg.id);
                     c.sendTCP(msg); // send back to client that requested id
                 }
                 else if (object instanceof GameRegister.Response) {
