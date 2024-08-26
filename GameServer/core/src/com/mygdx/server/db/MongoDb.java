@@ -17,6 +17,7 @@ import org.bson.conversions.Bson;
 import static com.mongodb.client.model.Filters.eq;
 
 import java.io.File;
+import java.util.ArrayList;
 
 /**
  * Class that deals with mongodb stored data including character game data
@@ -24,7 +25,6 @@ import java.io.File;
  * IMPORTANT: Add server host ip to whitelist to be able to access data
  */
 public class MongoDb {
-
     public static class MongoDBConnection {
         private static final String CONNECTION_STRING = "mongodb+srv://pedroigorpsampaio:11zIGd4PkALvWfhz@cluster0.f5gzh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
         private static MongoClient mongoGameClient = null;
@@ -73,6 +73,21 @@ public class MongoDb {
         return doc.getInteger("id");
     }
 
+    public static String findCharacterNameById(int id) {
+        MongoClient mClient = MongoDBConnection.getMongoGameClient();
+        MongoDatabase database = mClient.getDatabase("RFGameData");
+        MongoCollection<Document> charCollection = database.getCollection("characters");
+
+        Document doc = charCollection.find(eq("id", id))
+                .first();
+
+
+        if (doc == null)
+            return null;
+
+        return doc.getString("name");
+    }
+
     public static Component.Character loadCharacter (Component.Character character) {
         MongoClient mClient = MongoDBConnection.getMongoGameClient();
         MongoDatabase database = mClient.getDatabase("RFGameData");
@@ -104,6 +119,7 @@ public class MongoDb {
         character.attr.attackSpeed = doc.getDouble("attack_speed").floatValue();
         character.attr.attack = doc.getDouble("attack").floatValue();
         character.attr.defense = doc.getDouble("defense").floatValue();
+        character.contacts = (ArrayList<Integer>) doc.getList("contacts", Integer.class);
 
 //        character.tag.id = input.readInt();
 //        character.role_level = input.readInt();
@@ -146,7 +162,8 @@ public class MongoDb {
                         .append("height", character.attr.height)
                         .append("attack_speed", character.attr.attackSpeed)
                         .append("attack", character.attr.attack)
-                        .append("defense", character.attr.defense));
+                        .append("defense", character.attr.defense)
+                        .append("contacts", character.contacts));
         UpdateOptions options = new UpdateOptions().upsert(true);
 
         charCollection.updateOne(filter, update, options);

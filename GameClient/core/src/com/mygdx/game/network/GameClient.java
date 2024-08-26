@@ -41,11 +41,12 @@ public class GameClient extends DispatchServer {
     private Client client;
     String name="";
     String host="";
-    private int clientCharId; // this client's char id
+    private int clientCharId = -1; // this client's char id
     private int clientUid; // this client's char uid
     private long avgLatency = 0;
     private ConcurrentLinkedQueue<MoveCharacter> pendingMoves; // will contain a copy of all MoveMessages sent (for server recon.)
     private float updateDelta;
+
     public float getUpdateDelta() {return updateDelta;}
     public boolean isConnected() {return isConnected;}
     private boolean isConnected = false;
@@ -155,7 +156,7 @@ public class GameClient extends DispatchServer {
         new Thread(() -> {
             try {
                 client.connect(15000, host, GameRegister.tcp_port, GameRegister.udp_port);
-                sendTokenAsync(decryptedToken); // login using token received
+                sendTokenAsync(decryptedToken);
             } catch (IOException ex) {
                 ex.printStackTrace();
             }

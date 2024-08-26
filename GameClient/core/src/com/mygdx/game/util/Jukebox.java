@@ -18,7 +18,7 @@ public class Jukebox {
 
     public static void playSound(SoundType type, String identifier) {
         // only play sound effects if client player is alive
-        if(!GameClient.getInstance().getClientCharacter().isAlive)
+        if(GameClient.getInstance().getClientCharacter() == null || !GameClient.getInstance().getClientCharacter().isAlive)
             return;
 
         // builds path to song asset

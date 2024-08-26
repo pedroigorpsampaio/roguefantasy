@@ -213,6 +213,8 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
      * cut communication with server property changes
      */
     public void stopServerListening() {
+        if(this.loginClient == null) return;
+
         // if its listening to login responses, stops listening to it
         if(loginClient.isListening("loginResponse", this))
             loginClient.removeListener("loginResponse", this);
@@ -233,6 +235,11 @@ public class LoginWindow extends GameWindow implements PropertyChangeListener {
         float deltaY = txtFieldOffsetY - MainMenuScreen.chatOffsetY;
         if(deltaY < 0) // keyboard obfuscates
             moveBy(0, -deltaY);
+    }
+
+    @Override
+    public void dispose() {
+        stopServerListening();
     }
 
     @Override

@@ -171,6 +171,11 @@ public class OptionWindow extends GameWindow {
     }
 
     @Override
+    public void dispose() {
+
+    }
+
+    @Override
     public void reloadLanguage() {
 
     }

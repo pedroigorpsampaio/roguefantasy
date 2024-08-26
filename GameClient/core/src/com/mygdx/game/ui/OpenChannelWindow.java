@@ -228,6 +228,8 @@ public class OpenChannelWindow extends GameWindow implements PropertyChangeListe
 
     @Override
     public void stopServerListening() {
+        if(this.listeningClient == null) return;
+
         if(listeningClient.isListening("idByNameRetrieved", this))
             listeningClient.removeListener("idByNameRetrieved", this);
     }
@@ -243,6 +245,11 @@ public class OpenChannelWindow extends GameWindow implements PropertyChangeListe
         float deltaY = txtFieldOffsetY - RogueFantasy.getKeyboardHeight();
         if(deltaY < 0) // keyboard obfuscates
             moveBy(0, -deltaY);
+    }
+
+    @Override
+    public void dispose() {
+        stopServerListening();
     }
 
     @Override

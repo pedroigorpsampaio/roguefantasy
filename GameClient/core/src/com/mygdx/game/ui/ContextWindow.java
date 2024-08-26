@@ -107,6 +107,11 @@ public class ContextWindow extends GameWindow {
     }
 
     @Override
+    public void dispose() {
+
+    }
+
+    @Override
     public void reloadLanguage() {
 
     }

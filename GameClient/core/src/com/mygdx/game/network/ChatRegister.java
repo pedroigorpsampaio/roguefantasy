@@ -38,6 +38,8 @@ public class ChatRegister {
         kryo.register(ConcurrentHashMap.class);
         kryo.register(ContactsRequest.class);
         kryo.register(Comparable.class);
+        kryo.register(AddContact.class);
+        kryo.register(RemoveContact.class);
     }
 
     static public class Writer implements Comparable<Writer> {
@@ -117,5 +119,13 @@ public class ChatRegister {
     public static class ContactsRequest {
         public int requesterId;
         public Map<Integer, Writer> contacts = new ConcurrentHashMap<>();
+    }
+
+    public static class AddContact {
+        public int contactId;
+    }
+
+    public static class RemoveContact {
+        public int contactId;
     }
 }

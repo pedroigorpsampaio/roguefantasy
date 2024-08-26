@@ -98,6 +98,8 @@ public abstract class GameWindow extends Window {
 
     public abstract void softKeyboardOpened();
 
+    public abstract void dispose();
+
     protected void centerInStage() {
         setBounds(stage.getWidth()/2f - this.getWidth()/2f,
                 stage.getHeight()/2f - this.getWidth()/2f,

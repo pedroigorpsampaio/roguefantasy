@@ -1438,6 +1438,8 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
 
     @Override
     public void stopServerListening() {
+        if(this.listeningClient == null) return;
+
         // if its listening to login responses, stops listening to it
         if(listeningClient.isListening("messageReceived", this))
             listeningClient.removeListener("messageReceived", this);

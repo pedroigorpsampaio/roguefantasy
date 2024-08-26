@@ -352,7 +352,7 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         // create contact with the provided info
         ChatRegister.Writer wr = new ChatRegister.Writer();
         wr.online = online; wr.id = id; wr.name = name;
-        ChatClient.addContact(wr); // chat client will add contact to local list and send msg to server to save it
+        ChatClient.getInstance().addContact(wr); // chat client will add contact to local list and send msg to server to save it
 
         // rebuild contacts list
         buildContacts(orderByName);
@@ -364,7 +364,7 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
      */
     public void removeContact(int id) {
         // remove contact from local and server storage
-        ChatClient.removeContact(id);
+        ChatClient.getInstance().removeContact(id);
 
         // rebuild contacts list
         buildContacts(orderByName);
@@ -465,12 +465,15 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
     public void startServerListening(DispatchServer client) {
         this.listeningClient = client;
         // if its not listening to id by name responses, start listening to it
-        if(!client.isListening("idByNameRetrieved", this))
+        if(!client.isListening("idByNameRetrieved", this)) {
             client.addListener("idByNameRetrieved", this);
+        }
     }
 
     @Override
     public void stopServerListening() {
+        if(this.listeningClient == null) return;
+
         if(listeningClient.isListening("idByNameRetrieved", this))
             listeningClient.removeListener("idByNameRetrieved", this);
     }
@@ -486,6 +489,11 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         float deltaY = txtFieldOffsetY - RogueFantasy.getKeyboardHeight();
         if(deltaY < 0) // keyboard obfuscates
             moveBy(0, -deltaY);
+    }
+
+    @Override
+    public void dispose() {
+        stopServerListening();
     }
 
     @Override
@@ -556,6 +564,7 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
             if(propertyChangeEvent.getPropertyName().equals("idByNameRetrieved")) { // received a if by name response
                 GameRegister.CharacterIdRequest response = (GameRegister.CharacterIdRequest) propertyChangeEvent.getNewValue();
                 if(response.requester.equals("ContactWindow")) { // this is a response to this module, act
+                    System.out.println("WTASKOKOA PPPPPP");
                     if(response.id == -1) { // player not found - does not exist
                         GameScreen.getInstance().showInfo("playerDoesNotExist"); // show invalid length message
                         return;

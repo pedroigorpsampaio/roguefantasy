@@ -48,6 +48,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.badlogic.gdx.utils.Timer;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.KnownFonts;
@@ -398,10 +399,12 @@ public class LoadScreen implements Screen {
                     chatClient.connect(); // connects chat client with server
                     gameClient.connect(decryptedToken); // connects gameclient with server
                 }).start();
+
                 while(gameClient.getClientCharacter() == null);
+
                 chatClient.login(gameClient.getClientCharacter()); // send msg to chat server log in correctly in chat
                 chatClient.loadContacts(gameClient.getClientCharacter().id); // loads client contacts
-                while(!chatClient.isContactsLoaded);
+                //while(!chatClient.isContactsLoaded);
                 game.setScreen(gameScreen);
             }
         }));

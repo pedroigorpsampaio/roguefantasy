@@ -128,7 +128,7 @@ public class CommonUI {
         textField.setFocusTraversal(false);
         textField.setMaxLength(textLimit);
 
-        dialog.getContentTable().add(textField).fillX().minWidth(420).padLeft(4).padRight(4).padTop(10).padBottom(1).minHeight(50);
+        dialog.getContentTable().add(textField).fillX().minWidth(420).padLeft(4).padRight(4).padTop(10).padBottom(1).minHeight(36);
 
         dialog.button(confirm);
 //        dialog.key(Input.Keys.ENTER, confirm.getClickListener()).key(Input.Keys.ESCAPE, false);

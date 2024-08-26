@@ -125,6 +125,11 @@ public class InfoWindow extends GameWindow {
     }
 
     @Override
+    public void dispose() {
+
+    }
+
+    @Override
     public void reloadLanguage() {
 
     }

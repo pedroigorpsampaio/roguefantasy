@@ -6,6 +6,7 @@ import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
+import com.mygdx.server.db.MongoDb;
 import com.mygdx.server.entity.Component;
 import com.mygdx.server.entity.WorldMap;
 import com.mygdx.server.ui.CommandDispatcher.CmdReceiver;
@@ -81,6 +82,14 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
                     ChatRegister.ContactsRequest msg = (ChatRegister.ContactsRequest) object;
                     sendContacts(connection, msg.requesterId);
                 }
+                else if(object instanceof ChatRegister.AddContact) {
+                    ChatRegister.AddContact msg = (ChatRegister.AddContact) object;
+                    addContact(connection, msg.contactId);
+                }
+                else if(object instanceof ChatRegister.RemoveContact) {
+                    ChatRegister.RemoveContact msg = (ChatRegister.RemoveContact) object;
+                    removeContact(connection, msg.contactId);
+                }
             }
 
             public void disconnected (Connection c) {
@@ -96,6 +105,38 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
             }
         });
 
+    }
+
+    /**
+     * Removes a contact from user contact list
+     * @param connection    the connection containing information about the user
+     * @param contactId     the contact id to be removed
+     */
+    private void removeContact(CharacterConnection connection, int contactId) {
+        // gets character of requester
+        Component.Character character = GameServer.getInstance().getLoggedCharacter(connection.writer.id);
+
+        // removes contact from contact list
+        character.contacts.remove((Object) contactId);
+
+        // updates mongo db
+        MongoDb.saveCharacter(character);
+    }
+
+    /**
+     * Adds a contact to user contact list
+     * @param connection    the connection containing information about the user
+     * @param contactId     the contact id to be added
+     */
+    private void addContact(CharacterConnection connection, int contactId) {
+        // gets character of requester
+        Component.Character character = GameServer.getInstance().getLoggedCharacter(connection.writer.id);
+
+        // adds contact to contact list and updates mongo db (if not there yet)
+        if(!character.contacts.contains(contactId)) {
+            character.contacts.add(contactId);
+            MongoDb.saveCharacter(character);
+        }
     }
 
     /**
@@ -118,23 +159,33 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
          */
         ChatRegister.ContactsRequest cr = new ChatRegister.ContactsRequest();
 
+        Component.Character character = GameServer.getInstance().getLoggedCharacter(requesterId);
+
         cr.requesterId = requesterId;
 
-        ChatRegister.Writer wr = new ChatRegister.Writer();
-        wr.name = "Rios2a"; wr.id = 18; wr.online = isCharacterOnline(18);
-        cr.contacts.putIfAbsent(18, wr);
+//        ChatRegister.Writer wr = new ChatRegister.Writer();
+//        wr.name = "Rios2a"; wr.id = 18; wr.online = isCharacterOnline(18);
+//        cr.contacts.putIfAbsent(18, wr);
+//
+//        ChatRegister.Writer wr2 = new ChatRegister.Writer();
+//        wr2.name = "Rios"; wr2.id = 12; wr2.online = isCharacterOnline(12);
+//        cr.contacts.putIfAbsent(12, wr2);
+//
+//        ChatRegister.Writer wr3 = new ChatRegister.Writer();
+//        wr3.name = "Endor"; wr3.id = 15; wr3.online = isCharacterOnline(15);
+//        cr.contacts.putIfAbsent(15, wr3);
+//
+//        ChatRegister.Writer wr4 = new ChatRegister.Writer();
+//        wr4.name = "Rydok"; wr4.id = 14; wr4.online = isCharacterOnline(14);
+//        cr.contacts.putIfAbsent(14, wr4);
 
-        ChatRegister.Writer wr2 = new ChatRegister.Writer();
-        wr2.name = "Rios"; wr2.id = 12; wr2.online = isCharacterOnline(12);
-        cr.contacts.putIfAbsent(12, wr2);
-
-        ChatRegister.Writer wr3 = new ChatRegister.Writer();
-        wr3.name = "Endor"; wr3.id = 15; wr3.online = isCharacterOnline(15);
-        cr.contacts.putIfAbsent(15, wr3);
-
-        ChatRegister.Writer wr4 = new ChatRegister.Writer();
-        wr4.name = "Rydok"; wr4.id = 14; wr4.online = isCharacterOnline(14);
-        cr.contacts.putIfAbsent(14, wr4);
+        for(int i = 0; i < character.contacts.size(); i++) {
+            int cId = character.contacts.get(i);
+            String cName = MongoDb.findCharacterNameById(cId);
+            ChatRegister.Writer wr = new ChatRegister.Writer();
+            wr.name = cName; wr.id = cId; wr.online = isCharacterOnline(cId);
+            cr.contacts.putIfAbsent(cId, wr);
+        }
 
         connection.sendTCP(cr);
     }

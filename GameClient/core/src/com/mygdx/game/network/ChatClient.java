@@ -28,7 +28,7 @@ public class ChatClient extends DispatchServer {
      * Adds the contact to local map and and send message to server to store contact server-side
      * @param contact   the contact to be added for this client contacts list
      */
-    public static void addContact(ChatRegister.Writer contact) {
+    public void addContact(ChatRegister.Writer contact) {
         // if contact is already on map, return showing info toast
         if(contacts.containsKey(contact.id)) {
             GameScreen.getInstance().showInfo("contactAlreadyRegistered");
@@ -41,14 +41,21 @@ public class ChatClient extends DispatchServer {
         }
 
         // send contact to be saved server-side
-        // TODO SEND CONTACT TO BE STORED SERVER SIDE TO CURRENT CLIENT
+        ChatRegister.AddContact ac = new ChatRegister.AddContact();
+        ac.contactId = contact.id;
+
+        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+            lagNetwork.send(ac, 1);
+        } else {
+            client.sendTCP(ac);
+        }
     }
 
     /**
      * Removes the contact from local map and and send message to server to remove contact server-side
      * @param id   the id of the contact to be removed from this client contacts list
      */
-    public static void removeContact(int id) {
+    public void removeContact(int id) {
         // if contact is not on list, return (does not need to show toast, player won't input text for contact removal, this should be a bug if it happens)
         if(!contacts.containsKey(id)) {
             Gdx.app.log("contacts", "Error removing contact: contact does not exist in map - " + id);
@@ -61,7 +68,14 @@ public class ChatClient extends DispatchServer {
         }
 
         // send message to exclude contact server-side
-        // TODO SEND CONTACT TO BE STORED SERVER SIDE TO CURRENT CLIENT
+        ChatRegister.RemoveContact rc = new ChatRegister.RemoveContact();
+        rc.contactId = id;
+
+        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+            lagNetwork.send(rc, 1);
+        } else {
+            client.sendTCP(rc);
+        }
     }
 
 
@@ -183,6 +197,8 @@ public class ChatClient extends DispatchServer {
 
     public void logoff() {
         isConnected = false;
+        contacts.clear();
+
         // tell interested listeners that server has lost connection
         listeners.firePropertyChange("lostConnection", null, true);
         new Thread(() -> {

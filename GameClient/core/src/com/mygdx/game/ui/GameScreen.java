@@ -1804,6 +1804,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         projectiles.clear();
         floatingTexts.clear();
         chatWindow.dispose();
+        contactWindow.dispose();
     }
 
 //    public void stopUpdateTimer() {

@@ -279,6 +279,8 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
      * cut communication with server property changes
      */
     public void stopServerListening() {
+        if(this.loginClient == null) return;
+
         // if its listening to registration responses, stops listening to it
         if(loginClient.isListening("registrationResponse", this))
             loginClient.removeListener("registrationResponse", this);
@@ -302,6 +304,11 @@ public class RegisterWindow extends GameWindow implements PropertyChangeListener
             scroller.layout();
             scroller.scrollTo(0, 0, 0, 0);
         }
+    }
+
+    @Override
+    public void dispose() {
+        stopServerListening();
     }
 
     @Override
