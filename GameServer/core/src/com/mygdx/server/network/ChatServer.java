@@ -14,6 +14,7 @@ import com.mygdx.server.ui.CommandDispatcher.Command;
 import com.mygdx.server.network.ChatRegister.Message;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -90,6 +91,10 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
                     ChatRegister.RemoveContact msg = (ChatRegister.RemoveContact) object;
                     removeContact(connection, msg.contactId);
                 }
+                else if(object instanceof ChatRegister.OnlineCheck) {
+                    ChatRegister.OnlineCheck msg = (ChatRegister.OnlineCheck) object;
+                    checkOnlineStatus(connection, msg);
+                }
             }
 
             public void disconnected (Connection c) {
@@ -108,6 +113,18 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
     }
 
     /**
+     * Check if a contact is online at the moment
+     * @param connection    the connection of the requester of the check
+     * @param contactInfo       the contact to be checked
+     */
+    private void checkOnlineStatus(CharacterConnection connection, ChatRegister.OnlineCheck contactInfo) {
+        ChatRegister.OnlineCheck oc = new ChatRegister.OnlineCheck();
+        oc.contactId = contactInfo.contactId; oc.contactName = contactInfo.contactName; oc.online = isCharacterOnline(contactInfo.contactId);
+
+        connection.sendTCP(oc);
+    }
+
+    /**
      * Removes a contact from user contact list
      * @param connection    the connection containing information about the user
      * @param contactId     the contact id to be removed
@@ -121,6 +138,9 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
 
         // updates mongo db
         MongoDb.saveCharacter(character);
+
+        // send confirmation of removal
+        connection.sendTCP(new ChatRegister.Response(ChatRegister.Response.Type.CONTACT_REMOVED));
     }
 
     /**
@@ -136,6 +156,9 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
         if(!character.contacts.contains(contactId)) {
             character.contacts.add(contactId);
             MongoDb.saveCharacter(character);
+
+            // send confirmation of addition
+            connection.sendTCP(new ChatRegister.Response(ChatRegister.Response.Type.CONTACT_ADDED));
         }
     }
 
@@ -178,6 +201,10 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
 //        ChatRegister.Writer wr4 = new ChatRegister.Writer();
 //        wr4.name = "Rydok"; wr4.id = 14; wr4.online = isCharacterOnline(14);
 //        cr.contacts.putIfAbsent(14, wr4);
+
+        if(character.contacts == null) {
+            character.contacts = new ArrayList<>();
+        }
 
         for(int i = 0; i < character.contacts.size(); i++) {
             int cId = character.contacts.get(i);

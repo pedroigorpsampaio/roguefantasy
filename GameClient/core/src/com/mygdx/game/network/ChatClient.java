@@ -117,6 +117,12 @@ public class ChatClient extends DispatchServer {
                         case PLAYER_IS_OFFLINE:
                             GameScreen.getInstance().showInfo("playerIsNotOnline");
                             break;
+                        case CONTACT_ADDED:
+                            listeners.firePropertyChange("contactAdded", null, msg);
+                            break;
+                        case CONTACT_REMOVED:
+                            listeners.firePropertyChange("contactRemoved", null, msg);
+                            break;
                         default:
                             break;
                     }
@@ -124,6 +130,9 @@ public class ChatClient extends DispatchServer {
                     ChatRegister.ContactsRequest msg = (ChatRegister.ContactsRequest) object;
                     contacts = msg.contacts;
                     isContactsLoaded = true;
+                } else if(object instanceof ChatRegister.OnlineCheck) { // someone requested online check
+                    ChatRegister.OnlineCheck msg = (ChatRegister.OnlineCheck) object;
+                    listeners.firePropertyChange("onlineCheck", null, msg);
                 }
             }
 
@@ -234,5 +243,23 @@ public class ChatClient extends DispatchServer {
         cr.requesterId = id;
 
         client.sendTCP(cr);
+    }
+
+    /**
+     * Checks online status - request server info about specific contact
+     * Information will be sent back by server encapsulated on an OnlineCheck object
+     *
+     * @param id        the id of the contact to be checked
+     * @param name      the name of the contact to be checked
+     */
+    public void checkContactStatus(int id, String name) {
+        ChatRegister.OnlineCheck oc = new ChatRegister.OnlineCheck();
+        oc.contactId = id; oc.contactName = name;
+
+        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+            lagNetwork.send(oc, 1);
+        } else {
+            client.sendTCP(oc);
+        }
     }
 }

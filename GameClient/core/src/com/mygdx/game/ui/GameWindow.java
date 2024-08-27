@@ -24,6 +24,9 @@ import com.mygdx.game.network.DispatchServer;
 import com.mygdx.game.network.LoginClient;
 import com.mygdx.game.util.Encoder;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * A class that encapsulates a generic game window
  */
@@ -39,7 +42,7 @@ public abstract class GameWindow extends Window {
     protected I18NBundle langBundle;
     protected LoginClient loginClient;
     protected Encoder encoder;
-    protected DispatchServer listeningClient;
+    protected List<DispatchServer> listeningClients;
     protected Vector2 lastPosition;
     /**
      * Sets the window vars to be properly used in the game stage
@@ -71,6 +74,7 @@ public abstract class GameWindow extends Window {
         prefs = Gdx.app.getPreferences("globalPrefs");
 
         this.lastPosition = null;
+        listeningClients = new ArrayList<>();
     }
 
     /**

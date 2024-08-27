@@ -220,7 +220,7 @@ public class OpenChannelWindow extends GameWindow implements PropertyChangeListe
 
     @Override
     public void startServerListening(DispatchServer client) {
-        this.listeningClient = client;
+        this.listeningClients.add(client);
         // if its not listening to id by name responses, start listening to it
         if(!client.isListening("idByNameRetrieved", this))
             client.addListener("idByNameRetrieved", this);
@@ -228,10 +228,14 @@ public class OpenChannelWindow extends GameWindow implements PropertyChangeListe
 
     @Override
     public void stopServerListening() {
-        if(this.listeningClient == null) return;
+        if(this.listeningClients == null) return;
 
-        if(listeningClient.isListening("idByNameRetrieved", this))
-            listeningClient.removeListener("idByNameRetrieved", this);
+        for(DispatchServer listeningClient : this.listeningClients) {
+            if (listeningClient.isListening("idByNameRetrieved", this))
+                listeningClient.removeListener("idByNameRetrieved", this);
+        }
+
+        listeningClients.clear();
     }
 
     @Override

@@ -40,6 +40,7 @@ public class ChatRegister {
         kryo.register(Comparable.class);
         kryo.register(AddContact.class);
         kryo.register(RemoveContact.class);
+        kryo.register(OnlineCheck.class);
     }
 
     static public class Writer implements Comparable<Writer> {
@@ -58,7 +59,7 @@ public class ChatRegister {
     static public class Response {
         public enum Type{
             PLAYER_IS_OFFLINE,
-            DISCARD, LOGOFF,
+            DISCARD, LOGOFF, CONTACT_ADDED, CONTACT_REMOVED
         }
         public Type type;
         public Response() {this.type = Type.DISCARD;}
@@ -127,5 +128,11 @@ public class ChatRegister {
 
     public static class RemoveContact {
         public int contactId;
+    }
+
+    public static class OnlineCheck {
+        public int contactId;
+        public String contactName;
+        public boolean online;
     }
 }

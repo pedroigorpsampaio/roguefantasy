@@ -909,7 +909,7 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         addContact.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                System.out.println("TODO add by id to contacts list if its not there yet: " + msg.sender);
+                ChatClient.getInstance().checkContactStatus(msg.senderId, msg.sender); // check server response will be treated as a command to add to contact list in GameScreen
                 GameScreen.getInstance().hideContextMenu();
             }
         });
@@ -1430,19 +1430,24 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
 
     @Override
     public void startServerListening(DispatchServer client) {
-        this.listeningClient = client;
+        this.listeningClients.add(client);
         // if its not listening to id by name responses, start listening to it
         if(!client.isListening("messageReceived", this))
             client.addListener("messageReceived", this);
+
     }
 
     @Override
     public void stopServerListening() {
-        if(this.listeningClient == null) return;
+        if(this.listeningClients == null) return;
 
-        // if its listening to login responses, stops listening to it
-        if(listeningClient.isListening("messageReceived", this))
-            listeningClient.removeListener("messageReceived", this);
+        for(DispatchServer listeningClient : this.listeningClients) {
+            // if its listening to login responses, stops listening to it
+            if (listeningClient.isListening("messageReceived", this))
+                listeningClient.removeListener("messageReceived", this);
+        }
+
+        this.listeningClients.clear();
     }
 
     @Override

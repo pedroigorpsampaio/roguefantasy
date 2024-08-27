@@ -43,6 +43,7 @@ import com.badlogic.gdx.utils.I18NBundle;
 import com.badlogic.gdx.utils.Timer;
 import com.github.tommyettinger.textra.Font;
 import com.github.tommyettinger.textra.TypingLabel;
+import com.mygdx.game.network.ChatClient;
 import com.mygdx.game.network.GameClient;
 import com.mygdx.game.network.GameRegister;
 import com.mygdx.game.ui.CommonUI;
@@ -604,7 +605,7 @@ public abstract class Entity implements Comparable<Entity> {
         addContactBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                System.out.println("Implement ADD TO CONTACT LIST");
+                ChatClient.getInstance().checkContactStatus(contextId, entityName); // check server response will be treated as a command to add to contact list in GameScreen
                 GameScreen.getInstance().hideContextMenu();
             }
         });

@@ -731,9 +731,11 @@ public class GameScreen implements Screen, PropertyChangeListener {
 
         Entity.stage = stage;
 
-        // if its not listening to game server responses, start listening to it
+        // if its not listening to server responses, start listening to it
         if(!gameClient.isListening(this))
             gameClient.addListener(this);
+        if(!chatClient.isListening(this))
+            chatClient.addListener(this);
 
         new GameController(); // binds game controller interactions
 
@@ -904,6 +906,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
     public ChatWindow getChatWindow() {
         return chatWindow;
     }
+
+    public ContactWindow getContactWindow() {return contactWindow;}
 
     public static Stage getStage() {
         return stage;
@@ -1805,6 +1809,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         floatingTexts.clear();
         chatWindow.dispose();
         contactWindow.dispose();
+        gameClient.removeListener(this);
+        chatClient.removeListener(this);
     }
 
 //    public void stopUpdateTimer() {
@@ -1825,6 +1831,9 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 // stops update timer
                 updateTimer.stop();
                 dispose();
+            } else if(propertyChangeEvent.getPropertyName().equals("onlineCheck")) { // someone requested the response if contact to be added is online - add contact with correct status
+                ChatRegister.OnlineCheck oc = (ChatRegister.OnlineCheck) propertyChangeEvent.getNewValue();
+                GameScreen.getInstance().getContactWindow().addContact(oc.contactId, oc.contactName, oc.online);
             }
         });
     }

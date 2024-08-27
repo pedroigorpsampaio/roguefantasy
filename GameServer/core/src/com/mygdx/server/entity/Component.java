@@ -123,13 +123,9 @@ public class Component {
         public Target target = new Target(); // player current target
         public AoIEntities aoIEntities = new AoIEntities(); // current AoI entities of player (last game state)
         public int avgLatency = 0; // average latency of this player
-        public ArrayList<Integer> contacts; // contacts of this character
+        public ArrayList<Integer> contacts = new ArrayList<>(); // contacts of this character
         protected Timer interactionTimer=new Timer(); // timer that controls the interaction of this character
         //public boolean isInteracting = false; // flag that controls if this character is interacting at any given time
-
-        public Character() {
-            contacts = new ArrayList<>();
-        }
 
         /**
          * Prepares character data to be sent to clients with

@@ -452,6 +452,7 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         new ContactWindowController();
 
         startServerListening(GameClient.getInstance());
+        startServerListening(ChatClient.getInstance());
 
         // builds initial contacts list (will use chat loaded contacts from server)
         buildContacts(orderByName);
@@ -463,19 +464,33 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
 
     @Override
     public void startServerListening(DispatchServer client) {
-        this.listeningClient = client;
-        // if its not listening to id by name responses, start listening to it
+        this.listeningClients.add(client);
+        // if its not listening to responses, start listening to it
         if(!client.isListening("idByNameRetrieved", this)) {
             client.addListener("idByNameRetrieved", this);
+        }
+        if(!client.isListening("contactAdded", this)) {
+            client.addListener("contactAdded", this);
+        }
+        if(!client.isListening("contactRemoved", this)) {
+            client.addListener("contactRemoved", this);
         }
     }
 
     @Override
     public void stopServerListening() {
-        if(this.listeningClient == null) return;
+        if(this.listeningClients == null) return;
 
-        if(listeningClient.isListening("idByNameRetrieved", this))
-            listeningClient.removeListener("idByNameRetrieved", this);
+        for(DispatchServer listeningClient : this.listeningClients) {
+            if (listeningClient.isListening("idByNameRetrieved", this))
+                listeningClient.removeListener("idByNameRetrieved", this);
+            if (listeningClient.isListening("contactAdded", this))
+                listeningClient.removeListener("contactAdded", this);
+            if (listeningClient.isListening("contactRemoved", this))
+                listeningClient.removeListener("contactRemoved", this);
+        }
+
+        this.listeningClients.clear();
     }
 
     @Override
@@ -564,7 +579,6 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
             if(propertyChangeEvent.getPropertyName().equals("idByNameRetrieved")) { // received a if by name response
                 GameRegister.CharacterIdRequest response = (GameRegister.CharacterIdRequest) propertyChangeEvent.getNewValue();
                 if(response.requester.equals("ContactWindow")) { // this is a response to this module, act
-                    System.out.println("WTASKOKOA PPPPPP");
                     if(response.id == -1) { // player not found - does not exist
                         GameScreen.getInstance().showInfo("playerDoesNotExist"); // show invalid length message
                         return;
@@ -573,6 +587,12 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
                     // add contact to local list (if its not there already - addContact will check)
                     addContact(response.id, response.name, response.online);
                 }
+            }
+            else if(propertyChangeEvent.getPropertyName().equals("contactAdded")) { // received a confirmation of player addition
+                GameScreen.getInstance().showInfo("contactAdded"); // show contact added toast
+            }
+            else if(propertyChangeEvent.getPropertyName().equals("contactRemoved")) { // received a confirmation of player removal
+                GameScreen.getInstance().showInfo("contactRemoved"); // show contact removed toast
             }
         });
     }
