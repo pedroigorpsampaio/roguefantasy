@@ -88,6 +88,20 @@ public class MongoDb {
         return doc.getString("name");
     }
 
+    public static ArrayList<Integer> getContactsFromId(int id) {
+        MongoClient mClient = MongoDBConnection.getMongoGameClient();
+        MongoDatabase database = mClient.getDatabase("RFGameData");
+        MongoCollection<Document> charCollection = database.getCollection("characters");
+
+        Document doc = charCollection.find(eq("id", id))
+                .first();
+
+        if (doc == null)
+            return null;
+
+        return (ArrayList<Integer>) doc.getList("contacts", Integer.class);
+    }
+
     public static Component.Character loadCharacter (Component.Character character) {
         MongoClient mClient = MongoDBConnection.getMongoGameClient();
         MongoDatabase database = mClient.getDatabase("RFGameData");

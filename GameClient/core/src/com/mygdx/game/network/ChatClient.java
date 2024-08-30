@@ -37,13 +37,15 @@ public class ChatClient extends DispatchServer {
 
         // add to the local list (if not there yet)
         synchronized (contacts) {
-            contacts.put(contact.id, contact);
+            if(contacts.size() < ChatRegister.MAX_NUM_CONTACTS) // only add if its not full client-side
+                contacts.put(contact.id, contact);
         }
 
         // send contact to be saved server-side
         ChatRegister.AddContact ac = new ChatRegister.AddContact();
         ac.contactId = contact.id;
 
+        // if its full, server-side will send a full contact list response
         if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
             lagNetwork.send(ac, 1);
         } else {
@@ -122,6 +124,9 @@ public class ChatClient extends DispatchServer {
                             break;
                         case CONTACT_REMOVED:
                             listeners.firePropertyChange("contactRemoved", null, msg);
+                            break;
+                        case FULL_CONTACT_LIST:
+                            listeners.firePropertyChange("fullContactList", null, msg);
                             break;
                         default:
                             break;

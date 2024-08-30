@@ -60,7 +60,7 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
                     connection.writer.id = msg.id;
                     connection.writer.name = msg.name;
                     loggedIn.putIfAbsent(msg.id, connection);
-                    warnContacts(msg.id, true); // "warn" clients that has this client as contact of online status
+                    warnContacts(msg.id, msg.name, true); // "warn" clients that has this client as contact of online status
                 }
                 else if(object instanceof ChatRegister.Response) {
                     ChatRegister.Response msg = (ChatRegister.Response) object;
@@ -101,7 +101,7 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
                 CharacterConnection connection = (CharacterConnection)c;
                 synchronized (loggedIn) {
                     loggedIn.remove(connection.writer.id); // remove from logged in list
-                    warnContacts(connection.writer.id, false); // "warn" clients that has this client as contact of online status
+                    warnContacts(connection.writer.id, connection.writer.name, false); // "warn" clients that has this client as contact of online status
                     //remove from registry
                     helpRegistry.remove(connection.writer.id);
                     worldRegistry.remove(connection.writer.id);
@@ -152,6 +152,12 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
         // gets character of requester
         Component.Character character = GameServer.getInstance().getLoggedCharacter(connection.writer.id);
 
+        // if contact is full send full contact response and return not adding new contact
+        if(character.contacts.size() >= ChatRegister.MAX_NUM_CONTACTS) {
+            connection.sendTCP(new ChatRegister.Response(ChatRegister.Response.Type.FULL_CONTACT_LIST));
+            return;
+        }
+
         // adds contact to contact list and updates mongo db (if not there yet)
         if(!character.contacts.contains(contactId)) {
             character.contacts.add(contactId);
@@ -164,11 +170,28 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
 
     /**
      * Warns online players that have "id" character as contact of a change of online status
-     * @param id        the id of the character that had a change of online status
-     * @param online    the online status to update interested players
+     *
+     * @param id     the id of the character that had a change of online status
+     * @param name   the name of the character that had a change of online status
+     * @param online the online status to update interested players
      */
-    private void warnContacts(int id, boolean online) {
-        // TODO WARN CONTACTS THAT IS ONLINE/OFFLINE - QUERY EACH LOGGED PLAYER TO SEE IF IT HAS ID AS CONTACT
+    private void warnContacts(int id, String name, boolean online) {
+        ChatRegister.OnlineCheck oc = new ChatRegister.OnlineCheck();
+        oc.contactId = id; oc.contactName = name; oc.online = online;
+
+        // iterates through every online client in chat server and warn them if its a contact
+        synchronized (loggedIn) {
+            Iterator<Map.Entry<Integer, ChatServer.CharacterConnection>> iterator = loggedIn.entrySet().iterator();
+            while (iterator.hasNext()) {
+                ChatServer.CharacterConnection chatUser = iterator.next().getValue();
+                ArrayList<Integer> contacts = MongoDb.getContactsFromId(chatUser.writer.id);
+
+                if(contacts == null || contacts.size() == 0) continue; // user has no contacts, continue
+                // if it has contacts
+                if(contacts.contains(id)) // if it contains said contact, warn user of new status
+                    chatUser.sendTCP(oc);
+            }
+        }
     }
 
     /**
@@ -177,30 +200,11 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
      * @param requesterId   the requester id
      */
     private void sendContacts(CharacterConnection connection, int requesterId) {
-        /**
-         * TODO - STORE AND LOAD CONTACTS IN MONGO DB (FOR EACH CHAR, LIST OF IDS:NAMES? or JUST IDS)
-         */
         ChatRegister.ContactsRequest cr = new ChatRegister.ContactsRequest();
 
         Component.Character character = GameServer.getInstance().getLoggedCharacter(requesterId);
 
         cr.requesterId = requesterId;
-
-//        ChatRegister.Writer wr = new ChatRegister.Writer();
-//        wr.name = "Rios2a"; wr.id = 18; wr.online = isCharacterOnline(18);
-//        cr.contacts.putIfAbsent(18, wr);
-//
-//        ChatRegister.Writer wr2 = new ChatRegister.Writer();
-//        wr2.name = "Rios"; wr2.id = 12; wr2.online = isCharacterOnline(12);
-//        cr.contacts.putIfAbsent(12, wr2);
-//
-//        ChatRegister.Writer wr3 = new ChatRegister.Writer();
-//        wr3.name = "Endor"; wr3.id = 15; wr3.online = isCharacterOnline(15);
-//        cr.contacts.putIfAbsent(15, wr3);
-//
-//        ChatRegister.Writer wr4 = new ChatRegister.Writer();
-//        wr4.name = "Rydok"; wr4.id = 14; wr4.online = isCharacterOnline(14);
-//        cr.contacts.putIfAbsent(14, wr4);
 
         if(character.contacts == null) {
             character.contacts = new ArrayList<>();

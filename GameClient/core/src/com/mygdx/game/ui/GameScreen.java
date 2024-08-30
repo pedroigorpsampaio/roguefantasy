@@ -793,7 +793,7 @@ public class GameScreen implements Screen, PropertyChangeListener {
         String info = "";
 
         if(arg instanceof Integer)
-            info = langBundle.format(langKey, (int)arg);
+            info = langBundle.format(langKey, (Integer) arg);
         else if(arg instanceof String)
             info = langBundle.format(langKey, (String)arg);
 
@@ -807,6 +807,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
         infoToast.label.setVisible(true);
         infoToast.langKey = langKey;
         infoToast.arg0 = arg;
+
+        stage.addActor(infoToast.label);
 
         float lifeTime = 1f + info.length() * 1/24f;
 
@@ -1192,12 +1194,14 @@ public class GameScreen implements Screen, PropertyChangeListener {
                     chatOffsetY = RogueFantasy.getKeyboardHeight();
                     openKeyboard = true;
                     openChannelWindow.softKeyboardOpened();
+                    contactWindow.softKeyboardOpened();
                 }
             } else {
                 //chatOffsetY = 0;
                 if(openKeyboard) { // keyboard just closed
                     openKeyboard = false;
                     openChannelWindow.softKeyboardClosed();
+                    contactWindow.softKeyboardClosed();
                 }
             }
         }
@@ -1831,9 +1835,12 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 // stops update timer
                 updateTimer.stop();
                 dispose();
-            } else if(propertyChangeEvent.getPropertyName().equals("onlineCheck")) { // someone requested the response if contact to be added is online - add contact with correct status
+            } else if(propertyChangeEvent.getPropertyName().equals("onlineCheck")) { // someone requested the response if contact is online or a contact has changed its status
                 ChatRegister.OnlineCheck oc = (ChatRegister.OnlineCheck) propertyChangeEvent.getNewValue();
-                GameScreen.getInstance().getContactWindow().addContact(oc.contactId, oc.contactName, oc.online);
+                if(!chatClient.contacts.containsKey(oc.contactId)) // add contact with correct status if not there yet
+                    getContactWindow().addContact(oc.contactId, oc.contactName, oc.online);
+                else // else update contact status
+                    getContactWindow().updateContact(oc.contactId, oc.contactName, oc.online);
             }
         });
     }

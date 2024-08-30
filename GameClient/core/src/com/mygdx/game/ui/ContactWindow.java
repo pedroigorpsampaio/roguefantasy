@@ -61,6 +61,7 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
     private float originalY;
     private boolean orderByName = false;
     private boolean labelClicked = false;
+    private Dialog inputDialog;
 
     /**
      * Builds the option window, to be used as an actor in any screen
@@ -79,13 +80,31 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
 
     static <K,V extends Comparable<? super V>> SortedSet<Map.Entry<K,V>> entriesSortedByNames(Map<K,V> map) {
         SortedSet<Map.Entry<K,V>> sortedEntries = new TreeSet<Map.Entry<K,V>>(
-                new Comparator<Map.Entry<K,V>>() {
-                    @Override public int compare(Map.Entry<K,V> e1, Map.Entry<K,V> e2) {
-                        ChatRegister.Writer s1 = (ChatRegister.Writer) e1.getValue();
-                        ChatRegister.Writer s2 = (ChatRegister.Writer) e2.getValue();
+                (e1, e2) -> {
+                    ChatRegister.Writer s1 = (ChatRegister.Writer) e1.getValue();
+                    ChatRegister.Writer s2 = (ChatRegister.Writer) e2.getValue();
 
+                    return s1.compareTo(s2);
+                }
+        );
+        sortedEntries.addAll(map.entrySet());
+        return sortedEntries;
+    }
+
+    static <K,V extends Comparable<? super V>> SortedSet<Map.Entry<K,V>> entriesSortedByStatus(Map<K,V> map) {
+        SortedSet<Map.Entry<K,V>> sortedEntries = new TreeSet<Map.Entry<K,V>>(
+                (e1, e2) -> {
+                    ChatRegister.Writer s1 = (ChatRegister.Writer) e1.getValue();
+                    ChatRegister.Writer s2 = (ChatRegister.Writer) e2.getValue();
+
+                    if(s1.online && s2.online)
                         return s1.compareTo(s2);
-                    }
+                    else if(s1.online)
+                        return -1;
+                    else if(s2.online)
+                        return 1;
+                    else
+                        return s1.compareTo(s2);
                 }
         );
         sortedEntries.addAll(map.entrySet());
@@ -104,7 +123,12 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
 
         int count = 0;
         synchronized (ChatClient.contacts) {
-            for (Map.Entry<Integer, ChatRegister.Writer> entry : entriesSortedByNames(ChatClient.contacts)) {
+            SortedSet<Map.Entry<Integer, ChatRegister.Writer>> orderedEntries = null;
+            if(orderByName)
+                orderedEntries = entriesSortedByNames(ChatClient.contacts);
+            else
+                orderedEntries = entriesSortedByStatus(ChatClient.contacts);
+            for (Map.Entry<Integer, ChatRegister.Writer> entry : orderedEntries) {
                 ChatRegister.Writer contact = entry.getValue();
 
                 TypingLabel label = new TypingLabel(contact.name, skin);
@@ -325,7 +349,7 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
     private void openAddNewContactDialog() {
         TextButton confirm = new TextButton(langBundle.get("ok"), skin);
 
-        CommonUI.createInputDialog(stage, skin, langBundle.format("addContact"),
+        this.inputDialog = CommonUI.createInputDialog(stage, skin, langBundle.format("addContact"),
                 langBundle.format("enterNewContactName"), friendNameInputTxt, confirm, prefs.getInteger("defaultMaxNameSize", 26));
 
         confirm.addListener(new ChangeListener() {
@@ -343,6 +367,30 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
     }
 
     /**
+     * Updates the info of a contact
+     * @param id        the id of the contact to be updated
+     * @param name      the name of the contact to be updated
+     * @param online    the online status of the contact to be updated
+     */
+    public void updateContact(int id, String name, boolean online) {
+        if(!ChatClient.contacts.containsKey(id)) {
+            Gdx.app.log("contacts", "Can't update non-existing contact");
+            return;
+        }
+
+        ChatRegister.Writer wr = new ChatRegister.Writer();
+        wr.online = online; wr.id = id; wr.name = name;
+
+        // updates it
+        synchronized (ChatClient.contacts) {
+            ChatClient.contacts.put(id, wr);
+        }
+
+        // rebuild contacts list
+        buildContacts(orderByName);
+    }
+
+    /**
      * Adds contact to the map and to the label list
      * @param id    the id of the contact to be added
      * @param name  the name of the contact to be added
@@ -352,6 +400,7 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         // create contact with the provided info
         ChatRegister.Writer wr = new ChatRegister.Writer();
         wr.online = online; wr.id = id; wr.name = name;
+
         ChatClient.getInstance().addContact(wr); // chat client will add contact to local list and send msg to server to save it
 
         // rebuild contacts list
@@ -475,6 +524,9 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         if(!client.isListening("contactRemoved", this)) {
             client.addListener("contactRemoved", this);
         }
+        if(!client.isListening("fullContactList", this)) {
+            client.addListener("fullContactList", this);
+        }
     }
 
     @Override
@@ -488,6 +540,8 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
                 listeningClient.removeListener("contactAdded", this);
             if (listeningClient.isListening("contactRemoved", this))
                 listeningClient.removeListener("contactRemoved", this);
+            if (listeningClient.isListening("fullContactList", this))
+                listeningClient.removeListener("fullContactList", this);
         }
 
         this.listeningClients.clear();
@@ -495,15 +549,23 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
 
     @Override
     public void softKeyboardClosed() {
-        this.setY(originalY);
+//        if(inputDialog != null)
+//            inputDialog.setY(originalY);
+        if(inputDialog != null) {
+            float deltaY = txtFieldOffsetY - MainMenuScreen.chatOffsetY;
+            if(deltaY < 0) // keyboard obfuscates
+                inputDialog.moveBy(0, deltaY);
+        }
     }
 
     @Override
     public void softKeyboardOpened() {
-        originalY = getY();
-        float deltaY = txtFieldOffsetY - RogueFantasy.getKeyboardHeight();
-        if(deltaY < 0) // keyboard obfuscates
-            moveBy(0, -deltaY);
+        if(inputDialog != null) {
+            originalY = getY();
+            float deltaY = txtFieldOffsetY - RogueFantasy.getKeyboardHeight();
+            if (deltaY < 0) // keyboard obfuscates
+                inputDialog.moveBy(0, -deltaY);
+        }
     }
 
     @Override
@@ -594,6 +656,9 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
             else if(propertyChangeEvent.getPropertyName().equals("contactRemoved")) { // received a confirmation of player removal
                 GameScreen.getInstance().showInfo("contactRemoved"); // show contact removed toast
             }
+            else if(propertyChangeEvent.getPropertyName().equals("fullContactList")) { // received a full contact list response, inform player
+                GameScreen.getInstance().showInfo("fullContactList", ChatRegister.MAX_NUM_CONTACTS);
+            }
         });
     }
 
@@ -612,11 +677,14 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
             friendNameInputTxt.addListener(new InputListener() {
                 @Override
                 public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
-                    if(Gdx.app.getType() == Application.ApplicationType.Android && !RogueFantasy.isKeyboardShowing())
-                        txtFieldOffsetY = friendNameInputTxt.getY();
+                    if(Gdx.app.getType() == Application.ApplicationType.Android && !RogueFantasy.isKeyboardShowing()) {
+                        if(inputDialog != null)
+                            txtFieldOffsetY = inputDialog.getY();
+                    }
                     return false;
                 }
             });
+
         }
     }
 }

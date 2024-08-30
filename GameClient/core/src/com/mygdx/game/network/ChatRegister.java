@@ -18,6 +18,7 @@ public class ChatRegister {
 
     static public final int port = 43574; // LOGIN SERVER PORT (ONLY TCP FOR LOGIN SERVER)
     public static final int MESSAGE_REGISTRY_CHANNEL_COOLDOWN = 11;
+    public static final int MAX_NUM_CONTACTS = 30;
 
     /**
      * Registers objects that are going to be sent over the network
@@ -59,7 +60,7 @@ public class ChatRegister {
     static public class Response {
         public enum Type{
             PLAYER_IS_OFFLINE,
-            DISCARD, LOGOFF, CONTACT_ADDED, CONTACT_REMOVED
+            DISCARD, LOGOFF, CONTACT_ADDED, FULL_CONTACT_LIST, CONTACT_REMOVED
         }
         public Type type;
         public Response() {this.type = Type.DISCARD;}
