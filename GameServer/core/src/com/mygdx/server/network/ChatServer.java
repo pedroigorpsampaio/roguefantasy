@@ -91,6 +91,14 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
                     ChatRegister.RemoveContact msg = (ChatRegister.RemoveContact) object;
                     removeContact(connection, msg.contactId);
                 }
+                else if(object instanceof ChatRegister.AddIgnore) {
+                    ChatRegister.AddIgnore msg = (ChatRegister.AddIgnore) object;
+                    addToIgnoreList(connection, msg.contactId);
+                }
+                else if(object instanceof ChatRegister.RemoveIgnore) {
+                    ChatRegister.RemoveIgnore msg = (ChatRegister.RemoveIgnore) object;
+                    removeFromIgnoreList(connection, msg.contactId);
+                }
                 else if(object instanceof ChatRegister.OnlineCheck) {
                     ChatRegister.OnlineCheck msg = (ChatRegister.OnlineCheck) object;
                     checkOnlineStatus(connection, msg);
@@ -122,6 +130,50 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
         oc.contactId = contactInfo.contactId; oc.contactName = contactInfo.contactName; oc.online = isCharacterOnline(contactInfo.contactId);
 
         connection.sendTCP(oc);
+    }
+
+    /**
+     * Removes a contact from user ignore list
+     * @param connection    the connection containing information about the user
+     * @param contactId     the contact id to be removed from ignore list
+     */
+    private void removeFromIgnoreList(CharacterConnection connection, int contactId) {
+        // gets character of requester
+        Component.Character character = GameServer.getInstance().getLoggedCharacter(connection.writer.id);
+
+        // removes contact from contact list
+        character.ignoreList.remove((Object) contactId);
+
+        // updates mongo db
+        MongoDb.saveCharacter(character);
+
+        // send confirmation of removal
+        connection.sendTCP(new ChatRegister.Response(ChatRegister.Response.Type.CONTACT_REMOVED_FROM_IGNORE_LIST));
+    }
+
+    /**
+     * Adds a contact to user ignore list
+     * @param connection    the connection containing information about the user
+     * @param contactId     the contact id to be added to ignore list
+     */
+    private void addToIgnoreList(CharacterConnection connection, int contactId) {
+        // gets character of requester
+        Component.Character character = GameServer.getInstance().getLoggedCharacter(connection.writer.id);
+
+        // if contact is full send full contact response and return not adding new contact
+        if(character.ignoreList.size() >= ChatRegister.MAX_NUM_IGNORE_LIST) {
+            connection.sendTCP(new ChatRegister.Response(ChatRegister.Response.Type.FULL_IGNORE_LIST));
+            return;
+        }
+
+        // adds contact to contact list and updates mongo db (if not there yet)
+        if(!character.ignoreList.contains(contactId)) {
+            character.ignoreList.add(contactId);
+            MongoDb.saveCharacter(character);
+
+            // send confirmation of addition
+            connection.sendTCP(new ChatRegister.Response(ChatRegister.Response.Type.CONTACT_ADDED_TO_IGNORE_LIST));
+        }
     }
 
     /**
@@ -195,7 +247,7 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
     }
 
     /**
-     * Sends current stored contacts of the requester to the requester
+     * Sends current stored contacts and ignore list of the requester to the requester
      * @param connection    the requester connection
      * @param requesterId   the requester id
      */
@@ -210,12 +262,24 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
             character.contacts = new ArrayList<>();
         }
 
+        if(character.ignoreList == null) {
+            character.ignoreList = new ArrayList<>();
+        }
+
         for(int i = 0; i < character.contacts.size(); i++) {
             int cId = character.contacts.get(i);
             String cName = MongoDb.findCharacterNameById(cId);
             ChatRegister.Writer wr = new ChatRegister.Writer();
             wr.name = cName; wr.id = cId; wr.online = isCharacterOnline(cId);
             cr.contacts.putIfAbsent(cId, wr);
+        }
+
+        for(int i = 0; i < character.ignoreList.size(); i++) {
+            int cId = character.ignoreList.get(i);
+            String cName = MongoDb.findCharacterNameById(cId);
+            ChatRegister.Writer wr = new ChatRegister.Writer();
+            wr.name = cName; wr.id = cId; wr.online = isCharacterOnline(cId);
+            cr.ignoreList.putIfAbsent(cId, wr);
         }
 
         connection.sendTCP(cr);

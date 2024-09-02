@@ -391,6 +391,36 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
     }
 
     /**
+     * Adds contact to the ignore list
+     * @param id    the id of the contact to be added
+     * @param name  the name of the contact to be added
+     * @param online if the contact is currently online
+     */
+    public void ignoreContact(int id, String name, boolean online) {
+        // create contact with the provided info
+        ChatRegister.Writer wr = new ChatRegister.Writer();
+        wr.online = online; wr.id = id; wr.name = name;
+
+        ChatClient.getInstance().addToIgnoreList(wr); // chat client will add contact to local list and send msg to server to save it
+
+        // rebuild contacts list
+        buildContacts(orderByName);
+    }
+
+    /**
+     * Removes contact from ignore map and from ignore label list
+     * @param id    the id of the contact to be removed
+     */
+    public void removeIgnore(int id) {
+        // remove contact from local and server storage
+        ChatClient.getInstance().removeFromIgnoreList(id);
+
+        // rebuild contacts list
+        buildContacts(orderByName);
+    }
+
+
+    /**
      * Adds contact to the map and to the label list
      * @param id    the id of the contact to be added
      * @param name  the name of the contact to be added
@@ -527,6 +557,15 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         if(!client.isListening("fullContactList", this)) {
             client.addListener("fullContactList", this);
         }
+        if(!client.isListening("contactAddedToIgnoreList", this)) {
+            client.addListener("contactAddedToIgnoreList", this);
+        }
+        if(!client.isListening("contactRemovedFromIgnoreList", this)) {
+            client.addListener("contactRemovedFromIgnoreList", this);
+        }
+        if(!client.isListening("fullIgnoreList", this)) {
+            client.addListener("fullIgnoreList", this);
+        }
     }
 
     @Override
@@ -542,6 +581,12 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
                 listeningClient.removeListener("contactRemoved", this);
             if (listeningClient.isListening("fullContactList", this))
                 listeningClient.removeListener("fullContactList", this);
+            if (listeningClient.isListening("contactAddedToIgnoreList", this))
+                listeningClient.removeListener("contactAddedToIgnoreList", this);
+            if (listeningClient.isListening("contactRemovedFromIgnoreList", this))
+                listeningClient.removeListener("contactRemovedFromIgnoreList", this);
+            if (listeningClient.isListening("fullIgnoreList", this))
+                listeningClient.removeListener("fullIgnoreList", this);
         }
 
         this.listeningClients.clear();
@@ -658,6 +703,15 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
             }
             else if(propertyChangeEvent.getPropertyName().equals("fullContactList")) { // received a full contact list response, inform player
                 GameScreen.getInstance().showInfo("fullContactList", ChatRegister.MAX_NUM_CONTACTS);
+            }
+            else if(propertyChangeEvent.getPropertyName().equals("contactAddedToIgnoreList")) { // received a confirmation of player ignore addition
+                GameScreen.getInstance().showInfo("contactAddedToIgnoreList"); // show contact added to ignore list toast
+            }
+            else if(propertyChangeEvent.getPropertyName().equals("contactRemovedFromIgnoreList")) { // received a confirmation of player ignore removal
+                GameScreen.getInstance().showInfo("contactRemovedFromIgnoreList"); // show contact removed from ingore list toast
+            }
+            else if(propertyChangeEvent.getPropertyName().equals("fullIgnoreList")) { // received a full ignore list response, inform player
+                GameScreen.getInstance().showInfo("fullIgnoreList", ChatRegister.MAX_NUM_IGNORE_LIST);
             }
         });
     }

@@ -134,6 +134,7 @@ public class MongoDb {
         character.attr.attack = doc.getDouble("attack").floatValue();
         character.attr.defense = doc.getDouble("defense").floatValue();
         character.contacts = (ArrayList<Integer>) doc.getList("contacts", Integer.class);
+        character.ignoreList = (ArrayList<Integer>) doc.getList("ignore_list", Integer.class);
 
 //        character.tag.id = input.readInt();
 //        character.role_level = input.readInt();
@@ -177,7 +178,8 @@ public class MongoDb {
                         .append("attack_speed", character.attr.attackSpeed)
                         .append("attack", character.attr.attack)
                         .append("defense", character.attr.defense)
-                        .append("contacts", character.contacts));
+                        .append("contacts", character.contacts)
+                        .append("ignore_list", character.ignoreList));
         UpdateOptions options = new UpdateOptions().upsert(true);
 
         charCollection.updateOne(filter, update, options);

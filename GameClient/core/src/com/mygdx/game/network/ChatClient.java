@@ -23,6 +23,7 @@ public class ChatClient extends DispatchServer {
     private LagNetwork lagNetwork;
 
     public static Map<Integer, ChatRegister.Writer> contacts = new ConcurrentHashMap<>(); // contacts of this client
+    public static Map<Integer, ChatRegister.Writer> ignoreList = new ConcurrentHashMap<>(); // ignore list of this client
 
     /**
      * Adds the contact to local map and and send message to server to store contact server-side
@@ -80,6 +81,61 @@ public class ChatClient extends DispatchServer {
         }
     }
 
+    /**
+     * Adds the ignore to local map and and send message to server to store ignore server-side
+     * @param contact   the contact to be added for this client ignore list
+     */
+    public void addToIgnoreList(ChatRegister.Writer contact) {
+        // if contact is already on map, return showing info toast
+        if(ignoreList.containsKey(contact.id)) {
+            GameScreen.getInstance().showInfo("contactAlreadyIgnored");
+            return;
+        }
+
+        // add to the local list (if not there yet)
+        synchronized (ignoreList) {
+            if(ignoreList.size() < ChatRegister.MAX_NUM_IGNORE_LIST) // only add if its not full client-side
+                ignoreList.put(contact.id, contact);
+        }
+
+        // send contact to be saved server-side
+        ChatRegister.AddIgnore ai = new ChatRegister.AddIgnore();
+        ai.contactId = contact.id;
+
+        // if its full, server-side will send a full contact list response
+        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+            lagNetwork.send(ai, 1);
+        } else {
+            client.sendTCP(ai);
+        }
+    }
+
+    /**
+     * Removes the ignore from local map and and send message to server to remove ignore server-side
+     * @param id   the id of the contact to be removed from this client ignore list
+     */
+    public void removeFromIgnoreList(int id) {
+        // if contact is not on list, return (does not need to show toast, player won't input text for contact removal, this should be a bug if it happens)
+        if(!ignoreList.containsKey(id)) {
+            Gdx.app.log("ignore_list", "Error removing contact: contact does not exist in ignore list map - " + id);
+            return;
+        }
+
+        // remove from the local list
+        synchronized (ignoreList) {
+            ignoreList.remove(id);
+        }
+
+        // send message to exclude contact server-side
+        ChatRegister.RemoveIgnore ri = new ChatRegister.RemoveIgnore();
+        ri.contactId = id;
+
+        if(lagNetwork != null && GameRegister.lagSimulation) { // send with simulated lag
+            lagNetwork.send(ri, 1);
+        } else {
+            client.sendTCP(ri);
+        }
+    }
 
     public boolean isConnected() {return isConnected;}
     private boolean isConnected = false;
@@ -128,12 +184,22 @@ public class ChatClient extends DispatchServer {
                         case FULL_CONTACT_LIST:
                             listeners.firePropertyChange("fullContactList", null, msg);
                             break;
+                        case CONTACT_ADDED_TO_IGNORE_LIST:
+                            listeners.firePropertyChange("contactAddedToIgnoreList", null, msg);
+                            break;
+                        case CONTACT_REMOVED_FROM_IGNORE_LIST:
+                            listeners.firePropertyChange("contactRemovedFromIgnoreList", null, msg);
+                            break;
+                        case FULL_IGNORE_LIST:
+                            listeners.firePropertyChange("fullIgnoreList", null, msg);
+                            break;
                         default:
                             break;
                     }
                 } else if(object instanceof ChatRegister.ContactsRequest) {
                     ChatRegister.ContactsRequest msg = (ChatRegister.ContactsRequest) object;
                     contacts = msg.contacts;
+                    ignoreList = msg.ignoreList;
                     isContactsLoaded = true;
                 } else if(object instanceof ChatRegister.OnlineCheck) { // someone requested online check
                     ChatRegister.OnlineCheck msg = (ChatRegister.OnlineCheck) object;
@@ -212,6 +278,7 @@ public class ChatClient extends DispatchServer {
     public void logoff() {
         isConnected = false;
         contacts.clear();
+        ignoreList.clear();
 
         // tell interested listeners that server has lost connection
         listeners.firePropertyChange("lostConnection", null, true);

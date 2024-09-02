@@ -124,6 +124,7 @@ public class Component {
         public AoIEntities aoIEntities = new AoIEntities(); // current AoI entities of player (last game state)
         public int avgLatency = 0; // average latency of this player
         public ArrayList<Integer> contacts = new ArrayList<>(); // contacts of this character
+        public ArrayList<Integer> ignoreList = new ArrayList<>(); // ignore list of this character
         protected Timer interactionTimer=new Timer(); // timer that controls the interaction of this character
         //public boolean isInteracting = false; // flag that controls if this character is interacting at any given time
 

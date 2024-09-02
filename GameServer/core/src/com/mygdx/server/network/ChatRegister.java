@@ -18,6 +18,7 @@ public class ChatRegister {
     static public final int port = 43574; // LOGIN SERVER PORT (ONLY TCP FOR LOGIN SERVER)
     public static final int MESSAGE_REGISTRY_CHANNEL_COOLDOWN = 9;
     public static final int MAX_NUM_CONTACTS = 30;
+    public static final int MAX_NUM_IGNORE_LIST = 1;
 
     /**
      * Registers objects that are going to be sent over the network
@@ -40,6 +41,8 @@ public class ChatRegister {
         kryo.register(Comparable.class);
         kryo.register(AddContact.class);
         kryo.register(RemoveContact.class);
+        kryo.register(AddIgnore.class);
+        kryo.register(RemoveIgnore.class);
         kryo.register(OnlineCheck.class);
     }
 
@@ -59,7 +62,8 @@ public class ChatRegister {
     static public class Response {
         public enum Type{
             PLAYER_IS_OFFLINE,
-            DISCARD, LOGOFF, CONTACT_ADDED, FULL_CONTACT_LIST, CONTACT_REMOVED
+            DISCARD, LOGOFF, CONTACT_ADDED, CONTACT_REMOVED,
+            FULL_CONTACT_LIST, CONTACT_REMOVED_FROM_IGNORE_LIST, FULL_IGNORE_LIST, CONTACT_ADDED_TO_IGNORE_LIST
         }
         public Type type;
         public Response() {this.type = Type.DISCARD;}
@@ -121,6 +125,7 @@ public class ChatRegister {
     public static class ContactsRequest {
         public int requesterId;
         public Map<Integer, Writer> contacts = new ConcurrentHashMap<>();
+        public Map<Integer, Writer> ignoreList = new ConcurrentHashMap<>();
     }
 
     public static class AddContact {
@@ -128,6 +133,14 @@ public class ChatRegister {
     }
 
     public static class RemoveContact {
+        public int contactId;
+    }
+
+    public static class AddIgnore {
+        public int contactId;
+    }
+
+    public static class RemoveIgnore {
         public int contactId;
     }
 
