@@ -1842,6 +1842,24 @@ public class GameScreen implements Screen, PropertyChangeListener {
                 else // else update contact status
                     getContactWindow().updateContact(oc.contactId, oc.contactName, oc.online);
             }
+            else if(propertyChangeEvent.getPropertyName().equals("contactAdded")) { // received a confirmation of player addition
+                GameScreen.getInstance().showInfo("contactAdded"); // show contact added toast
+            }
+            else if(propertyChangeEvent.getPropertyName().equals("contactRemoved")) { // received a confirmation of player removal
+                GameScreen.getInstance().showInfo("contactRemoved"); // show contact removed toast
+            }
+            else if(propertyChangeEvent.getPropertyName().equals("fullContactList")) { // received a full contact list response, inform player
+                GameScreen.getInstance().showInfo("fullContactList", ChatRegister.MAX_NUM_CONTACTS);
+            }
+            else if(propertyChangeEvent.getPropertyName().equals("contactAddedToIgnoreList")) { // received a confirmation of player ignore addition
+                GameScreen.getInstance().showInfo("contactAddedToIgnoreList"); // show contact added to ignore list toast
+            }
+            else if(propertyChangeEvent.getPropertyName().equals("contactRemovedFromIgnoreList")) { // received a confirmation of player ignore removal
+                GameScreen.getInstance().showInfo("contactRemovedFromIgnoreList"); // show contact removed from ingore list toast
+            }
+            else if(propertyChangeEvent.getPropertyName().equals("fullIgnoreList")) { // received a full ignore list response, inform player
+                GameScreen.getInstance().showInfo("fullIgnoreList", ChatRegister.MAX_NUM_IGNORE_LIST);
+            }
         });
     }
 

@@ -523,8 +523,22 @@ public abstract class Entity implements Comparable<Entity> {
         TextButton followBtn = new TextButton(langBundle.get("contextMenuFollow"), skin);
 
         TextButton sendMessageBtn = new TextButton(langBundle.format("contextMenuSendMessage", this.entityName), skin);
-        TextButton addContactBtn = new TextButton(langBundle.get("contextMenuAddContact"), skin);
-        TextButton ignoreBtn = new TextButton(langBundle.format("contextMenuIgnorePerson", this.entityName), skin);
+
+        TextButton addContactBtn = null;
+
+        if(!ChatClient.getInstance().isContact(contextId)) {
+            addContactBtn = new TextButton(langBundle.format("contextMenuAddContact", entityName), skin);
+        } else {
+            addContactBtn = new TextButton(langBundle.format("contextMenuRemoveContact", entityName), skin);
+        }
+
+        TextButton ignoreBtn = null;
+
+        if(!ChatClient.getInstance().isIgnored(contextId)) {
+            ignoreBtn = new TextButton(langBundle.format("contextMenuIgnorePerson", this.entityName), skin);
+        } else {
+            ignoreBtn = new TextButton(langBundle.format("contextMenuStopIgnorePerson", this.entityName), skin);
+        }
 
         TextButton invitePartyBtn = new TextButton(langBundle.format("contextMenuInviteParty"), skin);
         TextButton tradeBtn = new TextButton(langBundle.get("contextMenuRequestTrade"), skin);
@@ -605,14 +619,23 @@ public abstract class Entity implements Comparable<Entity> {
         addContactBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                ChatClient.getInstance().checkContactStatus(contextId, entityName); // check server response will be treated as a command to add to contact list in GameScreen
+                if(!ChatClient.getInstance().isContact(contextId)) {
+                    ChatClient.getInstance().checkContactStatus(contextId, entityName); // check server response will be treated as a command to add to contact list in GameScreen
+                } else { // if its in contact list, this will act as a remove contact button
+                    GameScreen.getInstance().getContactWindow().removeContact(contextId);
+                }
+
                 GameScreen.getInstance().hideContextMenu();
             }
         });
         ignoreBtn.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                System.out.println("Implement ADD TO IGNORE LIST");
+                if(!ChatClient.getInstance().isIgnored(contextId)) {
+                    GameScreen.getInstance().getContactWindow().ignoreContact(contextId,  entityName);
+                } else {
+                    ChatClient.getInstance().removeFromIgnoreList(contextId);
+                }
                 GameScreen.getInstance().hideContextMenu();
             }
         });

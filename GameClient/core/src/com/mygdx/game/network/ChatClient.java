@@ -82,6 +82,22 @@ public class ChatClient extends DispatchServer {
     }
 
     /**
+     * Returns if a contact is currently being ignored by client player
+     * @param contactId the id to check if its ignored
+     */
+    public boolean isIgnored(int contactId) {
+        return ignoreList.containsKey(contactId);
+    }
+
+    /**
+     * Returns if a contact is currently in client player contact list
+     * @param contactId the id to check if its in contact list
+     */
+    public boolean isContact(int contactId) {
+        return contacts.containsKey(contactId);
+    }
+
+    /**
      * Adds the ignore to local map and and send message to server to store ignore server-side
      * @param contact   the contact to be added for this client ignore list
      */

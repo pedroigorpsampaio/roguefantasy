@@ -864,8 +864,19 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         TextButton cpyMsg = new TextButton(langBundle.get("contextMenuCopyMessage"), skin);
         TextButton cpyName = new TextButton(langBundle.get("contextMenuCopyName"), skin);
         TextButton cpyAll = new TextButton(langBundle.get("contextMenuCopyAll"), skin);
-        TextButton addContact = new TextButton(langBundle.get("contextMenuAddContact"), skin);
-        TextButton ignorePerson = new TextButton(langBundle.format("contextMenuIgnorePerson", msg.sender), skin);
+        TextButton addContact = null;
+        if(!ChatClient.getInstance().isContact(msg.senderId)) {
+            addContact = new TextButton(langBundle.format("contextMenuAddContact", msg.sender), skin);
+        } else {
+            addContact = new TextButton(langBundle.format("contextMenuRemoveContact", msg.sender), skin);
+        }
+        TextButton ignorePerson = null;
+
+        if(!ChatClient.getInstance().isIgnored(msg.senderId)) {
+            ignorePerson = new TextButton(langBundle.format("contextMenuIgnorePerson", msg.sender), skin);
+        } else {
+            ignorePerson = new TextButton(langBundle.format("contextMenuStopIgnorePerson", msg.sender), skin);
+        }
 
         /**
          * Context menu button style
@@ -909,7 +920,11 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         addContact.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                ChatClient.getInstance().checkContactStatus(msg.senderId, msg.sender); // check server response will be treated as a command to add to contact list in GameScreen
+                if(!ChatClient.getInstance().isContact(msg.senderId)) {
+                    ChatClient.getInstance().checkContactStatus(msg.senderId, msg.sender); // check server response will be treated as a command to add to contact list in GameScreen
+                } else {
+                    GameScreen.getInstance().getContactWindow().removeContact(msg.senderId);
+                }
                 GameScreen.getInstance().hideContextMenu();
             }
         });
@@ -917,7 +932,10 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
         ignorePerson.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                System.out.println("TODO add by id to ignore list if its not there yet: " + msg.sender);
+                if(!ChatClient.getInstance().isIgnored(msg.senderId)) // if its not in ignore list, add to it
+                    GameScreen.getInstance().getContactWindow().ignoreContact(msg.senderId,  msg.sender);
+                else // else, remove from contact list, as button will be toggled to un-ignore
+                    ChatClient.getInstance().removeFromIgnoreList(msg.senderId);
                 GameScreen.getInstance().hideContextMenu();
             }
         });
