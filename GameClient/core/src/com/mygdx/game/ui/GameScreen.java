@@ -2005,6 +2005,8 @@ public class GameScreen implements Screen, PropertyChangeListener {
             }
         }
         openChannelWindow.reloadLanguage();
+        if(contactWindow.getStage() != null)
+            contactWindow.reloadLanguage();
     }
 
     /**

@@ -189,7 +189,11 @@ public class ChatClient extends DispatchServer {
                     ChatRegister.Response msg = (ChatRegister.Response) object;
                     switch (msg.type) {
                         case PLAYER_IS_OFFLINE:
+                            System.out.println("WTF");
                             GameScreen.getInstance().showInfo("playerIsNotOnline");
+                            break;
+                        case PLAYER_IS_IGNORING_YOU:
+                            GameScreen.getInstance().showInfo("playerIsIgnoringClient");
                             break;
                         case CONTACT_ADDED:
                             listeners.firePropertyChange("contactAdded", null, msg);

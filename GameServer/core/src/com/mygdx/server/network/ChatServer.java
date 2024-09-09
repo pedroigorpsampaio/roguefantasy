@@ -456,6 +456,10 @@ public class ChatServer extends DispatchServer implements CmdReceiver {
     private void sendPrivateMessage(CharacterConnection writer, Message msg) {
         if(msg.recipientId == writer.writer.id) // don't send msg to itself
             return;
+        if(MongoDb.checkIgnore(writer.writer.id, msg.recipientId)) { // if its being ignored by the recipient, don't send msg and return ignored response
+            writer.sendTCP(new ChatRegister.Response(ChatRegister.Response.Type.PLAYER_IS_IGNORING_YOU));
+            return;
+        }
         CharacterConnection recipient = loggedIn.get(msg.recipientId);
         if(recipient == null) { // recipient is not online
             writer.sendTCP(new ChatRegister.Response(ChatRegister.Response.Type.PLAYER_IS_OFFLINE));

@@ -19,7 +19,7 @@ public class ChatRegister {
     static public final int port = 43574; // LOGIN SERVER PORT (ONLY TCP FOR LOGIN SERVER)
     public static final int MESSAGE_REGISTRY_CHANNEL_COOLDOWN = 11;
     public static final int MAX_NUM_CONTACTS = 30;
-    public static final int MAX_NUM_IGNORE_LIST = 1;
+    public static final int MAX_NUM_IGNORE_LIST = 50;
 
     /**
      * Registers objects that are going to be sent over the network
@@ -62,7 +62,7 @@ public class ChatRegister {
     // contains information flag data to be shared between client and server
     static public class Response {
         public enum Type{
-            PLAYER_IS_OFFLINE,
+            PLAYER_IS_OFFLINE, PLAYER_IS_IGNORING_YOU,
             DISCARD, LOGOFF, CONTACT_ADDED, CONTACT_REMOVED,
             FULL_CONTACT_LIST, CONTACT_REMOVED_FROM_IGNORE_LIST, FULL_IGNORE_LIST, CONTACT_ADDED_TO_IGNORE_LIST
         }

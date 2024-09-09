@@ -14,6 +14,8 @@ import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Button;
+import com.badlogic.gdx.scenes.scene2d.ui.ButtonGroup;
 import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
 import com.badlogic.gdx.scenes.scene2d.ui.HorizontalGroup;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
@@ -51,10 +53,12 @@ import java.util.regex.Pattern;
 public class ContactWindow extends GameWindow implements PropertyChangeListener {
     public static final Color CONTACT_OFFLINE_COLOR = new Color(0.95f, 0.34f, 0.25f, 1f);
     public static final Color CONTACT_ONLINE_COLOR = new Color(0.15f, 0.99f, 0.45f, 1f);
+    public static final Color CONTACT_IGNORED_COLOR = new Color(0.65f, 0.69f, 0.65f, 1f);
     private Table uiTable;
-    private TextButton closeBtn;
+    private TextButton closeBtn, btnContacts, btnIgnored;
     private Table scrollTable;
     private ScrollPane scrollPane;
+    private Table tabs;
     private TextField friendNameInputTxt;
     private boolean isUpdate = false;
     private float txtFieldOffsetY = 0;
@@ -62,6 +66,9 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
     private boolean orderByName = false;
     private boolean labelClicked = false;
     private Dialog inputDialog;
+    private ButtonGroup<Button> tabsButtonGroup;
+    private HorizontalGroup tabHorizontalBtns;
+    private ContactListType currentTab;
 
     /**
      * Builds the option window, to be used as an actor in any screen
@@ -122,65 +129,115 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         scrollTable.clear();
 
         int count = 0;
-        synchronized (ChatClient.contacts) {
-            SortedSet<Map.Entry<Integer, ChatRegister.Writer>> orderedEntries = null;
-            if(orderByName)
-                orderedEntries = entriesSortedByNames(ChatClient.contacts);
-            else
-                orderedEntries = entriesSortedByStatus(ChatClient.contacts);
-            for (Map.Entry<Integer, ChatRegister.Writer> entry : orderedEntries) {
-                ChatRegister.Writer contact = entry.getValue();
-
-                TypingLabel label = new TypingLabel(contact.name, skin);
-                label.setName(contact.name);
-                //label.setZIndex(contact.id);
-                label.setAlignment(Align.left);
-                label.skipToTheEnd();
-
-                if(contact.online)
-                    label.setColor(CONTACT_ONLINE_COLOR);
+        if(currentTab == ContactListType.CONTACTS) {
+            synchronized (ChatClient.contacts) {
+                SortedSet<Map.Entry<Integer, ChatRegister.Writer>> orderedEntries = null;
+                if (orderByName)
+                    orderedEntries = entriesSortedByNames(ChatClient.contacts);
                 else
-                    label.setColor(CONTACT_OFFLINE_COLOR);
+                    orderedEntries = entriesSortedByStatus(ChatClient.contacts);
+                for (Map.Entry<Integer, ChatRegister.Writer> entry : orderedEntries) {
+                    ChatRegister.Writer contact = entry.getValue();
 
-                // right click to context menu for desktop
-                if (Gdx.app.getType() == Application.ApplicationType.Desktop) {
-                    label.addListener(new ClickListener(Input.Buttons.LEFT) {
-                        @Override
-                        public void clicked(InputEvent event, float x, float y) {
-                            if( getTapCount() == 2) { // double click - open chat with contact
-                                GameScreen.openChannelWindow.openChannel(contact.name, contact.id);
+                    TypingLabel label = new TypingLabel(contact.name, skin);
+                    label.setName(contact.name);
+                    //label.setZIndex(contact.id);
+                    label.setAlignment(Align.left);
+                    label.skipToTheEnd();
+
+                    if (contact.online)
+                        label.setColor(CONTACT_ONLINE_COLOR);
+                    else
+                        label.setColor(CONTACT_OFFLINE_COLOR);
+
+                    // right click to context menu for desktop
+                    if (Gdx.app.getType() == Application.ApplicationType.Desktop) {
+                        label.addListener(new ClickListener(Input.Buttons.LEFT) {
+                            @Override
+                            public void clicked(InputEvent event, float x, float y) {
+                                if (getTapCount() == 2) { // double click - open chat with contact
+                                    GameScreen.openChannelWindow.openChannel(contact.name, contact.id);
+                                }
                             }
-                        }
-                    });
-                    label.addListener(new ClickListener(Input.Buttons.RIGHT) {
-                        @Override
-                        public void clicked(InputEvent event, float x, float y) {
-                            labelClicked = true;
-                            openContextMenu(contact);
-                        }
-                    });
-                } else if (Gdx.app.getType() == Application.ApplicationType.Android) {
-                    label.addListener(new ClickListener() {
-                        @Override
-                        public void clicked(InputEvent event, float x, float y) {
-                            labelClicked = true;
-                            openContextMenu(contact);
-                        }
+                        });
+                        label.addListener(new ClickListener(Input.Buttons.RIGHT) {
+                            @Override
+                            public void clicked(InputEvent event, float x, float y) {
+                                labelClicked = true;
+                                openContextMenu(contact);
+                            }
+                        });
+                    } else if (Gdx.app.getType() == Application.ApplicationType.Android) {
+                        label.addListener(new ClickListener() {
+                            @Override
+                            public void clicked(InputEvent event, float x, float y) {
+                                labelClicked = true;
+                                openContextMenu(contact);
+                            }
 
-                    });
-                }
-                if(count == 0) {
-                    scrollTable.add(label).growX().padLeft(12).padTop(6).padBottom(1);
-                    scrollTable.row();
-                }
-                else if (count < ChatClient.contacts.size() - 1) {
-                    scrollTable.add(label).growX().padLeft(12).padBottom(1f);
-                    scrollTable.row();
-                } else {
-                    scrollTable.add(label).growX().padLeft(12).padBottom(6);
-                }
+                        });
+                    }
+                    if (count == 0) {
+                        scrollTable.add(label).growX().padLeft(12).padTop(6).padBottom(1);
+                        scrollTable.row();
+                    } else if (count < ChatClient.contacts.size() - 1) {
+                        scrollTable.add(label).growX().padLeft(12).padBottom(1f);
+                        scrollTable.row();
+                    } else {
+                        scrollTable.add(label).growX().padLeft(12).padBottom(6);
+                    }
 
-                count++;
+                    count++;
+                }
+            }
+        } else if(currentTab == ContactListType.IGNORED) {
+            synchronized (ChatClient.ignoreList) {
+                SortedSet<Map.Entry<Integer, ChatRegister.Writer>> orderedEntries = null;
+                orderedEntries = entriesSortedByNames(ChatClient.ignoreList);
+
+                for (Map.Entry<Integer, ChatRegister.Writer> entry : orderedEntries) {
+                    ChatRegister.Writer contact = entry.getValue();
+
+                    TypingLabel label = new TypingLabel(contact.name, skin);
+                    label.setName(contact.name);
+                    //label.setZIndex(contact.id);
+                    label.setAlignment(Align.left);
+                    label.skipToTheEnd();
+
+
+                    label.setColor(CONTACT_IGNORED_COLOR);
+
+                    // right click to context menu for desktop
+                    if (Gdx.app.getType() == Application.ApplicationType.Desktop) {
+                        label.addListener(new ClickListener(Input.Buttons.RIGHT) {
+                            @Override
+                            public void clicked(InputEvent event, float x, float y) {
+                                labelClicked = true;
+                                openContextMenu(contact);
+                            }
+                        });
+                    } else if (Gdx.app.getType() == Application.ApplicationType.Android) {
+                        label.addListener(new ClickListener() {
+                            @Override
+                            public void clicked(InputEvent event, float x, float y) {
+                                labelClicked = true;
+                                openContextMenu(contact);
+                            }
+
+                        });
+                    }
+                    if (count == 0) {
+                        scrollTable.add(label).growX().padLeft(12).padTop(6).padBottom(1);
+                        scrollTable.row();
+                    } else if (count < ChatClient.ignoreList.size() - 1) {
+                        scrollTable.add(label).growX().padLeft(12).padBottom(1f);
+                        scrollTable.row();
+                    } else {
+                        scrollTable.add(label).growX().padLeft(12).padBottom(6);
+                    }
+
+                    count++;
+                }
             }
         }
 
@@ -209,12 +266,19 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
          */
         TextButton sendMsg = new TextButton(langBundle.format("contextMenuSendMessage", contactName), skin);
         TextButton editContact = new TextButton(langBundle.format("contextMenuEditContact", contactName), skin);
-        TextButton removeContact = new TextButton(langBundle.format("contextMenuRemoveContact", contactName), skin);
+        TextButton removeContact = null;
+
+        if(currentTab == ContactListType.CONTACTS)
+            removeContact = new TextButton(langBundle.format("contextMenuRemoveContact", contactName), skin);
+        else if(currentTab == ContactListType.IGNORED)
+            removeContact = new TextButton(langBundle.format("contextMenuStopIgnorePerson", contactName), skin);
+
         TextButton cpyName = new TextButton(langBundle.get("contextMenuCopyName"), skin);
 
         TextButton addNewContact = new TextButton(langBundle.get("contextMenuAddNewContact"), skin);
         String sortString = orderByName ? "status" : langBundle.get("name");
         TextButton sortBy = new TextButton(langBundle.format("contextMenuSortBy", sortString), skin);
+        TextButton close = new TextButton(langBundle.get("close"), skin);
 
         /**
          * Context menu button style
@@ -243,6 +307,8 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         addNewContact.getLabel().setAlignment(Align.left);
         sortBy.setStyle(newStyle);
         sortBy.getLabel().setAlignment(Align.left);
+        close.setStyle(newStyle);
+        close.getLabel().setAlignment(Align.left);
 
         /**
          * Listeners
@@ -268,7 +334,10 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         removeContact.addListener(new ClickListener(Input.Buttons.LEFT) {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                removeContact(contact.id);
+                if(currentTab == ContactListType.CONTACTS)
+                    removeContact(contact.id);
+                else if(currentTab == ContactListType.IGNORED)
+                    removeIgnore(contact.id);
                 GameScreen.getInstance().hideContextMenu();
             }
         });
@@ -286,7 +355,6 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
             @Override
             public void clicked(InputEvent event, float x, float y) {
                 openAddNewContactDialog();
-                //TODO ADD CONTACT: OPEN TEXT FIELD TO WRITE CONTACT NAME - CHECK IF USER EXIST SIMILAR TO OPENCHANNEL - IF SO ADD IN CLIENT AND SEND ADD MSG TO SERVER
                 GameScreen.getInstance().hideContextMenu();
             }
         });
@@ -299,6 +367,14 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
                 GameScreen.getInstance().hideContextMenu();
             }
         });
+
+        close.addListener(new ClickListener(Input.Buttons.LEFT) {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                GameScreen.getInstance().hideContextMenu();
+            }
+        });
+
 
         /**
          * Decorations
@@ -317,23 +393,33 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
          * Section available only when contact is not null (player clicked on a contact name)
          */
         if(contact != null) {
-            t.add(sendMsg).fillX();
-            t.row();
+            if(currentTab == ContactListType.CONTACTS) {
+                t.add(sendMsg).fillX();
+                t.row();
+            }
             t.add(editContact).fillX();
             t.row();
             t.add(removeContact).fillX();
             t.row();
             t.add(cpyName).fillX();
             t.row();
-            t.add(strokeLine).fill().padBottom(5).padTop(8);
-            t.row();
+            //if(currentTab == ContactListType.CONTACTS) {
+                t.add(strokeLine).fill().padBottom(5).padTop(8);
+                t.row();
+           // }
         }
         /**
          * Section for all contact window context menu clicks
          */
         t.add(addNewContact).fillX();
-        t.row();
-        t.add(sortBy).fillX();
+        if(currentTab == ContactListType.CONTACTS) {
+            t.row();
+            t.add(sortBy).fillX();
+        }
+        if(currentTab == ContactListType.IGNORED) {
+            t.row();
+            t.add(close).fillX();
+        }
         t.pack();
         t.layout();
         t.validate();
@@ -357,7 +443,10 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
                 boolean valid = isFriendNameTextValid(); // checks if player input is valid
 
                 if(valid) {
-                    GameClient.getInstance().sendCharacterSearchByName(friendNameInputTxt.getText(), "ContactWindow");
+                    if(currentTab == ContactListType.CONTACTS)
+                        GameClient.getInstance().sendCharacterSearchByName(friendNameInputTxt.getText(), "ContactWindow");
+                    else if(currentTab == ContactListType.IGNORED)
+                        GameClient.getInstance().sendCharacterSearchByName(friendNameInputTxt.getText(), "IgnoredWindow");
                 }
 
                 friendNameInputTxt.setText("");
@@ -395,6 +484,11 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
      * @param name  the name of the contact to be added
      */
     public void ignoreContact(int id, String name) {
+        if(id == GameClient.getInstance().getClientId()) { // can't add itself
+            GameScreen.getInstance().showInfo("cannotAddItself");
+            return;
+        }
+
         // create contact with the provided info
         ChatRegister.Writer wr = new ChatRegister.Writer();
         wr.online = false; wr.id = id; wr.name = name;
@@ -425,6 +519,11 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
      * @param online if the contact is currently online
      */
     public void addContact(int id, String name, boolean online) {
+        if(id == GameClient.getInstance().getClientId()) { // can't add itself
+            GameScreen.getInstance().showInfo("cannotAddItself");
+            return;
+        }
+
         // create contact with the provided info
         ChatRegister.Writer wr = new ChatRegister.Writer();
         wr.online = online; wr.id = id; wr.name = name;
@@ -455,6 +554,58 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         this.remove();
         this.getTitleLabel().setText(langBundle.format("contacts"));
         this.getTitleLabel().setAlignment(Align.center);
+
+        langBundle = manager.get("lang/langbundle", I18NBundle.class); // makes sure we are up-to-date with current language
+
+        /**
+         * Tabs for contact and ignore list
+         */
+        tabs = new Table();
+        tabsButtonGroup = new ButtonGroup<>();
+        tabsButtonGroup.setMinCheckCount(1);
+        tabsButtonGroup.setMaxCheckCount(1);
+        tabsButtonGroup.setUncheckLast(true);
+        // tab buttons
+        tabHorizontalBtns = new HorizontalGroup();
+        tabHorizontalBtns.space(4f);
+        /**
+         * add contacts and ignore buttons to tabs table
+         */
+        btnContacts = new TextButton(langBundle.get("contacts"), skin, "newTabStyle"); // get translatable tab name
+        btnContacts.padTop(1).padBottom(1).padLeft(11).padRight(11);
+        btnIgnored = new TextButton(langBundle.get("ignored"), skin, "newTabStyle"); // get translatable tab name
+        btnIgnored.padTop(1).padBottom(1).padLeft(11).padRight(11);
+
+        tabsButtonGroup.add(btnContacts);
+        tabsButtonGroup.add(btnIgnored);
+
+        btnContacts.setChecked(true);
+        currentTab = ContactListType.CONTACTS;
+
+        // listener for dealing with tab changes
+        btnContacts.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                if(btnContacts.isChecked()) { // this button was checked
+                    changeTab(ContactListType.CONTACTS);
+                }
+            }
+        });
+        btnIgnored.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                if(btnIgnored.isChecked()) { // this button was checked
+                    changeTab(ContactListType.IGNORED);
+                }
+            }
+        });
+
+        tabHorizontalBtns.addActor(btnContacts); // add to button group ui
+        tabHorizontalBtns.addActor(btnIgnored); // add to button group ui
+
+        tabs.add(tabHorizontalBtns);
+
+        tabs.pack();
 
         TextureAtlas uiAtlas = manager.get("ui/packed_textures/ui.atlas");
 
@@ -503,6 +654,8 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
 
         friendNameInputTxt = new TextField("", skin);
 
+        uiTable.add(tabs);
+        uiTable.row();
         uiTable.add(scrollPane).size(stage.getWidth()/8f, scrollTable.getMinHeight()+stage.getHeight()/8f);
         uiTable.row();
         HorizontalGroup horizontalBtnGroup = new HorizontalGroup();
@@ -533,6 +686,27 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
 
         // builds initial contacts list (will use chat loaded contacts from server)
         buildContacts(orderByName);
+    }
+
+    public enum ContactListType {
+        CONTACTS,
+        IGNORED,
+    }
+
+    /**
+     * Changes tab performing needed operations to load list of contacts/ignored
+     * @param type type of contact list (contacts or ignored)
+     */
+    private void changeTab(ContactListType type) {
+        if(type == ContactListType.CONTACTS) {
+            currentTab = type;
+            buildContacts(orderByName);
+        } else if(type == ContactListType.IGNORED) {
+            currentTab = type;
+            buildContacts(orderByName);
+        } else {
+            Gdx.app.log("contacts", "Unknown tab to change to: " + type);
+        }
     }
 
     @Override
@@ -596,8 +770,14 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
 //            inputDialog.setY(originalY);
         if(inputDialog != null) {
             float deltaY = txtFieldOffsetY - MainMenuScreen.chatOffsetY;
-            if(deltaY < 0) // keyboard obfuscates
+            if(deltaY < 0) { // keyboard obfuscates
                 inputDialog.moveBy(0, deltaY);
+            }
+        }
+
+        float dY = this.getY() - MainMenuScreen.chatOffsetY;
+        if(dY < 0) { // keyboard obfuscates
+            this.moveBy(0, dY);
         }
     }
 
@@ -606,8 +786,14 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         if(inputDialog != null) {
             originalY = getY();
             float deltaY = txtFieldOffsetY - RogueFantasy.getKeyboardHeight();
-            if (deltaY < 0) // keyboard obfuscates
+            if (deltaY < 0) { // keyboard obfuscates
                 inputDialog.moveBy(0, -deltaY);
+            }
+        }
+
+        float dY = this.getY() - MainMenuScreen.chatOffsetY;
+        if(dY < 0) { // keyboard obfuscates
+            this.moveBy(0, -dY);
         }
     }
 
@@ -620,6 +806,8 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
     public void reloadLanguage() {
         langBundle = manager.get("lang/langbundle", I18NBundle.class);
         this.getTitleLabel().setText(" "+langBundle.format("contacts"));
+        btnIgnored.setText(langBundle.get("ignored"));
+        btnContacts.setText(langBundle.get("contacts"));
         closeBtn.setText(langBundle.get("back"));
     }
 
@@ -683,34 +871,24 @@ public class ContactWindow extends GameWindow implements PropertyChangeListener 
         Gdx.app.postRunnable(() -> {
             if(propertyChangeEvent.getPropertyName().equals("idByNameRetrieved")) { // received a if by name response
                 GameRegister.CharacterIdRequest response = (GameRegister.CharacterIdRequest) propertyChangeEvent.getNewValue();
-                if(response.requester.equals("ContactWindow")) { // this is a response to this module, act
-                    if(response.id == -1) { // player not found - does not exist
-                        GameScreen.getInstance().showInfo("playerDoesNotExist"); // show invalid length message
+                if (response.requester.equals("ContactWindow")) { // this is a response to this module, act
+                    if (response.id == -1) { // player not found - does not exist
+                        GameScreen.getInstance().showInfo("playerDoesNotExist"); // show player does not exist message
                         return;
                     }
                     // if name input exists
                     // add contact to local list (if its not there already - addContact will check)
                     addContact(response.id, response.name, response.online);
+                } else if (response.requester.equals("IgnoredWindow")) {
+                    if (response.id == -1) { // player not found - does not exist
+                        GameScreen.getInstance().showInfo("playerDoesNotExist"); // show player does not exist message
+                        return;
+                    }
+                    // if name input exists
+                    // add contact to ignored list (if its not there already - ignoreContact will check)
+                    ignoreContact(response.id, response.name);
                 }
             }
-//            else if(propertyChangeEvent.getPropertyName().equals("contactAdded")) { // received a confirmation of player addition
-//                GameScreen.getInstance().showInfo("contactAdded"); // show contact added toast
-//            }
-//            else if(propertyChangeEvent.getPropertyName().equals("contactRemoved")) { // received a confirmation of player removal
-//                GameScreen.getInstance().showInfo("contactRemoved"); // show contact removed toast
-//            }
-//            else if(propertyChangeEvent.getPropertyName().equals("fullContactList")) { // received a full contact list response, inform player
-//                GameScreen.getInstance().showInfo("fullContactList", ChatRegister.MAX_NUM_CONTACTS);
-//            }
-//            else if(propertyChangeEvent.getPropertyName().equals("contactAddedToIgnoreList")) { // received a confirmation of player ignore addition
-//                GameScreen.getInstance().showInfo("contactAddedToIgnoreList"); // show contact added to ignore list toast
-//            }
-//            else if(propertyChangeEvent.getPropertyName().equals("contactRemovedFromIgnoreList")) { // received a confirmation of player ignore removal
-//                GameScreen.getInstance().showInfo("contactRemovedFromIgnoreList"); // show contact removed from ingore list toast
-//            }
-//            else if(propertyChangeEvent.getPropertyName().equals("fullIgnoreList")) { // received a full ignore list response, inform player
-//                GameScreen.getInstance().showInfo("fullIgnoreList", ChatRegister.MAX_NUM_IGNORE_LIST);
-//            }
         });
     }
 

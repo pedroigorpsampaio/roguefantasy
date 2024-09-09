@@ -222,6 +222,15 @@ public class LoadScreen implements Screen {
             tbStyle.fontColor = Color.WHITE;
             skin.add("newTextButtonStyle", tbStyle, TextButton.TextButtonStyle.class);
 
+            TextButton.TextButtonStyle tbTabStyle = new TextButton.TextButtonStyle(skin.get(TextButton.TextButtonStyle.class));
+            tbTabStyle.font = skin.get("fontChat", BitmapFont.class);
+            tbTabStyle.fontColor = Color.LIGHT_GRAY;
+            tbTabStyle.checkedFontColor = Color.WHITE;
+            tbTabStyle.up =  new TextureRegionDrawable(skin.getAtlas().findRegion("tab")).tint(new Color(0.4f, 0.5f, 0.5f, 1.0f));
+            tbTabStyle.checked = new TextureRegionDrawable(skin.getAtlas().findRegion("tab-pressed")).tint(new Color(0.4f, 0.8f, 0.7f, 1.0f));
+            tbTabStyle.down = tbTabStyle.checked;
+            skin.add("newTabStyle", tbTabStyle, TextButton.TextButtonStyle.class);
+
 //            down: button-pressed
 //            up: button
 //            font: font

@@ -25,6 +25,7 @@ import java.util.ArrayList;
  * IMPORTANT: Add server host ip to whitelist to be able to access data
  */
 public class MongoDb {
+
     public static class MongoDBConnection {
         private static final String CONNECTION_STRING = "mongodb+srv://pedroigorpsampaio:11zIGd4PkALvWfhz@cluster0.f5gzh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
         private static MongoClient mongoGameClient = null;
@@ -56,6 +57,26 @@ public class MongoDb {
 
             return mongoGameClient;
         }
+    }
+
+    /**
+     * Check if sender is being ignored by recipient
+     * @param senderId      the id of the sender to be checked
+     * @param recipientId   the id of the recipient to be checked
+     * @return  true if its being ignored, false otherwise
+     */
+    public static boolean checkIgnore(int senderId, int recipientId) {
+        MongoClient mClient = MongoDBConnection.getMongoGameClient();
+        MongoDatabase database = mClient.getDatabase("RFGameData");
+        MongoCollection<Document> charCollection = database.getCollection("characters");
+        Document doc = charCollection.find(eq("id", recipientId))
+                .first();
+
+        ArrayList<Integer> ignoreList = (ArrayList<Integer>) doc.getList("ignore_list", Integer.class);
+
+        if(ignoreList == null) return false;
+
+        return ignoreList.contains(senderId);
     }
 
     public static int findCharacterIdByName(String name) {

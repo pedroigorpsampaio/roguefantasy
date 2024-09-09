@@ -197,6 +197,9 @@ public class ChatWindow extends GameWindow implements PropertyChangeListener {
     private void receivePrivateMessage(ChatRegister.Message message, int chIdx) {
         boolean openNewTab = prefs.getBoolean("openChatOnPrivateMsg", false);
 
+        // if is ignoring the sender of the message, return (server should not send ignored player messages, but in any case block it here as well)
+        if(ChatClient.ignoreList.containsKey(message.senderId)) return;
+
         if(chIdx == -1) {
             if(openNewTab) { // open new chat is enabled, open it and send msg to the newly open chat
                 int idx = createChannel(ChatChannel.PRIVATE, message.senderId, message.sender, false);
